@@ -1,0 +1,510 @@
+{% extends 'base.html' %}
+{% block title %}فاتورة مبيعات جديدة{% endblock %}
+{% block header %}فاتورة مبيعات جديدة{% endblock %}
+{% block content %}
+{% include 'partials/_form_errors.html' %}
+<form method="post" id="invoiceForm">
+    {% csrf_token %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">التاريخ *</label>
+                    {{ form.date }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">العميل *</label>
+                    {{ form.customer }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">تاريخ الاستحقاق *</label>
+                    {{ form.due_date }}
+                </div>
+            </div>
+            <div class="row g-3 mt-1">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">نوع السداد *</label>
+                    {{ form.payment_type }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">المندوب</label>
+                    {{ form.sales_rep }}
+                </div>
+                <div class="col-md-3" id="cashBoxContainer">
+                    <label class="form-label fw-bold">الخزنة *</label>
+                    {{ form.cash_box }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">مركز التكلفة</label>
+                    {{ form.cost_center }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">أصناف الفاتورة</div>
+        <div class="card-body">
+            {{ lines.management_form }}
+            <table class="table table-bordered" id="linesTable">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 25%;">الصنف</th>
+                        <th>المستودع</th>
+                        <th style="width: 8%;">الكمية</th>
+                        <th style="width: 10%;">السعر</th>
+                        <th style="width: 7%;">خصم %</th>
+                        <th style="width: 12%;">ضريبة 1</th>
+                        <th style="width: 12%;">ضريبة 2</th>
+                        <th style="width: 12%;">الإجمالي</th>
+                        <th>حذف</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line_form in lines %}
+                    <tr class="line-row">
+                        <td>{{ line_form.item }}</td>
+                        <td>{{ line_form.warehouse }}</td>
+                        <td>{{ line_form.quantity }}</td>
+                        <td>{{ line_form.unit_price }}</td>
+                        <td>{{ line_form.discount_percent }}</td>
+                        <td>
+                            {{ line_form.tax_type }}
+                            {{ line_form.tax_percent }}
+                        </td>
+                        <td>
+                            {{ line_form.tax_type2 }}
+                            {{ line_form.tax_percent2 }}
+                        </td>
+                        <td>
+                            <input type="text" class="form-control line-total-display" readonly value="0.00">
+                            {{ line_form.total }}
+                        </td>
+                        <td class="text-center">
+                            {% if line_form.instance.pk %}{{ line_form.DELETE }}{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="addRow">
+                <i class="bi bi-plus"></i> إضافة سطر
+            </button>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-7">
+            <div class="card h-100">
+                <div class="card-body">
+                    <label class="form-label fw-bold">ملاحظات</label>
+                    {{ form.notes }}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-5">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="fw-bold">إجمالي قيمة الفاتورة:</span>
+                        <span id="subtotal">0.00</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2 text-danger">
+                        <span class="fw-bold">إجمالي الخصم:</span>
+                        <span id="discountTotal">0.00</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2 text-primary">
+                        <span class="fw-bold">إجمالي الضريبة:</span>
+                        <span id="taxTotal">0.00</span>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <span class="h4 fw-bold">الصافي النهائي:</span>
+                        <span class="h4 fw-bold text-success" id="grandTotal">0.00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <button type="submit" class="btn btn-primary btn-lg">حفظ الفاتورة (مسودة)</button>
+        <a href="{% url 'sales:invoice-list' %}" class="btn btn-secondary btn-lg">إلغاء</a>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Simple logic to calculate totals
+    function calculateInvoice() {
+        let grossTotal = 0;
+        let discountTotal = 0;
+        let taxTotal = 0;
+        
+        document.querySelectorAll('.line-row').forEach(row => {
+            const qtyInput = row.querySelector('.qty-input');
+            const priceInput = row.querySelector('.price-input');
+            const discInput = row.querySelector('.discount-input');
+            const tax1RateInput = row.querySelector('.tax-rate');
+            const tax2RateInput = row.querySelector('.tax-rate2');
+            
+            if (!qtyInput || !priceInput) return;
+
+            const qty = parseFloat(qtyInput.value) || 0;
+            const price = parseFloat(priceInput.value) || 0;
+            const discPercent = discInput ? (parseFloat(discInput.value) || 0) : 0;
+            
+            const grossLine = qty * price;
+            const discLine = grossLine * (discPercent / 100);
+            const netLine = grossLine - discLine;
+            
+            const tax1Rate = tax1RateInput ? (parseFloat(tax1RateInput.value) || 0) : 0;
+            const tax2Rate = tax2RateInput ? (parseFloat(tax2RateInput.value) || 0) : 0;
+            
+            const tax1Line = netLine * (tax1Rate / 100);
+            const tax2Line = netLine * (tax2Rate / 100);
+            const lineTotal = netLine + tax1Line + tax2Line;
+            
+            const displayEl = row.querySelector('.line-total-display');
+            const totalInput = row.querySelector('.total-input');
+            if (displayEl) displayEl.value = lineTotal.toFixed(2);
+            if (totalInput) totalInput.value = lineTotal.toFixed(2);
+            
+            grossTotal += grossLine;
+            discountTotal += discLine;
+            taxTotal += (tax1Line + tax2Line);
+        });
+        
+        document.getElementById('subtotal').innerText = grossTotal.toFixed(2);
+        document.getElementById('discountTotal').innerText = discountTotal.toFixed(2);
+        document.getElementById('taxTotal').innerText = taxTotal.toFixed(2);
+        document.getElementById('grandTotal').innerText = (grossTotal - discountTotal + taxTotal).toFixed(2);
+    }
+
+    // Fetch tax rate when tax type is selected
+    async function fetchTaxRate(taxSelect, rateInputClass) {
+        const taxId = taxSelect.value;
+        const row = taxSelect.closest('.line-row');
+        const rateInput = row.querySelector(rateInputClass);
+        
+        if (!taxId) {
+            rateInput.value = '0.00';
+            calculateInvoice();
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/taxes/${taxId}/`);
+            if (response.ok) {
+                const data = await response.json();
+                rateInput.value = data.rate;
+                calculateInvoice();
+            }
+        } catch (error) {
+            console.error('Error fetching tax rate:', error);
+        }
+    }
+
+    document.addEventListener('input', function(e) {
+        if (e.target.matches('.qty-input, .price-input, .discount-input')) {
+            calculateInvoice();
+        }
+    });
+    
+    document.addEventListener('change', function(e) {
+        if (e.target.matches('.tax-select')) {
+            fetchTaxRate(e.target, '.tax-rate');
+        }
+        if (e.target.matches('.tax-select2')) {
+            fetchTaxRate(e.target, '.tax-rate2');
+        }
+    });
+
+    // Add row logic
+    document.getElementById('addRow').addEventListener('click', function() {
+        const table = document.getElementById('linesTable').getElementsByTagName('tbody')[0];
+        const lastRow = table.querySelector('.line-row:last-child');
+        const newRow = lastRow.cloneNode(true);
+        
+        const totalForms = document.getElementById('id_lines-TOTAL_FORMS');
+        const currentCount = parseInt(totalForms.value);
+        
+        newRow.querySelectorAll('input, select').forEach(input => {
+            input.name = input.name.replace(`-${currentCount-1}-`, `-${currentCount}-`);
+            input.id = input.id.replace(`-${currentCount-1}-`, `-${currentCount}-`);
+            if (input.type !== 'checkbox') input.value = '';
+            // Reset totals
+            if (input.classList.contains('line-total-display')) input.value = '0.00';
+            if (input.classList.contains('total-input')) input.value = '0.00';
+            if (input.classList.contains('tax-rate')) input.value = '0.00';
+            if (input.classList.contains('tax-rate2')) input.value = '0.00';
+        });
+        
+        table.appendChild(newRow);
+        totalForms.value = currentCount + 1;
+    });
+
+    calculateInvoice();
+
+    // Payment type toggle logic
+    const paymentTypeSelect = document.getElementById('id_payment_type');
+    const cashBoxContainer = document.getElementById('cashBoxContainer');
+    const cashBoxSelect = document.getElementById('id_cash_box');
+
+    function toggleCashBox() {
+        if (paymentTypeSelect && paymentTypeSelect.value === 'cash') {
+            cashBoxContainer.style.display = 'block';
+            cashBoxSelect.required = true;
+        } else if (cashBoxContainer) {
+            cashBoxContainer.style.display = 'none';
+            cashBoxSelect.required = false;
+        }
+    }
+
+    if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', toggleCashBox);
+    toggleCashBox();
+
+    // Multi-unit logic
+    async function fetchItemUnits(itemSelect) {
+        const row = itemSelect.closest('.line-row');
+        const unitSelect = row.querySelector('.unit-select');
+        const itemId = itemSelect.value;
+        
+        if (!itemId) {
+            unitSelect.innerHTML = '<option value="">---------</option>';
+            return;
+        }
+
+        try {
+            const response = await fetch(`/inventory/api/item/${itemId}/`);
+            if (response.ok) {
+                const data = await response.json();
+                unitSelect.innerHTML = '';
+                data.units.forEach(u => {
+                    const option = document.createElement('option');
+                    option.value = u.id;
+                    option.text = u.name;
+                    option.dataset.factor = u.factor;
+                    unitSelect.appendChild(option);
+                });
+                if (data.default_unit_id) {
+                    unitSelect.value = data.default_unit_id;
+                }
+                calculateInvoice();
+            }
+        } catch (error) {
+            console.error('Error fetching units:', error);
+        }
+    }
+
+    document.addEventListener('change', function(e) {
+        if (e.target.matches('.item-select')) {
+            fetchItemUnits(e.target);
+        }
+    });
+
+    // Customer Defaults Logic
+    const customerSelect = document.getElementById('id_customer');
+    let currentCustomerPriceList = null;
+    let currentCustomerTax1 = null;
+    let currentCustomerTax2 = null;
+    let currentCustomerIsTaxable = true;
+    let currentSectorOffers = [];
+
+    async function fetchCustomerDetails(customerId) {
+        if (!customerId) return;
+        try {
+            const response = await fetch(`/api/customers/${customerId}/`);
+            if (response.ok) {
+                const data = await response.json();
+                
+                // 1. Set Payment Type
+                if (data.customer_type) {
+                    paymentTypeSelect.value = data.customer_type;
+                    toggleCashBox();
+                }
+
+                // 2. Store defaults for lines
+                currentCustomerPriceList = data.price_list;
+                currentCustomerTax1 = data.default_tax1;
+                currentCustomerTax2 = data.default_tax2;
+                currentCustomerIsTaxable = data.is_taxable;
+
+                // 3. Fetch Sector Offers
+                if (data.sector) {
+                    const offerResponse = await fetch(`/api/quotations/active_for_sector/?sector_id=${data.sector}`);
+                    if (offerResponse.ok) {
+                        currentSectorOffers = await offerResponse.json();
+                    }
+                } else {
+                    currentSectorOffers = [];
+                }
+
+                // 4. Apply to existing lines
+                document.querySelectorAll('.line-row').forEach(row => {
+                    applyCustomerDefaultsToRow(row);
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching customer details:', error);
+        }
+    }
+
+    function applyCustomerDefaultsToRow(row) {
+        const tax1Select = row.querySelector('.tax-select');
+        const tax2Select = row.querySelector('.tax-select2');
+        
+        if (currentCustomerIsTaxable) {
+            if (currentCustomerTax1) {
+                tax1Select.value = currentCustomerTax1;
+                fetchTaxRate(tax1Select, '.tax-rate');
+            }
+            if (currentCustomerTax2) {
+                tax2Select.value = currentCustomerTax2;
+                fetchTaxRate(tax2Select, '.tax-rate2');
+            }
+        } else {
+            tax1Select.value = '';
+            tax2Select.value = '';
+            fetchTaxRate(tax1Select, '.tax-rate');
+            fetchTaxRate(tax2Select, '.tax-rate2');
+        }
+        
+        // Re-price and re-discount item if already selected
+        const itemSelect = row.querySelector('.item-select');
+        if (itemSelect && itemSelect.value) {
+            fetchItemPrice(itemSelect);
+            applySectorDiscount(row, itemSelect.value);
+        }
+    }
+
+    function applySectorDiscount(row, itemId) {
+        const discountInput = row.querySelector('input[name$="-discount_percent"]');
+        if (!discountInput) return;
+
+        let totalDiscount = 0;
+        currentSectorOffers.forEach(offer => {
+            const line = offer.lines.find(l => l.item == itemId);
+            if (line) {
+                totalDiscount += parseFloat(line.extra_discount_percent);
+            }
+        });
+
+        discountInput.value = totalDiscount.toFixed(2);
+        calculateInvoice();
+    }
+
+    async function fetchItemPrice(itemSelect) {
+        if (!currentCustomerPriceList || !itemSelect.value) return;
+        
+        const row = itemSelect.closest('.line-row');
+        const priceInput = row.querySelector('.price-input');
+
+        try {
+            const response = await fetch(`/api/price-lists/${currentCustomerPriceList}/item_price/?item_id=${itemSelect.value}`);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.price) {
+                    priceInput.value = data.price;
+                    calculateInvoice();
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching item price:', error);
+        }
+    }
+
+    if (customerSelect) {
+        customerSelect.addEventListener('change', (e) => fetchCustomerDetails(e.target.value));
+        if (customerSelect.value) fetchCustomerDetails(customerSelect.value);
+    }
+
+    // Update item-select listener to also fetch price and apply discount
+    document.addEventListener('change', function(e) {
+        if (e.target.matches('.item-select')) {
+            fetchItemUnits(e.target);
+            fetchItemPrice(e.target);
+            applySectorDiscount(e.target.closest('.line-row'), e.target.value);
+        }
+    });
+
+    // Sales Representative logic
+    const salesRepSelect = document.getElementById('id_sales_rep');
+
+    async function fetchAndApplyRepDetails(repId) {
+        if (!repId) {
+            unlockFields();
+            return;
+        }
+
+        try {
+            const response = await fetch(`/sales/api/rep/${repId}/`);
+            if (response.ok) {
+                const data = await response.json();
+                
+                if (data.cash_box_id) {
+                    cashBoxSelect.value = data.cash_box_id;
+                    lockField(cashBoxSelect);
+                }
+                
+                document.querySelectorAll('.line-row').forEach(row => {
+                    const warehouseSelect = row.querySelector('select[name$="-warehouse"]');
+                    if (warehouseSelect && data.warehouse_id) {
+                        warehouseSelect.value = data.warehouse_id;
+                        lockField(warehouseSelect);
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching rep details:', error);
+        }
+    }
+
+    function lockField(el) {
+        el.style.pointerEvents = 'none';
+        el.style.backgroundColor = '#f8f9fa';
+        el.setAttribute('tabindex', '-1');
+    }
+
+    function unlockFields() {
+        if (cashBoxSelect) {
+            cashBoxSelect.style.pointerEvents = 'auto';
+            cashBoxSelect.style.backgroundColor = '';
+            cashBoxSelect.removeAttribute('tabindex');
+        }
+        
+        document.querySelectorAll('.line-row select[name$="-warehouse"]').forEach(el => {
+            el.style.pointerEvents = 'auto';
+            el.style.backgroundColor = '';
+            el.removeAttribute('tabindex');
+        });
+    }
+
+    if (salesRepSelect) salesRepSelect.addEventListener('change', (e) => fetchAndApplyRepDetails(e.target.value));
+
+    // Handle Current User as Rep
+    {% for rep in form.sales_rep.field.queryset %}
+        {% if rep.user_id == request.user.id %}
+            if (salesRepSelect && !salesRepSelect.value) {
+                salesRepSelect.value = "{{ rep.id }}";
+                lockField(salesRepSelect);
+                fetchAndApplyRepDetails("{{ rep.id }}");
+            }
+        {% endif %}
+    {% endfor %}
+    
+    if (salesRepSelect && salesRepSelect.value) {
+        fetchAndApplyRepDetails(salesRepSelect.value);
+    }
+
+    document.getElementById('addRow').addEventListener('click', function() {
+        setTimeout(() => {
+            const table = document.getElementById('linesTable').getElementsByTagName('tbody')[0];
+            const newRow = table.querySelector('.line-row:last-child');
+            if (salesRepSelect && salesRepSelect.value) fetchAndApplyRepDetails(salesRepSelect.value);
+            applyCustomerDefaultsToRow(newRow);
+        }, 100);
+    });
+</script>
+{% endblock %}

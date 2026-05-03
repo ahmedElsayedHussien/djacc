@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block title %}إنشاء فترة رواتب جديدة{% endblock %}
+{% block header %}إنشاء فترة رواتب جديدة{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    {{ form|crispy }}
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{% url 'hr:payroll-list' %}" class="btn btn-outline-secondary">إلغاء والعودة</a>
+                        <button type="submit" class="btn btn-primary px-4"><i class="bi bi-save"></i> حفظ الفترة المفتوحة</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

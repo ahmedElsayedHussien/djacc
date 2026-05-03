@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% block title %}تفاصيل مسير الرواتب: {{ period.name }}{% endblock %}
+{% block header %}تفاصيل مسير الرواتب: {{ period.name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card shadow-sm border-top border-primary border-3">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <h4 class="fw-bold mb-1">{{ period.name }}</h4>
+                        <p class="text-muted mb-0">من {{ period.start_date|date:"Y-m-d" }} إلى {{ period.end_date|date:"Y-m-d" }}</p>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        {% if period.status == 'draft' %}
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary fs-6 px-3 py-2">حالة المسير: مسودة (Draft)</span>
+                        {% elif period.status == 'approved' %}
+                        <span class="badge bg-primary-subtle text-primary border border-primary fs-6 px-3 py-2">حالة المسير: معتمد للتنفيذ</span>
+                        {% elif period.status == 'posted' %}
+                        <span class="badge bg-success-subtle text-success border border-success fs-6 px-3 py-2"><i class="bi bi-check-circle-fill"></i> تم الترحيل المحاسبي</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            {% if period.status == 'draft' %}
+            <div class="card-footer bg-light d-flex justify-content-between">
+                <form method="post" action="{% url 'hr:payroll-generate' period.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-magic"></i> توليد قسائم الرواتب آلياً (للموظفين النشطين)</button>
+                </form>
+                
+                {% if payslips %}
+                <form method="post" action="{% url 'hr:payroll-post' period.pk %}" onsubmit="return confirm('هل أنت متأكد من ترحيل هذا المسير وإنشاء قيد محاسبي؟ لا يمكن التراجع عن هذه الخطوة.');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success"><i class="bi bi-journal-check"></i> اعتماد وترحيل محاسبي</button>
+                </form>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white">
+        <h5 class="mb-0"><i class="bi bi-receipt"></i> قسائم الرواتب المفصلة (Payslips)</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>الموظف</th>
+                        <th class="text-end">الأساسي</th>
+                        <th class="text-end text-success">البدلات</th>
+                        <th class="text-end text-danger">الاستقطاعات/سلف</th>
+                        <th class="text-end text-warning">حصة التأمينات</th>
+                        <th class="text-end text-danger">ضريبة الدخل</th>
+                        <th class="text-end fw-bold bg-light">الصافي للموظف</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for slip in payslips %}
+                    <tr>
+                        <td>
+                            <div class="fw-bold">{{ slip.employee.first_name }} {{ slip.employee.last_name }}</div>
+                            <small class="text-muted">{{ slip.employee.job_title.name }}</small>
+                        </td>
+                        <td class="text-end">{{ slip.basic_salary }}</td>
+                        <td class="text-end text-success">{{ slip.total_allowances }}</td>
+                        <td class="text-end text-danger">{{ slip.total_deductions }}</td>
+                        <td class="text-end text-warning">{{ slip.social_insurance }}</td>
+                        <td class="text-end text-danger">{{ slip.income_tax }}</td>
+                        <td class="text-end fw-bold bg-light text-primary">{{ slip.net_salary }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="bi bi-file-earmark-x fs-1 d-block mb-3"></i>
+                            لم يتم توليد أي قسائم رواتب لهذه الفترة بعد.<br>
+                            اضغط على زر "توليد قسائم الرواتب آلياً" بالأعلى للبدء.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% if payslips %}
+                <tfoot class="table-dark">
+                    <tr>
+                        <th>الإجمالي الكلي:</th>
+                        <th class="text-end" id="sum-basic"></th>
+                        <th class="text-end text-success" id="sum-allow"></th>
+                        <th class="text-end text-danger" id="sum-deduct"></th>
+                        <th class="text-end text-warning" id="sum-insur"></th>
+                        <th class="text-end text-danger" id="sum-tax"></th>
+                        <th class="text-end fw-bold text-white" id="sum-net"></th>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if payslips %}
+<script>
+    // Simple script to sum columns in the footer
+    document.addEventListener("DOMContentLoaded", function() {
+        let sums = [0, 0, 0, 0, 0, 0];
+        let rows = document.querySelectorAll("tbody tr");
+        rows.forEach(row => {
+            let cells = row.querySelectorAll("td");
+            if(cells.length > 1) {
+                sums[0] += parseFloat(cells[1].innerText) || 0;
+                sums[1] += parseFloat(cells[2].innerText) || 0;
+                sums[2] += parseFloat(cells[3].innerText) || 0;
+                sums[3] += parseFloat(cells[4].innerText) || 0;
+                sums[4] += parseFloat(cells[5].innerText) || 0;
+                sums[5] += parseFloat(cells[6].innerText) || 0;
+            }
+        });
+        
+        document.getElementById('sum-basic').innerText = sums[0].toFixed(2);
+        document.getElementById('sum-allow').innerText = sums[1].toFixed(2);
+        document.getElementById('sum-deduct').innerText = sums[2].toFixed(2);
+        document.getElementById('sum-insur').innerText = sums[3].toFixed(2);
+        document.getElementById('sum-tax').innerText = sums[4].toFixed(2);
+        document.getElementById('sum-net').innerText = sums[5].toFixed(2);
+    });
+</script>
+{% endif %}
+{% endblock %}

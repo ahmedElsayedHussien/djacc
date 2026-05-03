@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% block title %}المركز المالي{% endblock %}
+{% block header %}الميزانية العمومية / المركز المالي{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-8">
+                <label class="form-label">في تاريخ</label>
+                <input type="date" name="date" class="form-control" value="{{ as_of_date }}">
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary w-100">تحديث الميزانية</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Assets Side -->
+    <div class="col-md-6">
+        <div class="card border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">الأصول (Assets)</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr class="table-light">
+                            <th>الحساب</th>
+                            <th class="text-end">القيمة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in report.assets %}
+                        <tr>
+                            <td>{{ item.name }}</td>
+                            <td class="text-end">{{ item.balance }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="2" class="text-center text-muted">لا توجد أصول مسجلة.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="table-success fw-bold fs-5">
+                            <td>إجمالي الأصول</td>
+                            <td class="text-end">{{ report.total_assets }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Liabilities & Equity Side -->
+    <div class="col-md-6">
+        <div class="card border-danger mb-4">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">الالتزامات (Liabilities)</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <tbody>
+                        {% for item in report.liabilities %}
+                        <tr>
+                            <td>{{ item.name }}</td>
+                            <td class="text-end">{{ item.balance }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="2" class="text-center text-muted">لا توجد التزامات مسجلة.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="table-danger fw-bold fs-5">
+                            <td>إجمالي الالتزامات</td>
+                            <td class="text-end">{{ report.total_liabilities }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <div class="card border-info">
+            <div class="card-header bg-info text-dark">
+                <h5 class="mb-0">حقوق الملكية (Equity)</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <tbody>
+                        {% for item in report.equity %}
+                        <tr>
+                            <td>{{ item.name }}</td>
+                            <td class="text-end">{{ item.balance }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="table-info fw-bold fs-5">
+                            <td>إجمالي حقوق الملكية</td>
+                            <td class="text-end">{{ report.total_equity }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mt-4 bg-dark text-white shadow-lg">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">إجمالي الالتزامات وحقوق الملكية</h5>
+                    <h4 class="mb-0">{{ report.total_liabilities|add:report.total_equity }}</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4 text-center d-print-none">
+    <div class="col">
+        <button class="btn btn-secondary" onclick="window.print()">
+            <i class="bi bi-printer"></i> طباعة الميزانية
+        </button>
+    </div>
+</div>
+
+{% if report.total_assets != report.total_liabilities|add:report.total_equity %}
+<div class="alert alert-danger mt-4 text-center">
+    <i class="bi bi-exclamation-triangle-fill"></i> تحذير: الميزانية غير متوازنة! الفرق: {{ report.total_assets|add:"-"|add:report.total_liabilities|add:"-"|add:report.total_equity }}
+</div>
+{% endif %}
+
+{% endblock %}

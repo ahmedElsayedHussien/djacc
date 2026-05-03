@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}سندات الصرف للموردين{% endblock %}
+{% block header %}سندات صرف الموردين{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">سجل المدفوعات</h5>
+        <a href="{% url 'purchases:payment-create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> إضافة سند صرف
+        </a>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>الرقم</th>
+                        <th>التاريخ</th>
+                        <th>المورد</th>
+                        <th>المبلغ</th>
+                        <th>طريقة الدفع</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pay in payments %}
+                    <tr>
+                        <td>{{ pay.number }}</td>
+                        <td>{{ pay.date }}</td>
+                        <td>{{ pay.supplier.name }}</td>
+                        <td><strong>{{ pay.amount }}</strong></td>
+                        <td>{{ pay.get_payment_method_display }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center">لا يوجد سندات صرف مسجلة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

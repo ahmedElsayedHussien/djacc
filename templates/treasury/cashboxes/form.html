@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}{% if object %}تعديل خزنة{% else %}إضافة خزنة{% endif %}{% endblock %}
+{% block header %}{% if object %}تعديل خزنة{% else %}إضافة خزنة{% endif %}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                {% include 'partials/_form_errors.html' %}
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">كود الخزنة</label>
+                        {{ form.code }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">اسم الخزنة</label>
+                        {{ form.name }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">العملة</label>
+                        {{ form.currency }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">المستخدم المسؤول</label>
+                        {{ form.responsible_user }}
+                    </div>
+
+                    {% if not object %}
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">رصيد أول المدة</label>
+                            {{ form.initial_balance }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">نوع الرصيد</label>
+                            {{ form.initial_balance_type }}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">حفظ</button>
+                        <a href="{% url 'treasury:cashbox-list' %}" class="btn btn-secondary">إلغاء</a>
+                    </div>
+                    {% if not object %}
+                    <div class="mt-3 text-muted small">
+                        سيتم إنشاء حساب محاسبي تلقائياً للخزنة تحت شجرة النقدية (أصول)
+                    </div>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

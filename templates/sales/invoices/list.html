@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% block title %}فواتير المبيعات{% endblock %}
+{% block header %}فواتير المبيعات{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">سجل الفواتير</h5>
+        <a href="{% url 'sales:invoice-create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> إنشاء فاتورة جديدة
+        </a>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-2 mb-4">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" name="q" class="form-control" placeholder="بحث برقم الفاتورة أو اسم العميل..." value="{{ request.GET.q }}">
+                </div>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-secondary w-100">بحث</button>
+            </div>
+            {% if request.GET.q %}
+            <div class="col-md-2">
+                <a href="{% url 'sales:invoice-list' %}" class="btn btn-link text-decoration-none">إلغاء البحث</a>
+            </div>
+            {% endif %}
+        </form>
+
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>رقم الفاتورة</th>
+                        <th>التاريخ</th>
+                        <th>العميل</th>
+                        <th>الإجمالي</th>
+                        <th>الحالة</th>
+                        <th>إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for inv in invoices %}
+                    <tr>
+                        <td>{{ inv.number }}</td>
+                        <td>{{ inv.date }}</td>
+                        <td>{{ inv.customer.name }}</td>
+                        <td><strong>{{ inv.total }}</strong></td>
+                        <td>
+                            <span class="badge {% if inv.status == 'posted' %}bg-success{% elif inv.status == 'draft' %}bg-warning{% else %}bg-info{% endif %}">
+                                {{ inv.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if inv.status == 'draft' %}
+                            <div class="btn-group">
+                                <form method="post" action="{% url 'sales:invoice-post' inv.pk %}" style="display:inline;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-success">ترحيل</button>
+                                </form>
+                                <a href="{% url 'sales:invoice-edit' inv.pk %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-pencil"></i> تعديل
+                                </a>
+                                <form method="post" action="{% url 'sales:invoice-reverse' inv.pk %}" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من إلغاء هذه الفاتورة؟');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-warning">
+                                        <i class="bi bi-x-circle"></i> إلغاء
+                                    </button>
+                                </form>
+                            </div>
+                            {% elif inv.status == 'posted' %}
+                            <div class="btn-group">
+                                <a href="{% url 'sales:invoice-detail' inv.pk %}" class="btn btn-sm btn-info text-white">عرض</a>
+                                <form method="post" action="{% url 'sales:invoice-reverse' inv.pk %}" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من عكس هذه الفاتورة؟ سيتم إنشاء قيد عكسي واستعادة المخزون.');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-arrow-counterclockwise"></i> عكس الفاتورة
+                                    </button>
+                                </form>
+                            </div>
+                            {% else %}
+                            <span class="text-muted small"><i class="bi bi-lock"></i> ملغي / معكوس</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center">لا يوجد فواتير مبيعات مسجلة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

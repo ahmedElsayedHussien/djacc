@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}{% if object %}تعديل ضريبة{% else %}إضافة ضريبة جديدة{% endif %}{% endblock %}
+{% block header %}{% if object %}تعديل ضريبة{% else %}إضافة ضريبة جديدة{% endif %}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    {% include 'partials/_form_errors.html' %}
+                    
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">اسم الضريبة *</label>
+                        {{ form.name }}
+                        <div class="form-text">مثال: ضريبة القيمة المضافة 14%</div>
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">الفئة *</label>
+                            {{ form.category }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">النسبة المئوية (%) *</label>
+                            {{ form.rate }}
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">الحساب المحاسبي المرتبط *</label>
+                        {{ form.account }}
+                        <div class="form-text">الحساب الذي ستسجل فيه مبالغ هذه الضريبة في شجرة الحسابات.</div>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-5">
+                        <button type="submit" class="btn btn-primary btn-lg px-5">حفظ البيانات</button>
+                        <a href="{% url 'core:taxtype-list' %}" class="btn btn-light btn-lg px-4">إلغاء</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="mt-4 card bg-light border-0">
+            <div class="card-body small text-muted">
+                <h6 class="fw-bold text-dark mb-2"><i class="bi bi-info-circle me-1"></i> ملاحظة محاسبية:</h6>
+                <ul>
+                    <li><strong>ضريبة القيمة المضافة:</strong> تظهر دائنة في المبيعات ومدينة في المشتريات.</li>
+                    <li><strong>ضريبة الخصم والتحصيل:</strong> تظهر مدينة في المبيعات ودائنة في المشتريات.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

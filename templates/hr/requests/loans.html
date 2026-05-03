@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}إدارة السلف والعهد{% endblock %}
+{% block header %}إدارة طلبات السلف المالية{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>الموظف</th>
+                        <th>تاريخ الطلب</th>
+                        <th class="text-end">قيمة السلفة</th>
+                        <th class="text-center">خطة السداد</th>
+                        <th>سبب السلفة</th>
+                        <th>الحالة</th>
+                        <th class="text-end">الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for req in loans %}
+                    <tr>
+                        <td>
+                            <div class="fw-bold">{{ req.employee.first_name }} {{ req.employee.last_name }}</div>
+                            <small class="text-muted">{{ req.employee.department.name }}</small>
+                        </td>
+                        <td>{{ req.request_date|date:"Y-m-d" }}</td>
+                        <td class="text-end fw-bold text-danger">{{ req.amount }}</td>
+                        <td class="text-center">
+                            <span class="d-block">{{ req.installments_count }} شهور</span>
+                            <small class="text-muted">(قسط: {{ req.monthly_installment }})</small>
+                        </td>
+                        <td><small class="text-muted d-inline-block text-truncate" style="max-width: 150px;">{{ req.reason|default:"غير محدد" }}</small></td>
+                        <td>
+                            {% if req.status == 'pending' %}
+                            <span class="badge bg-warning-subtle text-warning border border-warning">قيد الانتظار</span>
+                            {% elif req.status == 'approved' %}
+                            <span class="badge bg-success-subtle text-success border border-success">موافق عليها</span>
+                            {% elif req.status == 'paid' %}
+                            <span class="badge bg-primary-subtle text-primary border border-primary">مسددة بالكامل</span>
+                            {% else %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger">مرفوضة</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if req.status == 'pending' %}
+                            <form method="post" action="{% url 'hr:loan-approve' req.pk %}" class="d-inline" onsubmit="return confirm('هل أنت متأكد من الموافقة واعتماد خطة السداد؟ سيرتبط ذلك بالرواتب.');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> موافقة</button>
+                            </form>
+                            <form method="post" action="{% url 'hr:loan-reject' req.pk %}" class="d-inline" onsubmit="return confirm('هل أنت متأكد من الرفض؟');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-danger"><i class="bi bi-x-lg"></i> رفض</button>
+                            </form>
+                            {% else %}
+                            <small class="text-muted">مغلق</small>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-muted">لا توجد طلبات سلف مالية مسجلة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

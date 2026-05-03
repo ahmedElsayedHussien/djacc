@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+{% block title %}{% if object %}تعديل قائمة أسعار{% else %}إنشاء قائمة أسعار جديدة{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <form method="post">
+        {% csrf_token %}
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="h3 mb-0">{% if object %}تعديل قائمة: {{ object.name }}{% else %}إنشاء قائمة أسعار جديدة{% endif %}</h2>
+            <div>
+                <a href="{% url 'sales:pricelist-list' %}" class="btn btn-outline-secondary me-2">إلغاء</a>
+                <button type="submit" class="btn btn-primary">حفظ القائمة</button>
+            </div>
+        </div>
+
+        <div class="card mb-4 shadow-sm border-0">
+            <div class="card-header bg-white py-3">
+                <h5 class="card-title mb-0">المعلومات الأساسية</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">اسم القائمة (مثلاً: أسعار الجملة)</label>
+                        {{ form.name }}
+                        {{ form.name.errors }}
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end pb-2">
+                        <div class="form-check">
+                            {{ form.is_default }}
+                            <label class="form-check-label">تعيين كافتراضية</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end pb-2">
+                        <div class="form-check">
+                            {{ form.is_active }}
+                            <label class="form-check-label">نشطة</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">أسعار الأصناف في هذه القائمة</h5>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="add-item">إضافة صنف للقائمة</button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="items-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 50%;">الصنف</th>
+                                <th style="width: 25%;">سعر الوحدة</th>
+                                <th style="width: 15%;">أقل كمية</th>
+                                <th style="width: 10%;">حذف</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{ items.management_form }}
+                            {% for item_form in items %}
+                            <tr class="item-row">
+                                {% for hidden in item_form.hidden_fields %}
+                                    {{ hidden }}
+                                {% endfor %}
+                                <td>
+                                    {{ item_form.item }}
+                                    {{ item_form.item.errors }}
+                                </td>
+                                <td>
+                                    {{ item_form.unit_price }}
+                                    {{ item_form.unit_price.errors }}
+                                </td>
+                                <td>
+                                    {{ item_form.min_qty }}
+                                    {{ item_form.min_qty.errors }}
+                                </td>
+                                <td>
+                                    {% if item_form.instance.pk %}
+                                        {{ item_form.DELETE }}
+                                    {% else %}
+                                        <button type="button" class="btn btn-sm btn-outline-danger remove-item"><i class="bi bi-trash"></i></button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const addBtn = document.getElementById('add-item');
+        const tableBody = document.querySelector('#items-table tbody');
+        const totalForms = document.getElementById('id_items-TOTAL_FORMS');
+
+        addBtn.addEventListener('click', function() {
+            const formCount = parseInt(totalForms.value);
+            const template = document.querySelector('.item-row').cloneNode(true);
+            
+            template.querySelectorAll('input, select').forEach(input => {
+                const name = input.name.replace(/-\d+-/, `-${formCount}-`);
+                const id = input.id.replace(/-\d+-/, `-${formCount}-`);
+                input.name = name;
+                input.id = id;
+                if (input.type !== 'hidden') input.value = '';
+            });
+
+            const deleteCell = template.querySelector('td:last-child');
+            deleteCell.innerHTML = '<button type="button" class="btn btn-sm btn-outline-danger remove-item"><i class="bi bi-trash"></i></button>';
+
+            tableBody.appendChild(template);
+            totalForms.value = formCount + 1;
+        });
+
+        tableBody.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-item')) {
+                const row = e.target.closest('.item-row');
+                row.remove();
+                const rows = tableBody.querySelectorAll('.item-row');
+                totalForms.value = rows.length;
+            }
+        });
+    });
+</script>
+{% endblock %}

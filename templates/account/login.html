@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block title %}{% trans "Sign In" %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-5">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white text-center py-3">
+                <h4 class="mb-0">تسجيل الدخول</h4>
+            </div>
+            <div class="card-body p-4">
+                <form class="login" method="POST" action="{% url 'account_login' %}">
+                    {% csrf_token %}
+                    
+                    {% if form.errors %}
+                    <div class="alert alert-danger">
+                        بيانات الدخول غير صحيحة، يرجى المحاولة مرة أخرى.
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label for="id_login" class="form-label">اسم المستخدم أو البريد الإلكتروني</label>
+                        <input type="text" name="login" placeholder="admin" class="form-control" required id="id_login">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_password" class="form-label">كلمة المرور</label>
+                        <input type="password" name="password" placeholder="******" class="form-control" required id="id_password">
+                    </div>
+
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" name="remember" class="form-check-input" id="id_remember">
+                        <label class="form-check-label" for="id_remember">تذكرني</label>
+                    </div>
+
+                    {% if redirect_field_value %}
+                    <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}" />
+                    {% endif %}
+
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary btn-lg" type="submit">دخول</button>
+                    </div>
+                </form>
+            </div>
+            <div class="card-footer text-center text-muted py-3">
+                نظام المحاسبة المتقدم &copy; 2026
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

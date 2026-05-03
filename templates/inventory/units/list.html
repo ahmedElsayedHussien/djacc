@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}وحدات القياس{% endblock %}
+{% block header %}وحدات القياس{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">قائمة الوحدات</h5>
+        <a href="{% url 'inventory:unit-create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> إضافة وحدة جديدة
+        </a>
+    </div>
+    <div class="card-body">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>الكود</th>
+                    <th>الاسم</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for unit in object_list %}
+                <tr>
+                    <td>{{ unit.code }}</td>
+                    <td>{{ unit.name }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="2" class="text-center">لا يوجد وحدات مضافة.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

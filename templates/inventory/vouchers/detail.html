@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block title %}تفاصيل الإذن المخزني{% endblock %}
+{% block header %}إذن {{ voucher.get_voucher_type_display }}: {{ voucher.number }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0">بيانات الإذن</h5></div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr><th>رقم الإذن:</th><td>{{ voucher.number }}</td></tr>
+                    <tr><th>النوع:</th><td>{{ voucher.get_voucher_type_display }}</td></tr>
+                    <tr><th>التاريخ:</th><td>{{ voucher.date|date:'Y-m-d' }}</td></tr>
+                    <tr><th>المستودع:</th><td>{{ voucher.warehouse.name }}</td></tr>
+                    <tr><th>الحالة:</th>
+                        <td>
+                            {% if voucher.status == 'draft' %}
+                            <span class="badge bg-secondary">مسودة</span>
+                            {% elif voucher.status == 'posted' %}
+                            <span class="badge bg-primary">مرحّل</span>
+                            {% else %}
+                            <span class="badge bg-danger">ملغي</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr><th>الحساب المقابل:</th><td>{{ voucher.offset_account.name|default:"-" }}</td></tr>
+                    <tr><th>القيد المحاسبي:</th>
+                        <td>
+                            {% if voucher.journal_entry %}
+                            <a href="/admin/core/journalentry/{{ voucher.journal_entry.pk }}/change/">{{ voucher.journal_entry.number }}</a>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+
+                {% if voucher.status == 'draft' %}
+                <form method="post" action="{% url 'inventory:voucher-post' voucher.pk %}" class="mt-3">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success w-100" onclick="return confirm('تأكيد الترحيل؟ سيتم تحديث المخزون ولن يمكنك تعديل الإذن بعد ذلك.');">
+                        <i class="bi bi-check-circle"></i> ترحيل الإذن
+                    </button>
+                </form>
+                {% elif voucher.status == 'posted' %}
+                <form method="post" action="{% url 'inventory:voucher-reverse' voucher.pk %}" class="mt-3">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger w-100" onclick="return confirm('تأكيد عكس الإذن؟ سيتم إنشاء حركات مخزنية وقيد محاسبي عكسي.');">
+                        <i class="bi bi-arrow-counterclockwise"></i> عكس الإذن
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if voucher.notes %}
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">ملاحظات</h5></div>
+            <div class="card-body">{{ voucher.notes }}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">الأصناف</h5></div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>الصنف</th>
+                                <th>الكمية</th>
+                                <th>متوسط التكلفة</th>
+                                <th>إجمالي التكلفة</th>
+                                <th>ملاحظات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for line in voucher.lines.all %}
+                            <tr>
+                                <td>{{ line.item.name }}</td>
+                                <td>{{ line.quantity|floatformat:2 }}</td>
+                                <td>{% if voucher.status == 'posted' or voucher.voucher_type == 'receipt' %}{{ line.unit_cost|floatformat:2 }}{% else %}<span class="text-muted">عند الترحيل</span>{% endif %}</td>
+                                <td>{% if voucher.status == 'posted' or voucher.voucher_type == 'receipt' %}{{ line.total_cost|floatformat:2 }}{% else %}-{% endif %}</td>
+                                <td>{{ line.notes }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

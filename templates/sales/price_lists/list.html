@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}قوائم الأسعار{% endblock %}
+{% block header %}قوائم الأسعار{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">قوائم الأسعار المتاحة</h5>
+        <a href="{% url 'sales:pricelist-create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> إنشاء قائمة أسعار جديدة
+        </a>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>اسم القائمة</th>
+                        <th>افتراضية؟</th>
+                        <th>الحالة</th>
+                        <th class="text-end">إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pl in price_lists %}
+                    <tr>
+                        <td><span class="fw-bold text-primary">{{ pl.name }}</span></td>
+                        <td>{% if pl.is_default %}<span class="badge bg-success">نعم</span>{% else %}لا{% endif %}</td>
+                        <td>{% if pl.is_active %}<span class="badge bg-info">نشطة</span>{% else %}<span class="badge bg-secondary">غير نشطة</span>{% endif %}</td>
+                        <td class="text-end">
+                            <a href="{% url 'sales:pricelist-update' pl.id %}" class="btn btn-sm btn-outline-primary me-1">تعديل الأسعار</a>
+                            <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#deactivateModal{{ pl.id }}">إيقاف</button>
+
+                            <!-- Deactivate Modal -->
+                            <div class="modal fade" id="deactivateModal{{ pl.id }}" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content text-start">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">إيقاف قائمة الأسعار</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            هل أنت متأكد من إيقاف قائمة الأسعار <strong>{{ pl.name }}</strong>؟
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                                            <form action="{% url 'sales:pricelist-delete' pl.id %}" method="post" class="d-inline">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-warning">تأكيد الإيقاف</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center py-4">لا يوجد قوائم أسعار مسجلة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

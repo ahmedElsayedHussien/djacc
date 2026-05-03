@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block title %}إضافة إذن مخزني{% endblock %}
+{% block header %}إضافة إذن مخزني (صرف/إضافة){% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <form method="post">
+            {% csrf_token %}
+            <div class="card mb-4">
+                <div class="card-header"><h5 class="mb-0">بيانات الإذن</h5></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">{{ form.date|as_crispy_field }}</div>
+                        <div class="col-md-3">{{ form.voucher_type|as_crispy_field }}</div>
+                        <div class="col-md-3">{{ form.warehouse|as_crispy_field }}</div>
+                        <div class="col-md-3">{{ form.offset_account|as_crispy_field }}</div>
+                    </div>
+                    {{ form.notes|as_crispy_field }}
+                    <small class="text-muted">ملاحظة: اختر الحساب المقابل فقط إذا كنت ترغب في إنشاء قيد محاسبي (مثل: عجز مخزون، بضاعة تالفة، هدايا).</small>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header"><h5 class="mb-0">الأصناف</h5></div>
+                <div class="card-body">
+                    {{ lines.management_form }}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>الصنف</th>
+                                    <th>الكمية</th>
+                                    <th>التكلفة (للإضافة فقط)</th>
+                                    <th>ملاحظات</th>
+                                    <th>حذف</th>
+                                </tr>
+                            </thead>
+                            <tbody id="line-items">
+                                {% for l_form in lines %}
+                                <tr class="line-form">
+                                    <td>{{ l_form.id }}{{ l_form.item|as_crispy_field }}</td>
+                                    <td>{{ l_form.quantity|as_crispy_field }}</td>
+                                    <td>{{ l_form.unit_cost|as_crispy_field }}</td>
+                                    <td>{{ l_form.notes|as_crispy_field }}</td>
+                                    <td>{{ l_form.DELETE|as_crispy_field }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <small class="text-warning">في حالة إذن الصرف، سيتم حساب التكلفة تلقائياً بناءً على متوسط التكلفة الحالي بالمخزن عند الترحيل.</small>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 mb-5">
+                <button type="submit" class="btn btn-primary">حفظ الإذن كمسودة</button>
+                <a href="{% url 'inventory:voucher-list' %}" class="btn btn-secondary">إلغاء</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    .line-form .mb-3 { margin-bottom: 0 !important; }
+    .line-form label { display: none; }
+</style>
+{% endblock %}

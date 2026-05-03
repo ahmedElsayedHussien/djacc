@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+{% block title %}الملف الوظيفي: {{ employee.first_name }}{% endblock %}
+{% block header %}الملف الوظيفي: {{ employee.first_name }} {{ employee.last_name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Profile Card -->
+    <div class="col-md-4 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body text-center">
+                <div class="avatar-circle bg-primary text-white mx-auto mb-3 d-flex justify-content-center align-items-center rounded-circle fs-1" style="width: 100px; height: 100px;">
+                    {{ employee.first_name|first }}{{ employee.last_name|first }}
+                </div>
+                <h4 class="fw-bold">{{ employee.first_name }} {{ employee.last_name }}</h4>
+                <p class="text-muted mb-1">{{ employee.job_title.name }}</p>
+                <p class="text-muted mb-3">{{ employee.department.name }}</p>
+                
+                {% if employee.status == 'active' %}
+                <span class="badge bg-success w-50 py-2">على رأس العمل</span>
+                {% elif employee.status == 'on_leave' %}
+                <span class="badge bg-warning text-dark w-50 py-2">في إجازة</span>
+                {% else %}
+                <span class="badge bg-secondary w-50 py-2">{{ employee.get_status_display }}</span>
+                {% endif %}
+                
+                <hr class="my-4">
+                
+                <div class="text-start">
+                    <p class="mb-2"><i class="bi bi-person-badge text-primary me-2"></i> {{ employee.national_id }}</p>
+                    <p class="mb-2"><i class="bi bi-telephone text-primary me-2"></i> {{ employee.phone|default:"غير مسجل" }}</p>
+                    <p class="mb-2"><i class="bi bi-envelope text-primary me-2"></i> {% if employee.user %}{{ employee.user.email }}{% else %}غير مربوط بمستخدم{% endif %}</p>
+                    <p class="mb-0"><i class="bi bi-geo-alt text-primary me-2"></i> {{ employee.address|default:"غير مسجل" }}</p>
+                </div>
+                
+                <div class="mt-4">
+                    <a href="{% url 'hr:employee-edit' employee.pk %}" class="btn btn-outline-primary w-100"><i class="bi bi-pencil"></i> تعديل بيانات الموظف</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs Content -->
+    <div class="col-md-8 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white pb-0">
+                <ul class="nav nav-tabs border-0" id="empTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active fw-bold" id="info-tab" data-bs-toggle="tab" data-bs-target="#info" type="button" role="tab">بيانات التعاقد</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold" id="docs-tab" data-bs-toggle="tab" data-bs-target="#docs" type="button" role="tab">المستندات الرسمية</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold" id="leaves-tab" data-bs-toggle="tab" data-bs-target="#leaves" type="button" role="tab">رصيد الإجازات</button>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content" id="empTabContent">
+                    
+                    <!-- Contract Info Tab -->
+                    <div class="tab-pane fade show active" id="info" role="tabpanel">
+                        <h6 class="text-muted mb-4 mt-2">معلومات الوظيفة والعقد</h6>
+                        <table class="table table-borderless">
+                            <tr>
+                                <th class="w-25 text-muted">المدير المباشر:</th>
+                                <td>{% if employee.reports_to %}<a href="{% url 'hr:employee-detail' employee.reports_to.pk %}">{{ employee.reports_to }}</a>{% else %}-{% endif %}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-muted">نوع العقد:</th>
+                                <td>{{ employee.get_contract_type_display }}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-muted">تاريخ التعيين:</th>
+                                <td>{{ employee.hiring_date|date:"Y-m-d" }}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-muted">الراتب الأساسي:</th>
+                                <td><span class="fw-bold">{{ employee.basic_salary }}</span></td>
+                            </tr>
+                            <tr>
+                                <th class="text-muted">رقم الحساب البنكي:</th>
+                                <td>{{ employee.bank_account_number|default:"-" }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <!-- Documents Tab -->
+                    <div class="tab-pane fade" id="docs" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3 mt-2">
+                            <h6 class="text-muted mb-0">مستندات ومسوغات التعيين</h6>
+                            <button class="btn btn-sm btn-primary"><i class="bi bi-upload"></i> رفع مستند جديد</button>
+                        </div>
+                        
+                        {% if documents %}
+                        <div class="list-group">
+                            {% for doc in documents %}
+                            <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">{{ doc.title }}</h6>
+                                    <small class="text-muted">{{ doc.get_document_type_display }}</small>
+                                </div>
+                                <div class="text-end">
+                                    {% if doc.is_expired %}
+                                    <span class="badge bg-danger mb-1 d-block">منتهي الصلاحية</span>
+                                    {% elif doc.expiry_date %}
+                                    <small class="text-muted d-block mb-1">ينتهي في: {{ doc.expiry_date|date:"Y-m-d" }}</small>
+                                    {% endif %}
+                                    <a href="{{ doc.file.url }}" target="_blank" class="btn btn-sm btn-outline-info"><i class="bi bi-download"></i></a>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="alert alert-light text-center py-4 text-muted">
+                            <i class="bi bi-folder-x fs-1 d-block mb-2"></i> لا توجد مستندات مرفوعة لهذا الموظف
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Leaves Tab -->
+                    <div class="tab-pane fade" id="leaves" role="tabpanel">
+                        <h6 class="text-muted mb-4 mt-2">أرصدة الإجازات السنوية</h6>
+                        {% if leave_balances %}
+                        <div class="row g-3">
+                            {% for balance in leave_balances %}
+                            <div class="col-md-6">
+                                <div class="card border-info">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-info fw-bold">{{ balance.leave_type.name }} ({{ balance.year }})</h6>
+                                        <div class="d-flex justify-content-between mt-3">
+                                            <div class="text-center">
+                                                <small class="text-muted d-block">الإجمالي</small>
+                                                <span class="fw-bold">{{ balance.total_days }}</span>
+                                            </div>
+                                            <div class="text-center">
+                                                <small class="text-muted d-block">مستهلك</small>
+                                                <span class="text-danger fw-bold">{{ balance.used_days }}</span>
+                                            </div>
+                                            <div class="text-center">
+                                                <small class="text-muted d-block">المتبقي</small>
+                                                <span class="text-success fw-bold">{{ balance.remaining_days }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="alert alert-light text-center py-4 text-muted">
+                            <i class="bi bi-calendar-x fs-1 d-block mb-2"></i> لم يتم تخصيص رصيد إجازات بعد
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

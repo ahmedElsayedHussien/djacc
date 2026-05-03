@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}تفاصيل العميل - {{ object.name }}{% endblock %}
+{% block header %}تفاصيل العميل: {{ object.name }}{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">معلومات العميل</h5>
+                <hr>
+                <p><strong>الكود:</strong> {{ object.code }}</p>
+                <p><strong>حساب المحاسبة:</strong> <code>{{ object.account.code }}</code></p>
+                <p><strong>الهاتف:</strong> {{ object.phone|default:"---" }}</p>
+                <p><strong>البريد:</strong> {{ object.email|default:"---" }}</p>
+                <p><strong>الرصيد الحالي:</strong> <span class="h4 text-primary">{{ balance|default:"0.00" }}</span></p>
+                <a href="{% url 'sales:customer-edit' object.pk %}" class="btn btn-outline-primary w-100 mt-3">تعديل البيانات</a>
+                <a href="{% url 'sales:customer-statement' object.pk %}" class="btn btn-primary w-100 mt-2 rounded-pill">
+                    <i class="bi bi-file-earmark-text"></i> كشف حساب تفصيلي
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">أحدث الفواتير</div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>رقم الفاتورة</th>
+                            <th>التاريخ</th>
+                            <th>المبلغ</th>
+                            <th>الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for inv in invoices %}
+                        <tr>
+                            <td>{{ inv.number }}</td>
+                            <td>{{ inv.date }}</td>
+                            <td>{{ inv.total_amount }}</td>
+                            <td>{{ inv.get_status_display }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center">لا يوجد فواتير مسجلة.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block title %}تقديم طلب إجازة{% endblock %}
+{% block header %}تقديم طلب إجازة أو مغادرة{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-sm border-top border-primary border-3">
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="alert alert-info mb-4">
+                        <i class="bi bi-info-circle me-2"></i> سيتم توجيه طلبك مباشرة إلى مدير الموارد البشرية لمراجعته.
+                    </div>
+                    
+                    {{ form|crispy }}
+                    
+                    <div class="d-flex justify-content-between mt-5">
+                        <a href="{% url 'hr:ess-dashboard' %}" class="btn btn-outline-secondary px-4">إلغاء الرجوع</a>
+                        <button type="submit" class="btn btn-primary px-5"><i class="bi bi-send"></i> إرسال الطلب</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Auto-calculate days difference
+    document.addEventListener('DOMContentLoaded', function() {
+        const startInput = document.getElementById('id_start_date');
+        const endInput = document.getElementById('id_end_date');
+        const totalInput = document.getElementById('id_total_days');
+        
+        function calcDays() {
+            if(startInput.value && endInput.value) {
+                const start = new Date(startInput.value);
+                const end = new Date(endInput.value);
+                const diffTime = Math.abs(end - start);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // Inclusive
+                if (diffDays > 0) {
+                    totalInput.value = diffDays;
+                }
+            }
+        }
+        
+        startInput.addEventListener('change', calcDays);
+        endInput.addEventListener('change', calcDays);
+    });
+</script>
+{% endblock %}

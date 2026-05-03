@@ -1,0 +1,99 @@
+from django import forms
+from django.forms import inlineformset_factory
+from .models import Supplier, PurchaseInvoice, PurchaseInvoiceLine, SupplierPayment
+from apps.inventory.models import Item, Warehouse
+
+class SupplierForm(forms.ModelForm):
+    class Meta:
+        model = Supplier
+        fields = ['code', 'name', 'tax_number', 'phone', 'email', 'payment_terms_days', 'address']
+        widgets = {
+            'code': forms.TextInput(attrs={'class': 'form-control'}),
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'tax_number': forms.TextInput(attrs={'class': 'form-control'}),
+            'phone': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'payment_terms_days': forms.NumberInput(attrs={'class': 'form-control'}),
+            'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+        }
+
+class PurchaseInvoiceForm(forms.ModelForm):
+    class Meta:
+        model = PurchaseInvoice
+        fields = ['number', 'supplier_invoice_number', 'date', 'supplier', 'cost_center', 'due_date']
+        widgets = {
+            'number': forms.TextInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'supplier_invoice_number': forms.TextInput(attrs={'class': 'form-control'}),
+            'date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'supplier': forms.Select(attrs={'class': 'form-select'}),
+            'cost_center': forms.Select(attrs={'class': 'form-select'}),
+            'due_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+        }
+
+class PurchaseInvoiceLineForm(forms.ModelForm):
+    class Meta:
+        model = PurchaseInvoiceLine
+        fields = ['item', 'warehouse', 'unit', 'quantity', 'unit_cost', 'tax_type', 'tax_percent', 'tax_type2', 'tax_percent2']
+        widgets = {
+            'item': forms.Select(attrs={'class': 'form-select item-select'}),
+            'warehouse': forms.Select(attrs={'class': 'form-select'}),
+            'unit': forms.Select(attrs={'class': 'form-select unit-select'}),
+            'quantity': forms.NumberInput(attrs={'class': 'form-control qty-input', 'step': 'any'}),
+            'unit_cost': forms.NumberInput(attrs={'class': 'form-control price-input', 'step': 'any'}),
+            'tax_type': forms.Select(attrs={'class': 'form-select tax-select'}),
+            'tax_type2': forms.Select(attrs={'class': 'form-select tax-select2'}),
+        }
+
+PurchaseInvoiceLineFormSet = inlineformset_factory(
+    PurchaseInvoice, PurchaseInvoiceLine,
+    form=PurchaseInvoiceLineForm,
+    extra=1,
+    can_delete=True
+)
+
+class SupplierPaymentForm(forms.ModelForm):
+    class Meta:
+        model = SupplierPayment
+        fields = ['date', 'supplier', 'amount', 'payment_method', 'bank_account', 'cash_box']
+        widgets = {
+            'date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'supplier': forms.Select(attrs={'class': 'form-select'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
+            'payment_method': forms.Select(attrs={'class': 'form-select'}),
+            'bank_account': forms.Select(attrs={'class': 'form-select'}),
+            'cash_box': forms.Select(attrs={'class': 'form-select'}),
+        }
+
+from .models import PurchaseReturn, PurchaseReturnLine
+
+class PurchaseReturnForm(forms.ModelForm):
+    class Meta:
+        model = PurchaseReturn
+        fields = ['number', 'date', 'invoice', 'supplier', 'notes']
+        widgets = {
+            'number': forms.TextInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'invoice': forms.Select(attrs={'class': 'form-select'}),
+            'supplier': forms.Select(attrs={'class': 'form-select'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+        }
+
+class PurchaseReturnLineForm(forms.ModelForm):
+    class Meta:
+        model = PurchaseReturnLine
+        fields = ['item', 'warehouse', 'quantity', 'unit_cost', 'tax_type', 'tax_percent', 'tax_type2', 'tax_percent2']
+        widgets = {
+            'item': forms.Select(attrs={'class': 'form-select'}),
+            'warehouse': forms.Select(attrs={'class': 'form-select'}),
+            'quantity': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
+            'unit_cost': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
+            'tax_type': forms.Select(attrs={'class': 'form-select'}),
+            'tax_type2': forms.Select(attrs={'class': 'form-select'}),
+        }
+
+PurchaseReturnLineFormSet = inlineformset_factory(
+    PurchaseReturn, PurchaseReturnLine,
+    form=PurchaseReturnLineForm,
+    extra=1,
+    can_delete=True
+)

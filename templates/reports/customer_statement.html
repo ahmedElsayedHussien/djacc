@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% block title %}كشف حساب عميل{% endblock %}
+{% block header %}كشف حساب عميل{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">العميل</label>
+                <select name="customer" class="form-select" required>
+                    <option value="">اختر العميل...</option>
+                    {% for cust in customers %}
+                    <option value="{{ cust.id }}" {% if selected_customer == cust.id %}selected{% endif %}>
+                        {{ cust.name }} ({{ cust.code }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">من تاريخ</label>
+                <input type="date" name="from" class="form-control" value="{{ from_date }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">إلى تاريخ</label>
+                <input type="date" name="to" class="form-control" value="{{ to_date }}">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary w-100">عرض كشف الحساب</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if report %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">كشف حساب: {{ report.customer.name }}</h5>
+        <span class="badge bg-secondary">الفترة من {{ from_date }} إلى {{ to_date }}</span>
+    </div>
+    <div class="card-body">
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="p-3 bg-light border text-center">
+                    <small class="text-muted d-block">الرصيد الافتتاحي</small>
+                    <span class="fs-4 fw-bold">{{ report.opening_balance }}</span>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 bg-light border text-center">
+                    <small class="text-muted d-block">إجمالي الحركات (صافي)</small>
+                    <span class="fs-4 fw-bold">{{ report.closing_balance|add:"-"|add:report.opening_balance }}</span>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 bg-primary text-white border text-center">
+                    <small class="d-block">الرصيد النهائي الحالي</small>
+                    <span class="fs-4 fw-bold">{{ report.closing_balance }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th>التاريخ</th>
+                        <th>البيان / الوصف</th>
+                        <th class="text-end">مدين (+)</th>
+                        <th class="text-end">دائن (-)</th>
+                        <th class="text-end">الرصيد التراكمي</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="table-secondary">
+                        <td colspan="2">رصيد ما قبل الفترة</td>
+                        <td colspan="2"></td>
+                        <td class="text-end fw-bold">{{ report.opening_balance }}</td>
+                    </tr>
+                    {% for line in report.lines %}
+                    <tr>
+                        <td>{{ line.date|date:'Y-m-d' }}</td>
+                        <td>{{ line.description }}</td>
+                        <td class="text-end text-success">{% if line.debit > 0 %}{{ line.debit }}{% else %}-{% endif %}</td>
+                        <td class="text-end text-danger">{% if line.credit > 0 %}{{ line.credit }}{% else %}-{% endif %}</td>
+                        <td class="text-end fw-bold">{{ line.balance }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="table-dark">
+                        <th colspan="2">الإجماليات</th>
+                        <th class="text-end"></th>
+                        <th class="text-end"></th>
+                        <th class="text-end">{{ report.closing_balance }}</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer text-center">
+        <button class="btn btn-outline-secondary" onclick="window.print()">طباعة كشف الحساب</button>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info text-center">الرجاء اختيار عميل وفترة لعرض البيانات.</div>
+{% endif %}
+{% endblock %}

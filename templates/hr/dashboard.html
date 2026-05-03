@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block title %}لوحة تحكم شئون العاملين{% endblock %}
+{% block header %}لوحة تحكم شئون العاملين والرواتب (HR & Payroll){% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-primary text-white h-100 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-uppercase mb-2 opacity-75">إجمالي الموظفين (نشط)</h6>
+                        <h2 class="mb-0 fw-bold">{{ total_employees|default:"0" }}</h2>
+                    </div>
+                    <div class="fs-1 opacity-50"><i class="bi bi-people-fill"></i></div>
+                </div>
+            </div>
+            <div class="card-footer bg-transparent border-0">
+                <a href="#" class="text-white text-decoration-none">إدارة الموظفين <i class="bi bi-arrow-left"></i></a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card bg-warning text-dark h-100 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-uppercase mb-2 opacity-75">طلبات إجازة معلقة</h6>
+                        <h2 class="mb-0 fw-bold">{{ pending_leaves|default:"0" }}</h2>
+                    </div>
+                    <div class="fs-1 opacity-50"><i class="bi bi-calendar2-event"></i></div>
+                </div>
+            </div>
+            <div class="card-footer bg-transparent border-0 border-dark">
+                <a href="#" class="text-dark text-decoration-none">مراجعة الطلبات <i class="bi bi-arrow-left"></i></a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card bg-success text-white h-100 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-uppercase mb-2 opacity-75">فترة الرواتب الحالية</h6>
+                        <h4 class="mb-0 fw-bold">{{ latest_period.name|default:"لا توجد فترات" }}</h4>
+                        {% if latest_period %}
+                        <small class="opacity-75">الحالة: {{ latest_period.get_status_display }}</small>
+                        {% endif %}
+                    </div>
+                    <div class="fs-1 opacity-50"><i class="bi bi-cash-stack"></i></div>
+                </div>
+            </div>
+            <div class="card-footer bg-transparent border-0">
+                <a href="#" class="text-white text-decoration-none">مسيرات الرواتب <i class="bi bi-arrow-left"></i></a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0"><i class="bi bi-lightning-charge text-warning"></i> إجراءات سريعة</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary text-start"><i class="bi bi-person-plus me-2"></i> إضافة موظف جديد</button>
+                    <button class="btn btn-outline-success text-start"><i class="bi bi-calculator me-2"></i> إنشاء مسير رواتب جديد</button>
+                    <button class="btn btn-outline-info text-start"><i class="bi bi-file-earmark-text me-2"></i> تقديم طلب إجازة (بوابة الموظف)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

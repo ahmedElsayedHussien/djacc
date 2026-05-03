@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block title %}طلب سلفة مالية{% endblock %}
+{% block header %}تقديم طلب سلفة مالية (عهد تحت التسوية){% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-sm border-top border-warning border-3">
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="alert alert-warning mb-4">
+                        <i class="bi bi-exclamation-triangle me-2"></i> سيتم خصم الأقساط آلياً من الراتب الشهري بداية من التاريخ المحدد بعد موافقة الإدارة.
+                    </div>
+                    
+                    {{ form|crispy }}
+                    
+                    <div class="d-flex justify-content-between mt-5">
+                        <a href="{% url 'hr:ess-dashboard' %}" class="btn btn-outline-secondary px-4">إلغاء الرجوع</a>
+                        <button type="submit" class="btn btn-warning px-5 fw-bold"><i class="bi bi-send"></i> إرسال الطلب</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Auto-calculate monthly installment
+    document.addEventListener('DOMContentLoaded', function() {
+        const amountInput = document.getElementById('id_amount');
+        const countInput = document.getElementById('id_installments_count');
+        const monthlyInput = document.getElementById('id_monthly_installment');
+        
+        function calcInstallment() {
+            const amount = parseFloat(amountInput.value) || 0;
+            const count = parseInt(countInput.value) || 1;
+            if (amount > 0 && count > 0) {
+                monthlyInput.value = (amount / count).toFixed(2);
+            }
+        }
+        
+        amountInput.addEventListener('input', calcInstallment);
+        countInput.addEventListener('input', calcInstallment);
+    });
+</script>
+{% endblock %}

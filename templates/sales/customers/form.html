@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+{% block title %}{% if object %}تعديل عميل{% else %}عميل جديد{% endif %}{% endblock %}
+{% block header %}{% if object %}تعديل عميل{% else %}عميل جديد{% endif %}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0">{% if object %}تعديل: {{ object.name }}{% else %}إضافة عميل جديد{% endif %}</h5>
+      </div>
+      <div class="card-body">
+        {% include 'partials/_form_errors.html' %}
+        <form method="post" novalidate>
+          {% csrf_token %}
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">كود العميل</label>
+              {{ form.code }}
+            </div>
+            <div class="col-md-8">
+              <label class="form-label">اسم العميل *</label>
+              {{ form.name }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">الرقم الضريبي</label>
+              {{ form.tax_number }}
+            </div>
+            <div class="col-md-3 credit-field">
+              <label class="form-label">حد الائتمان</label>
+              {{ form.credit_limit }}
+            </div>
+            <div class="col-md-3 credit-field">
+              <label class="form-label">أجل السداد (يوم)</label>
+              {{ form.payment_terms_days }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">الهاتف</label>
+              {{ form.phone }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">البريد الإلكتروني</label>
+              {{ form.email }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">نوع العميل *</label>
+              {{ form.customer_type }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">قائمة الأسعار المرتبطة</label>
+              {{ form.price_list }}
+            </div>
+            
+            <hr class="my-4">
+            <h6 class="fw-bold mb-3"><i class="bi bi-percent me-2"></i> إعدادات الضرائب والأتمتة</h6>
+            
+            <div class="col-12 mb-2">
+              <div class="form-check form-switch">
+                {{ form.is_taxable }}
+                <label class="form-check-label fw-bold" for="id_is_taxable">خاضع للضريبة (تفعيل الضرائب التلقائية)</label>
+              </div>
+            </div>
+
+            <div class="col-md-6 tax-defaults-group">
+              <label class="form-label">الضريبة الافتراضية 1 (مثلاً VAT)</label>
+              {{ form.default_tax1 }}
+            </div>
+            <div class="col-md-6 tax-defaults-group">
+              <label class="form-label">الضريبة الافتراضية 2 (مثلاً WHT)</label>
+              {{ form.default_tax2 }}
+            </div>
+
+            <div class="col-12 mt-3">
+              <label class="form-label">العنوان</label>
+              {{ form.address }}
+            </div>
+          </div>
+          <div class="mt-4 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-save"></i> حفظ
+            </button>
+            <a href="{% url 'sales:customer-list' %}" class="btn btn-secondary">إلغاء</a>
+          </div>
+          {% if not object %}
+            <div class="mt-3 text-muted small">
+              <i class="bi bi-info-circle"></i>
+              سيتم إنشاء حساب محاسبي تلقائياً للعميل تحت شجرة العملاء
+            </div>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function toggleCreditFields(customerType) {
+        const creditFields = document.querySelectorAll('.credit-field');
+        creditFields.forEach(field => {
+            if (customerType === 'cash') {
+                field.style.display = 'none';
+            } else {
+                field.style.display = 'block';
+            }
+        });
+    }
+
+    function toggleTaxFields(isTaxable) {
+        const taxFields = document.querySelectorAll('.tax-defaults-group');
+        taxFields.forEach(field => {
+            field.style.display = isTaxable ? 'block' : 'none';
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const typeSelect = document.querySelector('select[name="customer_type"]');
+        const taxableCheckbox = document.querySelector('input[name="is_taxable"]');
+
+        if (typeSelect) {
+            toggleCreditFields(typeSelect.value);
+            typeSelect.addEventListener('change', function() {
+                toggleCreditFields(this.value);
+            });
+        }
+
+        if (taxableCheckbox) {
+            toggleTaxFields(taxableCheckbox.checked);
+            taxableCheckbox.addEventListener('change', function() {
+                toggleTaxFields(this.checked);
+            });
+        }
+    });
+</script>
+{% endblock %}

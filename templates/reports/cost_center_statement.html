@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block title %}كشف حساب مركز تكلفة{% endblock %}
+{% block header %}كشف حساب مركز تكلفة{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">مركز التكلفة</label>
+                <select name="cost_center" class="form-select" required>
+                    <option value="">اختر المركز...</option>
+                    {% for cc in cost_centers %}
+                    <option value="{{ cc.id }}" {% if selected_cost_center == cc.id %}selected{% endif %}>
+                        {{ cc.name }} ({{ cc.code }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">من تاريخ</label>
+                <input type="date" name="from" class="form-control" value="{{ from_date }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">إلى تاريخ</label>
+                <input type="date" name="to" class="form-control" value="{{ to_date }}">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary w-100">عرض الكشف</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if report %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center bg-secondary text-white">
+        <h5 class="mb-0">مركز التكلفة: {{ report.cost_center.name }}</h5>
+        <span>الفترة من {{ from_date }} إلى {{ to_date }}</span>
+    </div>
+    <div class="card-body">
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="p-3 border text-center">
+                    <small class="text-muted d-block">إجمالي المدين (مصروفات)</small>
+                    <span class="fs-4 fw-bold text-danger">{{ report.total_debit }}</span>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 border text-center">
+                    <small class="text-muted d-block">إجمالي الدائن (إيرادات)</small>
+                    <span class="fs-4 fw-bold text-success">{{ report.total_credit }}</span>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 bg-dark text-white border text-center">
+                    <small class="d-block">الصافي (Net)</small>
+                    <span class="fs-4 fw-bold">{{ report.net }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>التاريخ</th>
+                        <th>الحساب المحاسبي</th>
+                        <th>الوصف</th>
+                        <th class="text-end">مدين</th>
+                        <th class="text-end">دائن</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line in report.lines %}
+                    <tr>
+                        <td>{{ line.date|date:'Y-m-d' }}</td>
+                        <td>{{ line.account }}</td>
+                        <td>{{ line.description }}</td>
+                        <td class="text-end">{% if line.debit > 0 %}{{ line.debit }}{% else %}-{% endif %}</td>
+                        <td class="text-end">{% if line.credit > 0 %}{{ line.credit }}{% else %}-{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted">لا توجد حركات مسجلة لهذا المركز في هذه الفترة.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

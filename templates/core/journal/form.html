@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}إنشاء قيد يومية{% endblock %}
+{% block header %}إضافة قيد يومية جديد{% endblock %}
+
+{% block content %}
+<form method="post" id="journalForm">
+    {% csrf_token %}
+    
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <h5 class="card-title text-primary mb-3">بيانات القيد الأساسية</h5>
+                    <div class="row">
+                        <div class="col-md-3">{{ form.date|as_crispy_field }}</div>
+                        <div class="col-md-3">{{ form.entry_type|as_crispy_field }}</div>
+                        <div class="col-md-4">{{ form.description|as_crispy_field }}</div>
+                        <div class="col-md-2">{{ form.reference|as_crispy_field }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 text-primary">أسطر القيد</h5>
+            <button type="button" class="btn btn-sm btn-outline-success" id="addLineBtn">
+                <i class="bi bi-plus-lg"></i> سطر جديد
+            </button>
+        </div>
+        <div class="card-body p-0">
+            {{ lines.management_form }}
+            <table class="table table-hover table-bordered mb-0" id="linesTable">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 25%;">الحساب</th>
+                        <th style="width: 15%;">مركز التكلفة</th>
+                        <th style="width: 15%;">مدين</th>
+                        <th style="width: 15%;">دائن</th>
+                        <th style="width: 25%;">البيان</th>
+                        <th style="width: 5%;">حذف</th>
+                    </tr>
+                </thead>
+                <tbody id="formset-body">
+                    {% for l_form in lines %}
+                    <tr class="line-row">
+                        {% for hidden in l_form.hidden_fields %}{{ hidden }}{% endfor %}
+                        <td>{{ l_form.account|as_crispy_field }}</td>
+                        <td>{{ l_form.cost_center|as_crispy_field }}</td>
+                        <td>{{ l_form.debit|as_crispy_field }}</td>
+                        <td>{{ l_form.credit|as_crispy_field }}</td>
+                        <td>{{ l_form.description|as_crispy_field }}</td>
+                        <td class="text-center align-middle">
+                            {% if lines.can_delete %}
+                                {{ l_form.DELETE }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light fw-bold">
+                    <tr>
+                        <td colspan="2" class="text-end text-muted">الإجماليات:</td>
+                        <td><input type="text" id="totalDebit" class="form-control-plaintext text-success fw-bold" readonly value="0.00"></td>
+                        <td><input type="text" id="totalCredit" class="form-control-plaintext text-danger fw-bold" readonly value="0.00"></td>
+                        <td colspan="2"><span id="balanceStatus" class="badge bg-secondary p-2">جاري الحساب...</span></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-end mb-5">
+        <a href="{% url 'core:journal-list' %}" class="btn btn-light me-2 px-4">إلغاء</a>
+        <button type="submit" class="btn btn-primary px-5 shadow-sm" id="saveBtn">حفظ القيد</button>
+    </div>
+</form>
+
+<style>
+    /* Hide crispy forms labels in table */
+    #linesTable label { display: none; }
+    #linesTable .mb-3 { margin-bottom: 0 !important; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function calculateTotals() {
+        let tDebit = 0;
+        let tCredit = 0;
+        
+        document.querySelectorAll('.line-row').forEach(row => {
+            const deleteCb = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+            if (deleteCb && deleteCb.checked) return;
+            
+            const debitInput = row.querySelector('.debit-input');
+            const creditInput = row.querySelector('.credit-input');
+            
+            const dVal = parseFloat(debitInput.value) || 0;
+            const cVal = parseFloat(creditInput.value) || 0;
+            
+            tDebit += dVal;
+            tCredit += cVal;
+            
+            // Auto zero-out the other side
+            debitInput.addEventListener('input', function() {
+                if(this.value && parseFloat(this.value) > 0) creditInput.value = '';
+                calculateTotals();
+            });
+            creditInput.addEventListener('input', function() {
+                if(this.value && parseFloat(this.value) > 0) debitInput.value = '';
+                calculateTotals();
+            });
+        });
+
+        document.getElementById('totalDebit').value = tDebit.toFixed(2);
+        document.getElementById('totalCredit').value = tCredit.toFixed(2);
+        
+        const statusEl = document.getElementById('balanceStatus');
+        const saveBtn = document.getElementById('saveBtn');
+        
+        if (tDebit === 0 && tCredit === 0) {
+            statusEl.className = 'badge bg-secondary p-2';
+            statusEl.textContent = 'أدخل المبالغ';
+            saveBtn.disabled = true;
+        } else if (Math.abs(tDebit - tCredit) < 0.01) {
+            statusEl.className = 'badge bg-success p-2 w-100';
+            statusEl.textContent = 'متزن';
+            saveBtn.disabled = false;
+        } else {
+            const diff = Math.abs(tDebit - tCredit).toFixed(2);
+            statusEl.className = 'badge bg-danger p-2 w-100';
+            statusEl.textContent = `غير متزن (الفرق: ${diff})`;
+            saveBtn.disabled = true;
+        }
+    }
+
+    // Dynamic formset adding
+    const addBtn = document.getElementById('addLineBtn');
+    const totalForms = document.getElementById('id_journalline_set-TOTAL_FORMS');
+    
+    addBtn.addEventListener('click', function() {
+        const currentCount = parseInt(totalForms.value);
+        const rowTemplate = document.querySelector('.line-row').outerHTML;
+        
+        const newRowStr = rowTemplate.replace(/-\d+-/g, `-${currentCount}-`)
+                                     .replace(/_\d+_/g, `_${currentCount}_`);
+        
+        const tbody = document.getElementById('formset-body');
+        tbody.insertAdjacentHTML('beforeend', newRowStr);
+        totalForms.value = currentCount + 1;
+        
+        // Reset values in the new row
+        const newRow = tbody.lastElementChild;
+        newRow.querySelectorAll('input:not([type="hidden"])').forEach(input => input.value = '');
+        newRow.querySelectorAll('select').forEach(select => select.value = '');
+        if(newRow.querySelector('input[type="checkbox"]')) newRow.querySelector('input[type="checkbox"]').checked = false;
+        
+        calculateTotals();
+    });
+
+    // Initial calculation
+    calculateTotals();
+    
+    // Listen to changes for checkboxes
+    document.getElementById('linesTable').addEventListener('change', function(e) {
+        if(e.target.type === 'checkbox') calculateTotals();
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,57 @@
+<div class="table-responsive border rounded mt-3">
+    <table class="table table-hover mb-0">
+        <thead class="table-light">
+            <tr>
+                <th style="width: 50px;">
+                    <input class="form-check-input" type="checkbox" id="selectAll" checked onchange="toggleAllInvoices(this)">
+                </th>
+                <th>رقم الفاتورة</th>
+                <th>العميل</th>
+                <th>الإجمالي</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for inv in invoices %}
+            <tr>
+                <td>
+                    <input class="form-check-input invoice-check" type="checkbox" name="invoice_ids" value="{{ inv.pk }}" checked onchange="calculateSelectedTotal()">
+                </td>
+                <td>{{ inv.number }}</td>
+                <td>{{ inv.customer.name }}</td>
+                <td class="invoice-total">{{ inv.total }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4" class="text-center text-muted">لا توجد فواتير نقدية غير مسواة لهذا المندوب في هذا التاريخ.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot class="table-light fw-bold">
+            <tr>
+                <td colspan="3" class="text-end">الإجمالي المحدد:</td>
+                <td id="selectedTotal">{{ total }}</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+<script>
+function toggleAllInvoices(source) {
+    const checkboxes = document.querySelectorAll('.invoice-check');
+    checkboxes.forEach(cb => cb.checked = source.checked);
+    calculateSelectedTotal();
+}
+
+function calculateSelectedTotal() {
+    const checkboxes = document.querySelectorAll('.invoice-check');
+    let total = 0;
+    checkboxes.forEach(cb => {
+        if (cb.checked) {
+            const row = cb.closest('tr');
+            const amtStr = row.querySelector('.invoice-total').innerText;
+            total += parseFloat(amtStr) || 0;
+        }
+    });
+    document.getElementById('selectedTotal').innerText = total.toFixed(2);
+}
+</script>

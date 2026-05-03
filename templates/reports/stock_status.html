@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block title %}حالة المخزون{% endblock %}
+{% block header %}تقرير حالة وأرصدة المخزون{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-8">
+                <label class="form-label">المستودع / المخزن</label>
+                <select name="warehouse" class="form-select">
+                    <option value="">كل المستودعات</option>
+                    {% for wh in warehouses %}
+                    <option value="{{ wh.id }}" {% if selected_warehouse == wh.id %}selected{% endif %}>
+                        {{ wh.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary w-100">عرض الأرصدة</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">أرصدة الأصناف</h5>
+        <button class="btn btn-sm btn-outline-light" onclick="window.print()"><i class="bi bi-printer"></i> طباعة</button>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>المستودع</th>
+                        <th>كود الصنف</th>
+                        <th>اسم الصنف</th>
+                        <th>الوحدة</th>
+                        <th class="text-center">الكمية المتوفرة</th>
+                        <th class="text-end">متوسط التكلفة</th>
+                        <th class="text-end">إجمالي القيمة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in report %}
+                    <tr {% if entry.quantity_on_hand <= entry.item.minimum_stock %}class="table-warning"{% endif %}>
+                        <td>{{ entry.warehouse.name }}</td>
+                        <td><code>{{ entry.item.code }}</code></td>
+                        <td>{{ entry.item.name }}</td>
+                        <td>{{ entry.item.unit.name }}</td>
+                        <td class="text-center fw-bold">{{ entry.quantity_on_hand }}</td>
+                        <td class="text-end">{{ entry.average_cost|floatformat:2 }}</td>
+                        <td class="text-end fw-bold">{{ entry.total_value|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="text-center text-muted">لا توجد أرصدة مخزنية حالية.</td></tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="table-dark">
+                        <th colspan="4">الإجمالي العام</th>
+                        <th class="text-center">-</th>
+                        <th class="text-end">-</th>
+                        <th class="text-end" id="total-inventory-value">
+                            {# Sum can be done here or in view, usually better in view or with template tag #}
+                        </th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Simple sum of total_value column for the footer
+    document.addEventListener('DOMContentLoaded', function() {
+        let total = 0;
+        document.querySelectorAll('tbody tr').forEach(row => {
+            let val = parseFloat(row.cells[6].innerText.replace(/,/g, ''));
+            if (!isNaN(val)) total += val;
+        });
+        document.getElementById('total-inventory-value').innerText = total.toLocaleString(undefined, {minimumFractionDigits: 2});
+    });
+</script>
+{% endblock %}

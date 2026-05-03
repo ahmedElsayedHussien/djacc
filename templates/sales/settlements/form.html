@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}تسوية يومية لمندوب{% endblock %}
+{% block header %}تسوية يومية لمندوب{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card">
+            <div class="card-body">
+                <form method="post" id="settlementForm">
+                    {% csrf_token %}
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label">المندوب *</label>
+                            <select name="rep" id="repSelect" class="form-select" required
+                                    hx-get="{% url 'sales:unsettled-invoices' %}" 
+                                    hx-include="#dateInput" 
+                                    hx-target="#invoicesContainer">
+                                <option value="">-- اختر المندوب --</option>
+                                {% for rep in reps %}
+                                <option value="{{ rep.id }}">{{ rep.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">التاريخ *</label>
+                            <input type="date" name="date" id="dateInput" class="form-control" value="{{ today }}" required
+                                   hx-get="{% url 'sales:unsettled-invoices' %}" 
+                                   hx-include="#repSelect" 
+                                   hx-target="#invoicesContainer">
+                        </div>
+                    </div>
+
+                    <h5 class="border-bottom pb-2">الفواتير النقدية في هذا اليوم</h5>
+                    <div id="invoicesContainer" class="mb-4">
+                        <div class="text-muted text-center p-4 border rounded bg-light">
+                            يرجى اختيار المندوب والتاريخ لعرض الفواتير.
+                        </div>
+                    </div>
+
+                    <h5 class="border-bottom pb-2">تفاصيل الاستلام</h5>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">النقدية المستلمة فعلياً *</label>
+                            <input type="number" step="0.01" min="0" name="cash_delivered" class="form-control fw-bold text-success" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">استلام في خزنة</label>
+                            <select name="to_cash_box" class="form-select">
+                                <option value="">-- اختر خزنة --</option>
+                                {% for cb in cash_boxes %}
+                                <option value="{{ cb.id }}">{{ cb.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">أو استلام في بنك</label>
+                            <select name="to_bank" class="form-select" disabled>
+                                <option value="">(قريباً - البنوك)</option>
+                            </select>
+                            <small class="text-muted">ملاحظة: اختر الخزنة أو البنك، وليس كلاهما.</small>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary" onclick="return confirm('تأكيد ترحيل التسوية؟ لن يمكن التعديل لاحقاً.');">حفظ وترحيل التسوية</button>
+                        <a href="{% url 'sales:settlement-list' %}" class="btn btn-secondary">إلغاء</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

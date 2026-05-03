@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block title %}تحويل نقدي جديد{% endblock %}
+{% block header %}تحويل نقدي جديد{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                {% include 'partials/_form_errors.html' %}
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">التاريخ *</label>
+                            {{ form.date }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">المبلغ *</label>
+                            {{ form.amount }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">من خزنة</label>
+                            {{ form.from_cash_box }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">أو من بنك</label>
+                            {{ form.from_bank }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">إلى خزنة</label>
+                            {{ form.to_cash_box }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">أو إلى بنك</label>
+                            {{ form.to_bank }}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">البيان / الوصف</label>
+                            {{ form.description }}
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">تنفيذ التحويل</button>
+                        <a href="{% url 'treasury:transfer-list' %}" class="btn btn-secondary btn-lg">إلغاء</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}تفاصيل الحساب البنكي{% endblock %}
+{% block header %}البنك: {{ bank.name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white"><h5 class="mb-0">بيانات الحساب</h5></div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    <h6 class="text-muted">الرصيد الدفتري:</h6>
+                    <h2 class="fw-bold {% if balance >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        {{ balance|floatformat:2 }}
+                    </h2>
+                </div>
+                <table class="table table-sm">
+                    <tr><th>اسم البنك:</th><td>{{ bank.bank_name }}</td></tr>
+                    <tr><th>رقم الحساب:</th><td>{{ bank.account_number }}</td></tr>
+                    <tr><th>IBAN:</th><td>{{ bank.iban|default:"-" }}</td></tr>
+                    <tr><th>الحساب المحاسبي:</th><td>{{ bank.account.code }} - {{ bank.account.name }}</td></tr>
+                    <tr><th>الحالة:</th>
+                        <td>
+                            {% if bank.is_active %}
+                            <span class="badge bg-success">نشط</span>
+                            {% else %}
+                            <span class="badge bg-danger">متوقف</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+                <a href="{% url 'treasury:bank-update' bank.pk %}" class="btn btn-outline-secondary w-100 mt-2">تعديل البيانات</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">العمليات البنكية</h5></div>
+            <div class="card-body">
+                <p class="text-muted">لعرض كشف حساب تفصيلي، يرجى الانتقال إلى التقارير المالية.</p>
+                <div class="d-grid gap-2">
+                    <a href="{% url 'reports:trial_balance' %}?account={{ bank.account.pk }}" class="btn btn-info">عرض ميزان المراجعة لهذا الحساب</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

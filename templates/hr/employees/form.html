@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block title %}{% if object %}تعديل بيانات: {{ object.first_name }}{% else %}إضافة موظف جديد{% endif %}{% endblock %}
+{% block header %}{% if object %}تعديل بيانات: {{ object.first_name }} {{ object.last_name }}{% else %}إضافة موظف جديد{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white"><h5 class="mb-0 text-primary"><i class="bi bi-person-lines-fill"></i> البيانات الشخصية</h5></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">{{ form.first_name|as_crispy_field }}</div>
+                        <div class="col-md-4">{{ form.last_name|as_crispy_field }}</div>
+                        <div class="col-md-4">{{ form.national_id|as_crispy_field }}</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">{{ form.date_of_birth|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.phone|as_crispy_field }}</div>
+                    </div>
+                    {{ form.address|as_crispy_field }}
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white"><h5 class="mb-0 text-success"><i class="bi bi-briefcase-fill"></i> البيانات الوظيفية</h5></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">{{ form.department|as_crispy_field }}</div>
+                        <div class="col-md-4">{{ form.job_title|as_crispy_field }}</div>
+                        <div class="col-md-4">{{ form.reports_to|as_crispy_field }}</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">{{ form.hiring_date|as_crispy_field }}</div>
+                        <div class="col-md-4">{{ form.contract_type|as_crispy_field }}</div>
+                        <div class="col-md-4">{{ form.status|as_crispy_field }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white"><h5 class="mb-0 text-warning"><i class="bi bi-cash-stack"></i> البيانات المالية وتفضيلات النظام</h5></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">{{ form.basic_salary|as_crispy_field }}</div>
+                        <div class="col-md-4">{{ form.bank_account_number|as_crispy_field }}</div>
+                        <div class="col-md-4">{{ form.user|as_crispy_field }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between mb-5">
+                <a href="{% url 'hr:employee-list' %}" class="btn btn-outline-secondary px-4">إلغاء والعودة</a>
+                <button type="submit" class="btn btn-primary px-5">حفظ بيانات الموظف</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+{% block title %}{% if object %}تعديل عرض سعر قطاع{% else %}إنشاء عرض سعر قطاع جديد{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <form method="post">
+        {% csrf_token %}
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="h3 mb-0">{% if object %}تعديل العرض: {{ object.name }}{% else %}إنشاء عرض ترويجي جديد{% endif %}</h2>
+            <div>
+                <a href="{% url 'sales:quotation-list' %}" class="btn btn-outline-secondary me-2">إلغاء</a>
+                <button type="submit" class="btn btn-primary">حفظ العرض</button>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-white">
+                <h5 class="card-title mb-0">البيانات الأساسية للعرض</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <label class="form-label">اسم العرض (الترويج)</label>
+                        {{ form.name }}
+                        {{ form.name.errors }}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">القطاع المستهدف</label>
+                        {{ form.sector }}
+                        {{ form.sector.errors }}
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">تاريخ البدء</label>
+                        {{ form.start_date }}
+                        {{ form.start_date.errors }}
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">تاريخ الانتهاء</label>
+                        {{ form.end_date }}
+                        {{ form.end_date.errors }}
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">الحالة</label>
+                        {{ form.status }}
+                        {{ form.status.errors }}
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end pb-2">
+                        <div class="form-check">
+                            {{ form.is_active }}
+                            <label class="form-check-label">نشط حالياً؟</label>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">ملاحظات</label>
+                        {{ form.notes }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">الأصناف المشمولة في العرض</h5>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="add-line">إضافة صنف</button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="lines-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 60%;">الصنف</th>
+                                <th style="width: 30%;">نسبة الخصم الإضافية %</th>
+                                <th style="width: 10%;">حذف</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{ lines.management_form }}
+                            {% for line_form in lines %}
+                            <tr class="line-row">
+                                {% for hidden in line_form.hidden_fields %}
+                                    {{ hidden }}
+                                {% endfor %}
+                                <td>
+                                    {{ line_form.item }}
+                                    {{ line_form.item.errors }}
+                                </td>
+                                <td>
+                                    {{ line_form.extra_discount_percent }}
+                                    {{ line_form.extra_discount_percent.errors }}
+                                </td>
+                                <td>
+                                    {% if line_form.instance.pk %}
+                                        {{ line_form.DELETE }}
+                                    {% else %}
+                                        <button type="button" class="btn btn-sm btn-outline-danger remove-line"><i class="bi bi-trash"></i></button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const addBtn = document.getElementById('add-line');
+        const tableBody = document.querySelector('#lines-table tbody');
+        const totalForms = document.getElementById('id_lines-TOTAL_FORMS');
+
+        addBtn.addEventListener('click', function() {
+            const formCount = parseInt(totalForms.value);
+            const template = document.querySelector('.line-row').cloneNode(true);
+            
+            // Clear values and update IDs
+            template.querySelectorAll('input, select').forEach(input => {
+                const name = input.name.replace(/-\d+-/, `-${formCount}-`);
+                const id = input.id.replace(/-\d+-/, `-${formCount}-`);
+                input.name = name;
+                input.id = id;
+                if (input.type !== 'hidden') input.value = '';
+                if (input.classList.contains('is-invalid')) input.classList.remove('is-invalid');
+            });
+
+            // Handle delete checkbox for new rows
+            const deleteCell = template.querySelector('td:last-child');
+            deleteCell.innerHTML = '<button type="button" class="btn btn-sm btn-outline-danger remove-line"><i class="bi bi-trash"></i></button>';
+
+            tableBody.appendChild(template);
+            totalForms.value = formCount + 1;
+        });
+
+        tableBody.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-line')) {
+                const row = e.target.closest('.line-row');
+                row.remove();
+                
+                // Update total forms and re-index (simplified)
+                const rows = tableBody.querySelectorAll('.line-row');
+                totalForms.value = rows.length;
+            }
+        });
+    });
+</script>
+{% endblock %}

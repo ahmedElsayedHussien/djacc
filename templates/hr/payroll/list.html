@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}إدارة مسيرات الرواتب{% endblock %}
+{% block header %}إدارة مسيرات الرواتب{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 text-primary"><i class="bi bi-calendar2-month"></i> فترات الرواتب</h5>
+        <a href="{% url 'hr:payroll-add' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> إنشاء فترة رواتب جديدة</a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>الرقم</th>
+                        <th>اسم الفترة</th>
+                        <th>تاريخ البداية</th>
+                        <th>تاريخ النهاية</th>
+                        <th>الحالة</th>
+                        <th class="text-end">الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for period in periods %}
+                    <tr>
+                        <td><span class="fw-bold text-muted">#{{ period.id|stringformat:"04d" }}</span></td>
+                        <td><span class="fw-bold">{{ period.name }}</span></td>
+                        <td>{{ period.start_date|date:"Y-m-d" }}</td>
+                        <td>{{ period.end_date|date:"Y-m-d" }}</td>
+                        <td>
+                            {% if period.status == 'draft' %}
+                            <span class="badge bg-secondary-subtle text-secondary border border-secondary">مسودة (Draft)</span>
+                            {% elif period.status == 'approved' %}
+                            <span class="badge bg-primary-subtle text-primary border border-primary">معتمد</span>
+                            {% elif period.status == 'posted' %}
+                            <span class="badge bg-success-subtle text-success border border-success"><i class="bi bi-check-circle-fill"></i> مرحل محاسبياً</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <a href="{% url 'hr:payroll-detail' period.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-gear"></i> إدارة المسير</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">لا توجد فترات رواتب مسجلة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

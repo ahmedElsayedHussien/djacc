@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+{% block title %}فاتورة مشتريات جديدة{% endblock %}
+{% block header %}فاتورة مشتريات جديدة{% endblock %}
+{% block content %}
+{% include 'partials/_form_errors.html' %}
+<form method="post" id="invoiceForm">
+    {% csrf_token %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">رقم فاتورة المورد</label>
+                    {{ form.supplier_invoice_number }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">التاريخ *</label>
+                    {{ form.date }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">المورد *</label>
+                    {{ form.supplier }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">تاريخ الاستحقاق *</label>
+                    {{ form.due_date }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">مركز التكلفة</label>
+                    {{ form.cost_center }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">أصناف الفاتورة</div>
+        <div class="card-body">
+            {{ lines.management_form }}
+            <table class="table table-bordered" id="linesTable">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 30%;">الصنف</th>
+                        <th>المستودع</th>
+                        <th style="width: 10%;">الكمية</th>
+                        <th style="width: 12%;">تكلفة الوحدة</th>
+                        <th style="width: 8%;">ضريبة 1</th>
+                        <th style="width: 8%;">ضريبة 2</th>
+                        <th style="width: 15%;">الإجمالي</th>
+                        <th>حذف</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line_form in lines %}
+                    <tr class="line-row">
+                        <td>{{ line_form.item }}</td>
+                        <td>{{ line_form.warehouse }}</td>
+                        <td>{{ line_form.quantity }}</td>
+                        <td>{{ line_form.unit_cost }}</td>
+                        <td>
+                            {{ line_form.tax_type }}
+                            <input type="hidden" name="{{ line_form.prefix }}-tax_percent" id="id_{{ line_form.prefix }}-tax_percent" class="tax-rate" value="{{ line_form.tax_percent.value|default:'0' }}">
+                        </td>
+                        <td>
+                            {{ line_form.tax_type2 }}
+                            <input type="hidden" name="{{ line_form.prefix }}-tax_percent2" id="id_{{ line_form.prefix }}-tax_percent2" class="tax-rate2" value="{{ line_form.tax_percent2.value|default:'0' }}">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control line-total" readonly value="0.00">
+                        </td>
+                        <td class="text-center">
+                            {% if line_form.instance.pk %}{{ line_form.DELETE }}{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="addRow">
+                <i class="bi bi-plus"></i> إضافة سطر
+            </button>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8"></div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>الإجمالي قبل الضريبة:</span>
+                        <span id="subtotal">0.00</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2 text-primary">
+                        <span>إجمالي الضرائب:</span>
+                        <span id="taxTotal">0.00</span>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <span class="h5 fw-bold">الصافي النهائي:</span>
+                        <span class="h5 fw-bold text-success" id="grandTotal">0.00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4 text-end">
+        <button type="submit" class="btn btn-primary btn-lg px-5">حفظ الفاتورة</button>
+        <a href="{% url 'purchases:invoice-list' %}" class="btn btn-secondary btn-lg px-5">إلغاء</a>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function calculateInvoice() {
+        let subtotal = 0;
+        let taxTotal = 0;
+        
+        document.querySelectorAll('.line-row').forEach(row => {
+            const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
+            const price = parseFloat(row.querySelector('.price-input').value) || 0;
+            const tax1Rate = parseFloat(row.querySelector('.tax-rate').value) || 0;
+            const tax2Rate = parseFloat(row.querySelector('.tax-rate2').value) || 0;
+            
+            const lineSub = qty * price;
+            const lineTax1 = lineSub * (tax1Rate / 100);
+            const lineTax2 = lineSub * (tax2Rate / 100);
+            const lineTotal = lineSub + lineTax1 + lineTax2;
+            
+            const totalInput = row.querySelector('.line-total');
+            if (totalInput) totalInput.value = lineTotal.toFixed(2);
+            
+            subtotal += lineSub;
+            taxTotal += (lineTax1 + lineTax2);
+        });
+        
+        document.getElementById('subtotal').innerText = subtotal.toLocaleString(undefined, {minimumFractionDigits: 2});
+        document.getElementById('taxTotal').innerText = taxTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
+        document.getElementById('grandTotal').innerText = (subtotal + taxTotal).toLocaleString(undefined, {minimumFractionDigits: 2});
+    }
+
+    async function fetchTaxRate(taxSelect, rateInputClass) {
+        const taxId = taxSelect.value;
+        const row = taxSelect.closest('.line-row');
+        const rateInput = row.querySelector(rateInputClass);
+        
+        if (!taxId) {
+            rateInput.value = '0.00';
+            calculateInvoice();
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/taxes/${taxId}/`);
+            if (response.ok) {
+                const data = await response.json();
+                rateInput.value = data.rate;
+                calculateInvoice();
+            }
+        } catch (error) {
+            console.error('Error fetching tax rate:', error);
+        }
+    }
+
+    document.addEventListener('input', function(e) {
+        if (e.target.matches('.qty-input, .price-input')) {
+            calculateInvoice();
+        }
+    });
+
+    document.addEventListener('change', function(e) {
+        if (e.target.matches('.tax-select')) {
+            fetchTaxRate(e.target, '.tax-rate');
+        }
+        if (e.target.matches('.tax-select2')) {
+            fetchTaxRate(e.target, '.tax-rate2');
+        }
+    });
+
+    document.getElementById('addRow').addEventListener('click', function() {
+        const table = document.getElementById('linesTable').getElementsByTagName('tbody')[0];
+        const lastRow = table.querySelector('.line-row:last-child');
+        const newRow = lastRow.cloneNode(true);
+        const totalForms = document.getElementById('id_lines-TOTAL_FORMS');
+        const currentCount = parseInt(totalForms.value);
+        
+        newRow.querySelectorAll('input, select').forEach(input => {
+            input.name = input.name.replace(`-${currentCount-1}-`, `-${currentCount}-`);
+            input.id = input.id.replace(`-${currentCount-1}-`, `-${currentCount}-`);
+            if (input.type !== 'checkbox') input.value = '';
+            if (input.classList.contains('tax-rate') || input.classList.contains('tax-rate2')) input.value = '0';
+        });
+        
+        table.appendChild(newRow);
+        totalForms.value = currentCount + 1;
+    });
+
+    calculateInvoice();
+</script>
+{% endblock %}

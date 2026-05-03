@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% block title %}طلب تحميل جديد{% endblock %}
+{% block header %}إنشاء طلب تحميل بضاعة للمندوب{% endblock %}
+{% block content %}
+{% include 'partials/_form_errors.html' %}
+<form method="post" id="loadingForm">
+    {% csrf_token %}
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-white"><h5 class="mb-0 fw-bold">البيانات الأساسية</h5></div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">رقم الطلب</label>
+                    {{ form.number }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">التاريخ *</label>
+                    {{ form.date }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">المندوب *</label>
+                    {{ form.sales_rep }}
+                </div>
+            </div>
+            <div class="row g-3 mt-1">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">من مخزن (الرئيسي) *</label>
+                    {{ form.from_warehouse }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">إلى مخزن (المندوب) *</label>
+                    {{ form.to_warehouse }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fw-bold">أصناف التحميل</h5>
+        </div>
+        <div class="card-body p-0">
+            {{ lines.management_form }}
+            <div class="table-responsive">
+                <table class="table table-flush align-middle mb-0" id="linesTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 40%;">الصنف</th>
+                            <th style="width: 20%;">الكمية المطلوبة</th>
+                            <th>ملاحظات</th>
+                            <th style="width: 50px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for line_form in lines %}
+                        <tr class="line-row">
+                            <td>{{ line_form.item }}</td>
+                            <td>{{ line_form.requested_qty }}</td>
+                            <td>{{ line_form.notes }}</td>
+                            <td class="text-center">
+                                {% if line_form.instance.pk %}{{ line_form.DELETE }}{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer bg-white border-top-0">
+            <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill" id="addRow">
+                <i class="bi bi-plus"></i> إضافة صنف آخر
+            </button>
+        </div>
+    </div>
+
+    <div class="card mb-4 shadow-sm">
+        <div class="card-body">
+            <label class="form-label fw-bold">ملاحظات إضافية</label>
+            {{ form.notes }}
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between mb-5">
+        <a href="{% url 'inventory:loading-list' %}" class="btn btn-light px-4 rounded-pill">إلغاء</a>
+        <button type="submit" class="btn btn-primary px-5 rounded-pill shadow">
+            <i class="bi bi-check-lg"></i> حفظ الطلب كمسودة
+        </button>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.getElementById('addRow').addEventListener('click', function() {
+        const table = document.getElementById('linesTable').getElementsByTagName('tbody')[0];
+        const lastRow = table.querySelector('.line-row:last-child');
+        const newRow = lastRow.cloneNode(true);
+        
+        const totalForms = document.getElementById('id_lines-TOTAL_FORMS');
+        const currentCount = parseInt(totalForms.value);
+        
+        newRow.querySelectorAll('input, select').forEach(input => {
+            input.name = input.name.replace(`-${currentCount-1}-`, `-${currentCount}-`);
+            input.id = input.id.replace(`-${currentCount-1}-`, `-${currentCount}-`);
+            if (input.type !== 'checkbox') input.value = '';
+        });
+        
+        table.appendChild(newRow);
+        totalForms.value = currentCount + 1;
+    });
+
+    // Auto-select warehouses based on Sales Rep (Future improvement via AJAX)
+</script>
+{% endblock %}

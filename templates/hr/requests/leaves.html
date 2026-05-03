@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}إدارة الإجازات{% endblock %}
+{% block header %}إدارة الإجازات والمغادرات{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <form class="d-flex w-50" method="get">
+            <select name="status" class="form-select me-2" onchange="this.form.submit()">
+                <option value="">جميع الحالات</option>
+                <option value="pending" {% if request.GET.status == 'pending' %}selected{% endif %}>قيد الانتظار</option>
+                <option value="approved" {% if request.GET.status == 'approved' %}selected{% endif %}>موافق عليها</option>
+                <option value="rejected" {% if request.GET.status == 'rejected' %}selected{% endif %}>مرفوضة</option>
+            </select>
+            <button class="btn btn-outline-primary" type="submit">فلترة</button>
+        </form>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>الموظف</th>
+                        <th>نوع الإجازة</th>
+                        <th>الفترة (من - إلى)</th>
+                        <th>عدد الأيام</th>
+                        <th>الحالة</th>
+                        <th class="text-end">الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for req in requests %}
+                    <tr>
+                        <td>
+                            <div class="fw-bold">{{ req.employee.first_name }} {{ req.employee.last_name }}</div>
+                            <small class="text-muted">{{ req.employee.department.name }}</small>
+                        </td>
+                        <td><span class="badge bg-info text-dark">{{ req.leave_type.name }}</span></td>
+                        <td>
+                            <small class="d-block text-muted">من: {{ req.start_date|date:"Y-m-d" }}</small>
+                            <small class="d-block text-muted">إلى: {{ req.end_date|date:"Y-m-d" }}</small>
+                        </td>
+                        <td><span class="fw-bold">{{ req.total_days }}</span> أيام</td>
+                        <td>
+                            {% if req.status == 'pending' %}
+                            <span class="badge bg-warning-subtle text-warning border border-warning">قيد الانتظار</span>
+                            {% elif req.status == 'approved' %}
+                            <span class="badge bg-success-subtle text-success border border-success">موافق عليها</span>
+                            {% elif req.status == 'rejected' %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger">مرفوضة</span>
+                            {% else %}
+                            <span class="badge bg-secondary-subtle text-secondary border border-secondary">{{ req.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if req.status == 'pending' %}
+                            <form method="post" action="{% url 'hr:leave-approve' req.pk %}" class="d-inline" onsubmit="return confirm('هل أنت متأكد من الموافقة وتخفيض رصيد إجازات الموظف؟');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> موافقة</button>
+                            </form>
+                            <form method="post" action="{% url 'hr:leave-reject' req.pk %}" class="d-inline" onsubmit="return confirm('هل أنت متأكد من الرفض؟');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-danger"><i class="bi bi-x-lg"></i> رفض</button>
+                            </form>
+                            {% else %}
+                            <small class="text-muted">بواسطة: {{ req.approved_by.username|default:"-" }}</small>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">لا توجد طلبات إجازة حالياً.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

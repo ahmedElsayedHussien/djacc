@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block title %}المصروفات{% endblock %}
+{% block header %}إدارة المصروفات{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">قائمة المصروفات</h5>
+        <a href="{% url 'expenses:expense-create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> تسجيل مصروف جديد
+        </a>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>رقم المصروف</th>
+                        <th>التاريخ</th>
+                        <th>البند</th>
+                        <th>المبلغ</th>
+                        <th>طريقة الدفع</th>
+                        <th>الحالة</th>
+                        <th>بواسطة</th>
+                        <th>إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for expense in expenses %}
+                    <tr>
+                        <td><code>{{ expense.number }}</code></td>
+                        <td>{{ expense.date|date:'Y-m-d' }}</td>
+                        <td>{{ expense.category.name }}</td>
+                        <td>{{ expense.amount }}</td>
+                        <td>{{ expense.get_payment_method_display }}</td>
+                        <td>
+                            {% if expense.status == 'draft' %}
+                            <span class="badge bg-secondary">مسودة</span>
+                            {% elif expense.status == 'approved' %}
+                            <span class="badge bg-info">معتمد</span>
+                            {% elif expense.status == 'posted' %}
+                            <span class="badge bg-success">مرحل</span>
+                            {% else %}
+                            <span class="badge bg-danger">مرفوض</span>
+                            {% endif %}
+                        </td>
+                        <td>{% if expense.journal_entry %}{{ expense.journal_entry.created_by.username }}{% else %}-{% endif %}</td>
+                        <td>
+                            <a href="{% url 'expenses:expense-detail' expense.pk %}" class="btn btn-sm btn-outline-info">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            {% if expense.status == 'draft' %}
+                            <form method="post" action="{% url 'expenses:expense-approve' expense.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-success" title="اعتماد وترحيل" onclick="return confirm('تأكيد الاعتماد والترحيل؟');">
+                                    <i class="bi bi-check-circle"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center">لا توجد مصروفات مسجلة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include 'partials/pagination.html' %}
+    </div>
+</div>
+{% endblock %}

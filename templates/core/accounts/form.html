@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}{% if object %}تعديل حساب{% else %}إضافة حساب جديد{% endif %}{% endblock %}
+{% block header %}{% if object %}تعديل حساب{% else %}إضافة حساب جديد{% endif %}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                {% include 'partials/_form_errors.html' %}
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">كود الحساب *</label>
+                            {{ form.code }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">اسم الحساب *</label>
+                            {{ form.name }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">نوع الحساب *</label>
+                            {{ form.account_type }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">الحساب الأب</label>
+                            {{ form.parent }}
+                            <div class="form-text">لا يمكن الربط تحت حساب فرعي (Leaf).</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-4">
+                                {{ form.is_leaf }}
+                                <label class="form-check-label">حساب فرعي (يقبل حركات محاسبية)</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">العملة</label>
+                            {{ form.currency }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">رصيد أول المدة</label>
+                            {{ form.initial_balance }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">نوع رصيد أول المدة</label>
+                            {{ form.initial_balance_type }}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">ملاحظات</label>
+                            {{ form.notes }}
+                        </div>
+                    </div>
+
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> حفظ البيانات
+                        </button>
+                        <a href="{% url 'core:account-list' %}" class="btn btn-secondary">إلغاء</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

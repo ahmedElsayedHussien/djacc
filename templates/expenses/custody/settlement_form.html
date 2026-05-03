@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block title %}تسوية عهدة{% endblock %}
+{% block header %}تسوية العهدة: {{ custody.number }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-5">
+        <div class="card mb-4">
+            <div class="card-header bg-light"><h6 class="mb-0">ملخص العهدة الحالي</h6></div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr><th>الموظف:</th><td>{{ custody.employee.get_full_name|default:custody.employee.username }}</td></tr>
+                    <tr><th>المبلغ الأصلي:</th><td>{{ custody.amount }}</td></tr>
+                    <tr><th>ما تم تسويته سابقاً:</th><td class="text-success">{{ custody.settled_amount }}</td></tr>
+                    <tr class="table-info"><th>المصروفات المرحلة قيد التسوية حالياً:</th><td class="fw-bold">{{ total_expenses }}</td></tr>
+                    <tr class="table-warning"><th>النقدية المتبقية المطلوبة:</th><td class="fw-bold text-danger">{{ remaining_balance }}</td></tr>
+                </table>
+                <small class="text-muted d-block mt-2">
+                    لتسوية العهدة بالكامل، يجب على الموظف إما استرداد نقدية بقيمة ({{ remaining_balance }}) أو تسجيل مصروفات إضافية.
+                </small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">إجراء التسوية (استرداد نقدية)</h5></div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6">{{ form.date|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.returned_amount|as_crispy_field }}</div>
+                    </div>
+                    {{ form.cash_box|as_crispy_field }}
+                    <small class="text-muted d-block mb-3">حدد الخزنة التي تم توريد النقدية المتبقية إليها (إذا وجد).</small>
+                    
+                    {{ form.notes|as_crispy_field }}
+                    
+                    <div class="alert alert-info mt-3">
+                        سيتم اعتماد تسوية بقيمة <strong>(المصروفات: {{ total_expenses }} + المرتجع الذي أدخلته)</strong>.
+                    </div>
+
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-success" onclick="return confirm('هل أنت متأكد من تسوية العهدة؟');">
+                            <i class="bi bi-check-circle"></i> اعتماد التسوية
+                        </button>
+                        <a href="{% url 'expenses:custody-detail' custody.pk %}" class="btn btn-secondary">إلغاء</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

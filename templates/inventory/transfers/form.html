@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}طلب تحويل مخزني{% endblock %}
+{% block header %}إنشاء طلب تحويل مخزني{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                {% include 'partials/_form_errors.html' %}
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">التاريخ *</label>
+                        {{ form.date }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">من مستودع *</label>
+                        {{ form.from_warehouse }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">إلى مستودع *</label>
+                        {{ form.to_warehouse }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الصنف *</label>
+                        {{ form.item }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الكمية *</label>
+                        {{ form.quantity }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">ملاحظات</label>
+                        {{ form.notes }}
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">حفظ كمسودة</button>
+                        <a href="{% url 'inventory:transfer-list' %}" class="btn btn-secondary">إلغاء</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

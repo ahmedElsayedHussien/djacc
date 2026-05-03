@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}إضافة سنة مالية{% endblock %}
+{% block header %}إضافة سنة مالية{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                {% include 'partials/_form_errors.html' %}
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">اسم السنة المالية</label>
+                        {{ form.name }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">تاريخ البداية</label>
+                        {{ form.start_date }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">تاريخ النهاية</label>
+                        {{ form.end_date }}
+                    </div>
+                    
+                    
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">حفظ</button>
+                        <a href="{% url 'core:fiscalyear-list' %}" class="btn btn-secondary">إلغاء</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

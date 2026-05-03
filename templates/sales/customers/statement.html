@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block title %}كشف حساب: {{ customer.name }}{% endblock %}
+{% block header %}كشف حساب عميل تفصيلي{% endblock %}
+{% block content %}
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label fw-bold">من تاريخ</label>
+                <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold">إلى تاريخ</label>
+                <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100 rounded-pill">تحديث</button>
+            </div>
+            <div class="col-md-2">
+                <button type="button" onclick="window.print()" class="btn btn-outline-secondary w-100 rounded-pill">طباعة</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold">حركة الحساب للعميل: <span class="text-primary">{{ customer.name }}</span></h5>
+        <div class="text-muted">كود الحساب: <code>{{ customer.account.code }}</code></div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 120px;">التاريخ</th>
+                        <th style="width: 150px;">رقم القيد/المستند</th>
+                        <th>البيان</th>
+                        <th class="text-end" style="width: 120px;">مدين (+)</th>
+                        <th class="text-end" style="width: 120px;">دائن (-)</th>
+                        <th class="text-end" style="width: 150px;">الرصيد المتراكم</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="table-info">
+                        <td colspan="3" class="fw-bold">رصيد أول المدة (قبل {{ start_date }})</td>
+                        <td class="text-end"></td>
+                        <td class="text-end"></td>
+                        <td class="text-end fw-bold">{{ opening_balance|floatformat:2 }}</td>
+                    </tr>
+                    {% for line in statement_lines %}
+                    <tr>
+                        <td>{{ line.date|date:"Y-m-d" }}</td>
+                        <td><code>{{ line.number }}</code></td>
+                        <td>{{ line.description }}</td>
+                        <td class="text-end text-danger">{% if line.debit > 0 %}{{ line.debit|floatformat:2 }}{% endif %}</td>
+                        <td class="text-end text-success">{% if line.credit > 0 %}{{ line.credit|floatformat:2 }}{% endif %}</td>
+                        <td class="text-end fw-bold {% if line.balance > 0 %}text-danger{% elif line.balance < 0 %}text-success{% endif %}">
+                            {{ line.balance|floatformat:2 }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">لا يوجد حركات في هذه الفترة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    <tr class="fw-bold">
+                        <td colspan="5" class="text-end">الرصيد الختامي في {{ end_date }}</td>
+                        <td class="text-end fs-5">{{ closing_balance|floatformat:2 }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="mt-3 text-muted small">
+    <i class="bi bi-info-circle"></i> ملاحظة: الأرصدة الموجبة تعني مديونية على العميل (مدين)، والأرصدة السالبة تعني مبالغ دائنة للعميل.
+</div>
+{% endblock %}

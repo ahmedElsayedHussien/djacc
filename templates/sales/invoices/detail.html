@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block title %}تفاصيل الفاتورة{% endblock %}
+{% block header %}فاتورة مبيعات: {{ invoice.number }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0">بيانات الفاتورة</h5></div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr><th>رقم الفاتورة:</th><td>{{ invoice.number }}</td></tr>
+                    <tr><th>تاريخ الفاتورة:</th><td>{{ invoice.date|date:'Y-m-d' }}</td></tr>
+                    <tr><th>تاريخ الاستحقاق:</th><td>{{ invoice.due_date|date:'Y-m-d' }}</td></tr>
+                    <tr><th>العميل:</th>
+                        <td><a href="{% url 'sales:customer-detail' invoice.customer.pk %}">{{ invoice.customer.name }}</a></td>
+                    </tr>
+                    <tr><th>طريقة الدفع:</th>
+                        <td>{{ invoice.get_payment_type_display }}</td>
+                    </tr>
+                    <tr><th>المندوب:</th>
+                        <td>{{ invoice.sales_rep.name|default:"-" }}</td>
+                    </tr>
+                    <tr><th>الحالة:</th>
+                        <td>
+                            {% if invoice.status == 'draft' %}
+                            <span class="badge bg-secondary">مسودة</span>
+                            {% elif invoice.status == 'posted' %}
+                            <span class="badge bg-success">مرحلة</span>
+                            {% else %}
+                            <span class="badge bg-danger">ملغاة</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr><th>القيد المحاسبي:</th>
+                        <td>
+                            {% if invoice.journal_entry %}
+                            <a href="/admin/core/journalentry/{{ invoice.journal_entry.pk }}/change/">{{ invoice.journal_entry.number }}</a>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+
+                {% if invoice.status == 'draft' %}
+                <form method="post" action="{% url 'sales:invoice-post' invoice.pk %}" class="mt-3">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success w-100" onclick="return confirm('هل أنت متأكد من ترحيل الفاتورة؟ لن يمكنك التعديل بعد الترحيل.');">
+                        <i class="bi bi-check-circle"></i> ترحيل الفاتورة
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">بنود الفاتورة</h5></div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>الصنف</th>
+                                <th>المستودع</th>
+                                <th>الكمية</th>
+                                <th>السعر</th>
+                                <th>الخصم %</th>
+                                <th>الضريبة %</th>
+                                <th>الإجمالي</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for line in invoice.lines.all %}
+                            <tr>
+                                <td>{{ line.item.name }}</td>
+                                <td>{{ line.warehouse.name }}</td>
+                                <td>{{ line.quantity|floatformat:2 }}</td>
+                                <td>{{ line.unit_price|floatformat:2 }}</td>
+                                <td>{{ line.discount_percent }}%</td>
+                                <td>{{ line.tax_percent }}%</td>
+                                <td>{{ line.total|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center">لا توجد بنود.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="row mt-4">
+                    <div class="col-md-6 offset-md-6">
+                        <table class="table table-sm">
+                            <tr><th>الإجمالي قبل الخصم والضريبة:</th><td class="text-end">{{ invoice.subtotal|floatformat:2 }}</td></tr>
+                            <tr><th>إجمالي الخصم:</th><td class="text-end text-danger">{{ invoice.discount_amount|floatformat:2 }}</td></tr>
+                            <tr><th>إجمالي الضريبة:</th><td class="text-end">{{ invoice.tax_amount|floatformat:2 }}</td></tr>
+                            <tr class="fs-5 fw-bold border-top"><th>الصافي المطلوب:</th><td class="text-end text-success">{{ invoice.total|floatformat:2 }}</td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% block title %}بوابة الموظف{% endblock %}
+{% block header %}بوابة الخدمة الذاتية (ESS) - {{ employee.first_name }} {{ employee.last_name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Quick Actions & Info -->
+    <div class="col-md-4 mb-4">
+        <div class="card shadow-sm border-0 bg-success text-white mb-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="avatar-circle bg-white text-success me-3 d-flex justify-content-center align-items-center rounded-circle fs-3" style="width: 60px; height: 60px;">
+                        {{ employee.first_name|first }}{{ employee.last_name|first }}
+                    </div>
+                    <div>
+                        <h5 class="mb-0 fw-bold">{{ employee.first_name }} {{ employee.last_name }}</h5>
+                        <small class="opacity-75">{{ employee.job_title.name }}</small>
+                    </div>
+                </div>
+                <hr class="border-light opacity-25">
+                <p class="mb-1"><i class="bi bi-building me-2"></i> {{ employee.department.name }}</p>
+                <p class="mb-0"><i class="bi bi-calendar3 me-2"></i> تاريخ التعيين: {{ employee.hiring_date|date:"Y-m-d" }}</p>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4 border-top border-primary border-3">
+            <div class="card-body">
+                <h6 class="card-title fw-bold text-primary mb-3"><i class="bi bi-lightning-charge"></i> إجراءات سريعة</h6>
+                <div class="d-grid gap-2">
+                    <a href="{% url 'hr:ess-request-leave' %}" class="btn btn-outline-primary text-start"><i class="bi bi-calendar-plus me-2"></i> طلب إجازة جديدة</a>
+                    <a href="{% url 'hr:ess-request-loan' %}" class="btn btn-outline-warning text-dark text-start"><i class="bi bi-cash-coin me-2"></i> طلب سلفة مالية</a>
+                    <a href="{% url 'hr:ess-payslips' %}" class="btn btn-outline-success text-start"><i class="bi bi-receipt me-2"></i> استعراض الرواتب</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card shadow-sm border-top border-info border-3">
+            <div class="card-body">
+                <h6 class="card-title fw-bold text-info mb-3"><i class="bi bi-pie-chart"></i> أرصدة إجازات العام الحالي</h6>
+                {% for balance in balances %}
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <small>{{ balance.leave_type.name }}</small>
+                        <small class="fw-bold">{{ balance.remaining_days }} / {{ balance.total_days }} أيام</small>
+                    </div>
+                    <div class="progress" style="height: 6px;">
+                        <!-- Calculate percentage visually (rough approx) -->
+                        <div class="progress-bar bg-info" role="progressbar" style="width: {% widthratio balance.used_days balance.total_days 100 %}%"></div>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="text-muted small">لم يتم تخصيص أرصدة بعد.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="col-md-8 mb-4">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-receipt text-success"></i> أحدث قسائم الرواتب</h6>
+                <a href="{% url 'hr:ess-payslips' %}" class="btn btn-sm btn-link text-decoration-none">عرض الكل</a>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for slip in recent_payslips %}
+                <div class="list-group-item py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">{{ slip.period.name }}</h6>
+                            <small class="text-muted">تاريخ الإصدار: {{ slip.period.end_date|date:"Y-m-d" }}</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="fs-5 fw-bold text-success">{{ slip.net_salary }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="list-group-item py-4 text-center text-muted">لا توجد قسائم رواتب صادرة بعد.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-clock-history text-warning"></i> آخر طلبات الإجازات</h6>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for req in recent_leaves %}
+                <div class="list-group-item py-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fw-bold">{{ req.leave_type.name }}</span>
+                        {% if req.status == 'pending' %}
+                        <span class="badge bg-warning-subtle text-warning border border-warning">قيد الانتظار</span>
+                        {% elif req.status == 'approved' %}
+                        <span class="badge bg-success-subtle text-success border border-success">موافق عليها</span>
+                        {% elif req.status == 'rejected' %}
+                        <span class="badge bg-danger-subtle text-danger border border-danger">مرفوضة</span>
+                        {% endif %}
+                    </div>
+                    <small class="text-muted d-block">من: {{ req.start_date|date:"Y-m-d" }} إلى: {{ req.end_date|date:"Y-m-d" }} ({{ req.total_days }} أيام)</small>
+                </div>
+                {% empty %}
+                <div class="list-group-item py-4 text-center text-muted">لم تقم بتقديم أي طلبات إجازة.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block title %}فواتير المشتريات{% endblock %}
+{% block header %}قائمة فواتير المشتريات{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="#" class="btn btn-primary disabled">إنشاء فاتورة مشتريات (قيد التطوير)</a>
+</div>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>رقم الفاتورة</th>
+            <th>التاريخ</th>
+            <th>المورد</th>
+            <th>الإجمالي</th>
+            <th>العمليات</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for invoice in invoices %}
+        <tr>
+            <td>{{ invoice.number }}</td>
+            <td>{{ invoice.date }}</td>
+            <td>{{ invoice.supplier.name }}</td>
+            <td>{{ invoice.total }}</td>
+            <td>
+                <!-- Links -->
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="5" class="text-center">لا توجد فواتير مشتريات</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

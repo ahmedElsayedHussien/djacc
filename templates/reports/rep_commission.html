@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}عمولات المناديب{% endblock %}
+{% block header %}تقرير مبيعات وعمولات مناديب البيع{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">من تاريخ</label>
+                <input type="date" name="from" class="form-control" value="{{ from_date }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">إلى تاريخ</label>
+                <input type="date" name="to" class="form-control" value="{{ to_date }}">
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary w-100">عرض التقرير</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-info text-dark d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">سجل العمولات المستحقة</h5>
+        <span class="badge bg-light text-dark">الفترة من {{ from_date }} إلى {{ to_date }}</span>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover text-center">
+                <thead class="table-light">
+                    <tr>
+                        <th>المندوب</th>
+                        <th>كود المندوب</th>
+                        <th>إجمالي المبيعات المرحلة</th>
+                        <th>نسبة العمولة (%)</th>
+                        <th class="table-primary">مبلغ العمولة المستحق</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report %}
+                    <tr>
+                        <td class="text-start">{{ row.rep.name }}</td>
+                        <td><code>{{ row.rep.code }}</code></td>
+                        <td class="fw-bold">{{ row.total_sales }}</td>
+                        <td>{{ row.commission_rate }}%</td>
+                        <td class="table-primary fw-bold fs-5 text-primary">{{ row.commission_amount|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted">لا توجد مبيعات مسجلة في هذه الفترة.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer text-muted small">
+        * يتم حساب العمولة بناءً على فواتير المبيعات المرحلة (Posted) فقط خلال الفترة المحددة.
+    </div>
+</div>
+{% endblock %}

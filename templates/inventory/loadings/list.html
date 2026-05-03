@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}طلبات التحميل{% endblock %}
+{% block header %}إدارة طلبات تحميل المناديب{% endblock %}
+{% block content %}
+<div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center bg-white py-3">
+        <h5 class="mb-0 fw-bold text-primary">طلبات التحميل</h5>
+        <a href="{% url 'inventory:loading-create' %}" class="btn btn-primary rounded-pill">
+            <i class="bi bi-plus-lg"></i> إنشاء طلب جديد
+        </a>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>رقم الطلب</th>
+                        <th>التاريخ</th>
+                        <th>المندوب</th>
+                        <th>من مخزن</th>
+                        <th>إلى مخزن</th>
+                        <th>الحالة</th>
+                        <th>بواسطة</th>
+                        <th>إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr>
+                        <td><code>{{ order.number }}</code></td>
+                        <td>{{ order.date }}</td>
+                        <td>{{ order.sales_rep.name }}</td>
+                        <td>{{ order.from_warehouse.name }}</td>
+                        <td>{{ order.to_warehouse.name }}</td>
+                        <td>
+                            {% if order.status == 'draft' %}
+                                <span class="badge bg-secondary">مسودة</span>
+                            {% elif order.status == 'pending' %}
+                                <span class="badge bg-warning text-dark">انتظار اعتماد</span>
+                            {% elif order.status == 'approved' %}
+                                <span class="badge bg-info text-dark">معتمد</span>
+                            {% elif order.status == 'issued' %}
+                                <span class="badge bg-success">تم الصرف</span>
+                            {% else %}
+                                <span class="badge bg-danger">{{ order.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ order.requested_by.username }}</td>
+                        <td>
+                            <a href="{% url 'inventory:loading-detail' order.pk %}" class="btn btn-sm btn-outline-primary rounded-pill">
+                                <i class="bi bi-eye"></i> تفاصيل
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-4 text-muted">لا يوجد طلبات تحميل مسجلة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

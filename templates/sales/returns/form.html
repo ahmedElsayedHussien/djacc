@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block title %}إضافة مرتجع مبيعات{% endblock %}
+{% block header %}إضافة مرتجع مبيعات{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <form method="post">
+            {% csrf_token %}
+            <div class="card mb-4">
+                <div class="card-header"><h5 class="mb-0">بيانات المرتجع الأساسية</h5></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">{{ form.date|as_crispy_field }}</div>
+                        <div class="col-md-3">{{ form.customer|as_crispy_field }}</div>
+                        <div class="col-md-3">{{ form.invoice|as_crispy_field }}</div>
+                        <div class="col-md-3">{{ form.sales_rep|as_crispy_field }}</div>
+                    </div>
+                    {{ form.notes|as_crispy_field }}
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between">
+                    <h5 class="mb-0">أصناف المرتجع</h5>
+                </div>
+                <div class="card-body">
+                    {{ lines.management_form }}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>الصنف</th>
+                                    <th>المستودع</th>
+                                    <th>الكمية</th>
+                                    <th>السعر</th>
+                                    <th>الإجمالي</th>
+                                    <th>حساب المردودات</th>
+                                    <th>حساب التكلفة</th>
+                                    <th>حذف</th>
+                                </tr>
+                            </thead>
+                            <tbody id="line-items">
+                                {% for l_form in lines %}
+                                <tr class="line-form">
+                                    <td>{{ l_form.id }}{{ l_form.item|as_crispy_field }}</td>
+                                    <td>{{ l_form.warehouse|as_crispy_field }}</td>
+                                    <td>{{ l_form.quantity|as_crispy_field }}</td>
+                                    <td>{{ l_form.unit_price|as_crispy_field }}</td>
+                                    <td>{{ l_form.total|as_crispy_field }}</td>
+                                    <td>{{ l_form.return_account|as_crispy_field }}</td>
+                                    <td>{{ l_form.cogs_account|as_crispy_field }}</td>
+                                    <td>{{ l_form.DELETE|as_crispy_field }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 mb-5">
+                <button type="submit" class="btn btn-primary">حفظ كمسودة</button>
+                <a href="{% url 'sales:return-list' %}" class="btn btn-secondary">إلغاء</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    /* Hide crispy labels in table for better layout */
+    .line-form .mb-3 { margin-bottom: 0 !important; }
+    .line-form label { display: none; }
+</style>
+{% endblock %}

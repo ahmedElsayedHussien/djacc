@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}{% if object %}تعديل صنف{% else %}إضافة صنف{% endif %}{% endblock %}
+{% block header %}{% if object %}تعديل صنف{% else %}إضافة صنف{% endif %}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                {% include 'partials/_form_errors.html' %}
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">كود الصنف *</label>
+                            {{ form.code }}
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">اسم الصنف *</label>
+                            {{ form.name }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">الفئة *</label>
+                            {{ form.category }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">الباركود</label>
+                            {{ form.barcode }}
+                        </div>
+
+                        <div class="col-12"><hr><h6>إعدادات الوحدات</h6></div>
+                        
+                        <div class="col-md-4">
+                            <label class="form-label">الوحدة الأساسية (الأصغر) *</label>
+                            {{ form.base_unit }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">وحدة المبيعات (اختياري)</label>
+                            {{ form.sales_unit }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">معامل التحويل (1 مبيعات = كم أساسية؟)</label>
+                            {{ form.conversion_factor }}
+                        </div>
+
+                        <div class="col-12"><hr><h6>الإعدادات المالية والتكلفة</h6></div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">طريقة التكلفة</label>
+                            {{ form.costing_method }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">حد الطلب (الحد الأدنى)</label>
+                            {{ form.minimum_stock }}
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">حساب المخزون (أصول)</label>
+                            {{ form.inventory_account }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">حساب التكلفة (مصروف)</label>
+                            {{ form.cogs_account }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">حساب المبيعات (إيراد)</label>
+                            {{ form.sales_account }}
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">حفظ</button>
+                        <a href="{% url 'inventory:item-list' %}" class="btn btn-secondary">إلغاء</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

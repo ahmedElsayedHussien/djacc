@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block title %}تفاصيل عرض السعر{% endblock %}
+{% block header %}عرض سعر: {{ quotation.number }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">بيانات العرض</h5>
+                <span class="badge {% if quotation.status == 'invoiced' %}bg-primary{% else %}bg-info{% endif %}">{{ quotation.get_status_display }}</span>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr><th>رقم العرض:</th><td>{{ quotation.number }}</td></tr>
+                    <tr><th>التاريخ:</th><td>{{ quotation.date|date:'Y-m-d' }}</td></tr>
+                    <tr><th>تاريخ الانتهاء:</th><td>{{ quotation.expiry_date|date:'Y-m-d'|default:"-" }}</td></tr>
+                    <tr><th>العميل:</th><td>{{ quotation.customer.name }}</td></tr>
+                    <tr><th>المندوب:</th><td>{{ quotation.sales_rep.name|default:"-" }}</td></tr>
+                    <tr><th>بواسطة:</th><td>{{ quotation.created_by.get_full_name|default:quotation.created_by.username }}</td></tr>
+                </table>
+
+                <div class="mt-4 d-grid gap-2">
+                    {% if quotation.status != 'invoiced' %}
+                    <form method="post" action="{% url 'sales:quotation-convert' quotation.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-success w-100" onclick="return confirm('تأكيد تحويل عرض السعر إلى فاتورة مبيعات؟');">
+                            <i class="bi bi-file-earmark-plus"></i> تحويل إلى فاتورة
+                        </button>
+                    </form>
+                    {% else %}
+                    <div class="alert alert-success text-center">
+                        <i class="bi bi-check-circle"></i> تم تحويل العرض لفاتورة مبيعات
+                    </div>
+                    {% endif %}
+                    
+                    <button class="btn btn-outline-primary" onclick="window.print()">
+                        <i class="bi bi-printer"></i> طباعة عرض السعر
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        {% if quotation.notes %}
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">ملاحظات</h5></div>
+            <div class="card-body">{{ quotation.notes }}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">بنود عرض السعر</h5></div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>الصنف</th>
+                                <th>الكمية</th>
+                                <th>السعر</th>
+                                <th>الخصم</th>
+                                <th>الضريبة</th>
+                                <th>الإجمالي</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for line in quotation.lines.all %}
+                            <tr>
+                                <td>{{ line.item.name }}</td>
+                                <td>{{ line.quantity|floatformat:2 }}</td>
+                                <td>{{ line.unit_price|floatformat:2 }}</td>
+                                <td>{{ line.discount_percent }}%</td>
+                                <td>{{ line.tax_percent }}%</td>
+                                <td>{{ line.total|floatformat:2 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="fw-bold fs-5">
+                            <tr>
+                                <td colspan="5" class="text-end">الإجمالي الصافي:</td>
+                                <td>{{ quotation.total|floatformat:2 }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

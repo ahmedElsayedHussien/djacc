@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}تفاصيل سند صرف مورد{% endblock %}
+{% block header %}سند صرف: {{ payment.number }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">بيانات السند</h5>
+                <button class="btn btn-sm btn-outline-primary" onclick="window.print()"><i class="bi bi-printer"></i> طباعة</button>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-sm-6">
+                        <h6 class="text-muted">رقم السند:</h6>
+                        <p class="fs-5 fw-bold">{{ payment.number }}</p>
+                    </div>
+                    <div class="col-sm-6 text-sm-end">
+                        <h6 class="text-muted">التاريخ:</h6>
+                        <p class="fs-5">{{ payment.date|date:'Y-m-d' }}</p>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-sm-6">
+                        <h6 class="text-muted">المورد:</h6>
+                        <p class="fs-5"><a href="{% url 'purchases:supplier-detail' payment.supplier.pk %}">{{ payment.supplier.name }}</a></p>
+                    </div>
+                    <div class="col-sm-6 text-sm-end">
+                        <h6 class="text-muted">المبلغ:</h6>
+                        <p class="fs-4 fw-bold text-danger">{{ payment.amount|floatformat:2 }}</p>
+                    </div>
+                </div>
+
+                <hr>
+
+                <div class="row mb-4">
+                    <div class="col-sm-6">
+                        <h6 class="text-muted">طريقة الدفع:</h6>
+                        <p>{{ payment.get_payment_method_display }}</p>
+                    </div>
+                    <div class="col-sm-6 text-sm-end">
+                        <h6 class="text-muted">دُفع من:</h6>
+                        <p>
+                            {% if payment.payment_method == 'cash' %}
+                            الخزينة: {{ payment.cash_box.name }}
+                            {% else %}
+                            البنك: {{ payment.bank_account.name }}
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+
+                <div class="alert alert-info">
+                    <div class="row">
+                        <div class="col-sm-6">
+                            <strong>القيد المحاسبي:</strong> 
+                            {% if payment.journal_entry %}
+                            <a href="/admin/core/journalentry/{{ payment.journal_entry.pk }}/change/">{{ payment.journal_entry.number }}</a>
+                            {% else %}
+                            <span class="text-muted">لم يتم الترحيل بعد</span>
+                            {% endif %}
+                        </div>
+                        <div class="col-sm-6 text-sm-end">
+                            <strong>بواسطة:</strong> {{ payment.created_by.get_full_name|default:payment.created_by.username }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

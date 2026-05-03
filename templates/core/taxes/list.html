@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block title %}إعدادات الضرائب{% endblock %}
+{% block header %}إعدادات الضرائب{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0">قائمة أنواع الضرائب</h3>
+    <a href="{% url 'core:taxtype-create' %}" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i> إضافة ضريبة جديدة
+    </a>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-4">اسم الضريبة</th>
+                    <th>الفئة</th>
+                    <th>النسبة %</th>
+                    <th>الحساب المرتبط</th>
+                    <th class="text-end pe-4">إجراءات</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tax in taxes %}
+                <tr>
+                    <td class="ps-4 fw-bold text-dark">{{ tax.name }}</td>
+                    <td>
+                        <span class="badge {% if tax.category == 'vat' %}bg-info{% elif tax.category == 'wht' %}bg-warning{% else %}bg-secondary{% endif %}">
+                            {{ tax.get_category_display }}
+                        </span>
+                    </td>
+                    <td class="fw-bold">{{ tax.rate }} %</td>
+                    <td>
+                        <span class="text-muted small">{{ tax.account.code }}</span> - {{ tax.account.name }}
+                    </td>
+                    <td class="text-end pe-4">
+                        <a href="{% url 'core:taxtype-edit' tax.pk %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-pencil"></i> تعديل
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-5 text-muted">
+                        <i class="bi bi-info-circle fs-2 d-block mb-3"></i>
+                        لا توجد ضرائب معرفة حالياً
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-12">
+        <div class="card border-0 bg-light shadow-sm">
+            <div class="card-body p-4">
+                <h5 class="fw-bold text-dark mb-4"><i class="bi bi-journal-check me-2 text-primary"></i> دليل المستخدم المحاسبي للضرائب</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered bg-white">
+                        <thead class="table-dark">
+                            <tr class="text-center">
+                                <th>الفئة (Category)</th>
+                                <th>نوع الضريبة</th>
+                                <th>في المبيعات</th>
+                                <th>في المشتريات</th>
+                                <th>الحساب المفضل</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="fw-bold">القيمة المضافة / ضريبة الجدول / الجمارك</td>
+                                <td>تضاف فوق السعر</td>
+                                <td class="text-danger text-center">دائن (التزام)</td>
+                                <td class="text-success text-center">مدين (أصل)</td>
+                                <td>حساب "الضريبة" (خصوم متداولة / أصول متداولة)</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">الخصم والتحصيل / كسب العمل / التأمينات</td>
+                                <td>تُطرح من الإجمالي</td>
+                                <td class="text-success text-center">مدين (أصل)</td>
+                                <td class="text-danger text-center">دائن (التزام)</td>
+                                <td>حساب "الاستقطاعات" (أصول / التزامات)</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">الدمغة / التصرفات العقارية</td>
+                                <td>حسب طبيعة المعاملة</td>
+                                <td colspan="3" class="text-center text-muted">تعتمد المعالجة على الحساب المحاسبي المربوط (عادة مصروف)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="mb-0 mt-3 text-muted">
+                    <i class="bi bi-info-circle me-1"></i>
+                    <strong>ملاحظة:</strong> النظام يقرر آلياً (مدين/دائن) بناءً على الفئة المختارة، لذا تأكد دائماً من أن "الفئة" مطابقة لنوع الضريبة الفعلي.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

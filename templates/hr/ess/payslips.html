@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}سجل الرواتب{% endblock %}
+{% block header %}استعراض قسائم الرواتب السابقة{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>الفترة المالية</th>
+                        <th>تاريخ الصرف (تقريبي)</th>
+                        <th class="text-end">الراتب الأساسي</th>
+                        <th class="text-end text-success">البدلات</th>
+                        <th class="text-end text-danger">الاستقطاعات</th>
+                        <th class="text-end fw-bold">الصافي المقبوض</th>
+                        <th class="text-center">طباعة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for slip in payslips %}
+                    <tr>
+                        <td>
+                            <span class="fw-bold">{{ slip.period.name }}</span>
+                            {% if slip.period.status == 'posted' %}
+                            <i class="bi bi-check-circle-fill text-success ms-1" title="مرحل ومعتمد"></i>
+                            {% endif %}
+                        </td>
+                        <td>{{ slip.period.end_date|date:"Y-m-d" }}</td>
+                        <td class="text-end">{{ slip.basic_salary }}</td>
+                        <td class="text-end text-success">{{ slip.total_allowances }}</td>
+                        <td class="text-end text-danger">{{ slip.total_deductions|add:slip.social_insurance|add:slip.income_tax }}</td>
+                        <td class="text-end fw-bold text-primary fs-5">{{ slip.net_salary }}</td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer"></i></button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">لا يوجد سجل لرواتب سابقة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+    @media print {
+        body * { visibility: hidden; }
+        .table-responsive, .table-responsive * { visibility: visible; }
+        .table-responsive { position: absolute; left: 0; top: 0; width: 100%; }
+        .btn, .navbar, #sidebar { display: none !important; }
+    }
+</style>
+{% endblock %}

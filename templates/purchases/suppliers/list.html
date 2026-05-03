@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}الموردون{% endblock %}
+{% block header %}قائمة الموردين{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">الموردون</h5>
+        <a href="{% url 'purchases:supplier-create' %}" class="btn btn-primary">
+            <i class="bi bi-person-plus"></i> إضافة مورد جديد
+        </a>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>الكود</th>
+                        <th>الاسم</th>
+                        <th>حساب المحاسبة</th>
+                        <th>الرقم الضريبي</th>
+                        <th>الهاتف</th>
+                        <th>الرصيد الحالي</th>
+                        <th>إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for supplier in suppliers %}
+                    <tr>
+                        <td>{{ supplier.code }}</td>
+                        <td><a href="{% url 'purchases:supplier-detail' supplier.pk %}">{{ supplier.name }}</a></td>
+                        <td><code>{{ supplier.account.code }}</code></td>
+                        <td>{{ supplier.tax_number|default:"---" }}</td>
+                        <td>{{ supplier.phone|default:"---" }}</td>
+                        <td>{{ supplier.balance|default:"0.00" }}</td>
+                        <td>
+                            <a href="{% url 'purchases:supplier-edit' supplier.pk %}" class="btn btn-sm btn-outline-primary">تعديل</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center">لا يوجد موردون مضافون.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}الأصناف{% endblock %}
+{% block header %}قائمة الأصناف{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">الأصناف</h5>
+        <a href="{% url 'inventory:item-create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> إضافة صنف جديد
+        </a>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-2 mb-3">
+            <div class="col-md-3">
+                <input type="text" name="q" class="form-control" placeholder="اسم أو كود الصنف..." value="{{ request.GET.q }}">
+            </div>
+            <div class="col-md-3">
+                <select name="category" class="form-select">
+                    <option value="">-- كل الفئات --</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if request.GET.category == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-secondary w-100">فلترة</button>
+            </div>
+        </form>
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>الكود</th>
+                        <th>الاسم</th>
+                        <th>الفئة</th>
+                        <th>الوحدة</th>
+                        <th>الرصيد المتاح</th>
+                        <th>إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td>{{ item.code }}</td>
+                        <td><a href="{% url 'inventory:item-detail' item.pk %}">{{ item.name }}</a></td>
+                        <td>{{ item.category.name }}</td>
+                        <td>{{ item.base_unit.name }}</td>
+                        <td><strong>{{ item.current_stock|default:"0" }}</strong></td>
+                        <td>
+                            <a href="{% url 'inventory:item-edit' item.pk %}" class="btn btn-sm btn-outline-primary">تعديل</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center">لا يوجد أصناف مضافة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

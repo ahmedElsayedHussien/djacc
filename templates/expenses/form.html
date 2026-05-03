@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block title %}تسجيل مصروف جديد{% endblock %}
+{% block header %}تسجيل مصروف جديد{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-4">{{ form.date|as_crispy_field }}</div>
+                        <div class="col-md-4">{{ form.subtotal|as_crispy_field }}</div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-primary">الصافي للدفع</label>
+                            <input type="text" id="net_payment_display" class="form-control bg-light fw-bold" readonly value="0.00">
+                        </div>
+                    </div>
+                    
+                    <div class="card bg-light border-0 mb-3">
+                        <div class="card-body">
+                            <h6 class="fw-bold mb-3"><i class="bi bi-percent me-1"></i> إعدادات الضرائب</h6>
+                            <div class="row">
+                                <div class="col-md-4">{{ form.tax_type|as_crispy_field }}</div>
+                                <div class="col-md-2">{{ form.tax_percent|as_crispy_field }}</div>
+                                <div class="col-md-4">{{ form.tax_type2|as_crispy_field }}</div>
+                                <div class="col-md-2">{{ form.tax_percent2|as_crispy_field }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">{{ form.category|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.cost_center|as_crispy_field }}</div>
+                    </div>
+                    {{ form.description|as_crispy_field }}
+                    
+                    <hr>
+                    <h5 class="mb-3">طريقة الدفع</h5>
+                    {{ form.payment_method|as_crispy_field }}
+                    
+                    <div id="bank-group" style="display: none;">
+                        {{ form.bank_account|as_crispy_field }}
+                    </div>
+                    <div id="cash-group" style="display: none;">
+                        {{ form.cash_box|as_crispy_field }}
+                    </div>
+                    <div id="custody-group" style="display: none;">
+                        {{ form.custody|as_crispy_field }}
+                    </div>
+                    
+                    <hr>
+                    {{ form.attachment|as_crispy_field }}
+
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary px-4">حفظ كمسودة</button>
+                        <a href="{% url 'expenses:expense-list' %}" class="btn btn-outline-secondary">إلغاء</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function togglePaymentSource(method) {
+        document.getElementById('bank-group').style.display = 'none';
+        document.getElementById('cash-group').style.display = 'none';
+        document.getElementById('custody-group').style.display = 'none';
+        
+        if (method === 'bank') {
+            document.getElementById('bank-group').style.display = 'block';
+        } else if (method === 'cash') {
+            document.getElementById('cash-group').style.display = 'block';
+        } else if (method === 'custody') {
+            document.getElementById('custody-group').style.display = 'block';
+        }
+    }
+    
+    function calculateNet() {
+        var subtotal = parseFloat(document.getElementById('id_subtotal').value) || 0;
+        var tax1_rate = parseFloat(document.getElementById('id_tax_percent').value) || 0;
+        var tax2_rate = parseFloat(document.getElementById('id_tax_percent2').value) || 0;
+        
+        // We'll get the categories from the server if possible, but for simplicity
+        // let's assume we can check the selected option text or use a simple logic.
+        // For a more robust solution, we'd use data attributes on the select options.
+        
+        // Let's implement a robust way by checking the selected tax category
+        // We'll need to fetch the tax info. Since it's a small app, we can embed it.
+        var net = subtotal;
+        
+        // This is a simplified calculation for the UI display
+        // The real calculation happens on the server during save.
+        // We'll treat WHT/Salary/Insurance as deductions (negative)
+        function getTaxValue(taxId, rate, base) {
+            if (!taxId) return 0;
+            var taxValue = base * (rate / 100);
+            // In a real app, we'd fetch the category via AJAX or data-attrs
+            // For now, let's assume common Egyptian WHT naming
+            var taxText = document.querySelector(`#id_tax_type option[value="${taxId}"]`)?.text || "";
+            var taxText2 = document.querySelector(`#id_tax_type2 option[value="${taxId}"]`)?.text || "";
+            var fullText = taxText + taxText2;
+            
+            if (fullText.includes("خصم") || fullText.includes("أ.ت.ص") || fullText.includes("كسب") || fullText.includes("تأمينات")) {
+                return -taxValue;
+            }
+            return taxValue;
+        }
+
+        var t1 = getTaxValue(document.getElementById('id_tax_type').value, tax1_rate, subtotal);
+        var t2 = getTaxValue(document.getElementById('id_tax_type2').value, tax2_rate, subtotal);
+        
+        var finalNet = subtotal + t1 + t2;
+        document.getElementById('net_payment_display').value = finalNet.toLocaleString('en-US', {minimumFractionDigits: 2});
+    }
+
+    // Initial call on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        var method = document.getElementById('id_payment_method').value;
+        if (method) togglePaymentSource(method);
+        
+        // Attach listeners for calculation
+        ['id_subtotal', 'id_tax_type', 'id_tax_percent', 'id_tax_type2', 'id_tax_percent2'].forEach(id => {
+            document.getElementById(id)?.addEventListener('change', calculateNet);
+            document.getElementById(id)?.addEventListener('input', calculateNet);
+        });
+        calculateNet();
+    });
+</script>
+{% endblock %}

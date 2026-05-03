@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% block title %}تفاصيل سند تحصيل عميل{% endblock %}
+{% block header %}سند تحصيل: {{ receipt.number }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">سند تحصيل</h5>
+                <button class="btn btn-sm btn-light" onclick="window.print()"><i class="bi bi-printer"></i> طباعة</button>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4 border-bottom pb-3">
+                    <div class="col-sm-6">
+                        <h6 class="text-muted">رقم السند:</h6>
+                        <p class="fs-4 fw-bold mb-0 text-success">{{ receipt.number }}</p>
+                    </div>
+                    <div class="col-sm-6 text-sm-end">
+                        <h6 class="text-muted">التاريخ:</h6>
+                        <p class="fs-5 mb-0">{{ receipt.date|date:'Y-m-d' }}</p>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-sm-6">
+                        <h6 class="text-muted">العميل:</h6>
+                        <p class="fs-5 fw-bold"><a href="{% url 'sales:customer-detail' receipt.customer.pk %}" class="text-decoration-none">{{ receipt.customer.name }}</a></p>
+                    </div>
+                    <div class="col-sm-6 text-sm-end">
+                        <h6 class="text-muted">المبلغ المستلم:</h6>
+                        <p class="fs-2 fw-bold text-success">{{ receipt.amount|floatformat:2 }}</p>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-light rounded mb-4">
+                    <div class="row">
+                        <div class="col-sm-4">
+                            <h6 class="text-muted small">طريقة التحصيل:</h6>
+                            <p class="mb-0 fw-bold">{{ receipt.get_payment_method_display }}</p>
+                        </div>
+                        <div class="col-sm-8 text-sm-end">
+                            <h6 class="text-muted small">حُصل في:</h6>
+                            <p class="mb-0 fw-bold">
+                                {% if receipt.payment_method == 'cash' %}
+                                {{ receipt.cash_box.name }}
+                                {% else %}
+                                {{ receipt.bank_account.name }}
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {% if receipt.notes %}
+                <div class="mb-4">
+                    <h6 class="text-muted small">ملاحظات/البيان:</h6>
+                    <p class="p-2 border rounded bg-white">{{ receipt.notes }}</p>
+                </div>
+                {% endif %}
+
+                <div class="alert alert-success d-flex justify-content-between align-items-center py-2 mb-0">
+                    <div>
+                        <i class="bi bi-journal-check me-2"></i>
+                        <strong>رقم القيد:</strong> 
+                        {% if receipt.journal_entry %}
+                        <a href="/admin/core/journalentry/{{ receipt.journal_entry.pk }}/change/" class="alert-link">{{ receipt.journal_entry.number }}</a>
+                        {% else %}
+                        <span class="text-muted">قيد المراجعة</span>
+                        {% endif %}
+                    </div>
+                    <div class="small">
+                        بواسطة: {{ receipt.created_by.username|default:"نظام" }}
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer bg-white text-center">
+                <p class="text-muted small mb-0">شكراً لتعاملكم معنا</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

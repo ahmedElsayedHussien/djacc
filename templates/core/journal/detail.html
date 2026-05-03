@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% block title %}تفاصيل القيد المحاسبي{% endblock %}
+{% block header %}قيد رقم: {{ entry.number }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header bg-dark text-white"><h5 class="mb-0">بيانات القيد</h5></div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr><th>التاريخ:</th><td>{{ entry.date|date:'Y-m-d' }}</td></tr>
+                    <tr><th>النوع:</th><td>{{ entry.get_entry_type_display }}</td></tr>
+                    <tr><th>السنة المالية:</th><td>{{ entry.fiscal_year.name }}</td></tr>
+                    <tr><th>الحالة:</th>
+                        <td>
+                            {% if entry.is_posted %}
+                            <span class="badge bg-success">مرحل</span>
+                            {% else %}
+                            <span class="badge bg-secondary">مسودة</span>
+                            {% endif %}
+                            
+                            {% if entry.is_reversed %}
+                            <span class="badge bg-danger">معكوس</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr><th>بواسطة:</th><td>{{ entry.created_by.username|default:"نظام" }}</td></tr>
+                    {% if entry.source_document %}
+                    <tr><th>المستند الأصلي:</th>
+                        <td>
+                            <span class="text-muted small">{{ entry.content_type.model }}: {{ entry.object_id }}</span>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% if entry.reversed_by %}
+                    <tr><th>قيد العكس:</th>
+                        <td><a href="{% url 'core:journal-detail' entry.reversed_by.pk %}">{{ entry.reversed_by.number }}</a></td>
+                    </tr>
+                    {% endif %}
+                </table>
+
+                <div class="d-grid gap-2 mt-4 no-print">
+                    <button class="btn btn-outline-primary" onclick="window.print()">
+                        <i class="bi bi-printer"></i> طباعة القيد
+                    </button>
+                    
+                    {% if not entry.is_posted %}
+                    <form method="post" action="{% url 'core:journal-post' entry.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-success w-100" onclick="return confirm('هل أنت متأكد من ترحيل هذا القيد؟ لن يمكنك تعديله بعد الترحيل.')">
+                            <i class="bi bi-check2-circle"></i> ترحيل القيد
+                        </button>
+                    </form>
+                    {% endif %}
+                    
+                    {% if entry.is_posted and not entry.is_reversed %}
+                    <form method="post" action="{% url 'core:journal-reverse' entry.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger w-100" onclick="return confirm('تأكيد عكس القيد؟ سيتم إنشاء قيد عكسي وتصفير أثر هذا القيد.')">
+                            <i class="bi bi-arrow-counterclockwise"></i> عكس القيد
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">بنود القيد</h5>
+                <div class="small text-muted">البيان: {{ entry.description }}</div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-bordered mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>الحساب</th>
+                                <th>مركز التكلفة</th>
+                                <th class="text-end" style="width: 120px;">مدين</th>
+                                <th class="text-end" style="width: 120px;">دائن</th>
+                                <th>البيان</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for line in entry.lines.all %}
+                            <tr>
+                                <td>{{ line.account.code }} - {{ line.account.name }}</td>
+                                <td>{{ line.cost_center.name|default:"-" }}</td>
+                                <td class="text-end fw-bold text-primary">{% if line.debit > 0 %}{{ line.debit|floatformat:2 }}{% else %}-{% endif %}</td>
+                                <td class="text-end fw-bold text-success">{% if line.credit > 0 %}{{ line.credit|floatformat:2 }}{% else %}-{% endif %}</td>
+                                <td class="small">{{ line.description }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="table-light fw-bold">
+                            <tr>
+                                <td colspan="2" class="text-center">الإجمالي</td>
+                                <td class="text-end">{{ entry.total_debit|floatformat:2 }}</td>
+                                <td class="text-end">{{ entry.total_credit|floatformat:2 }}</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

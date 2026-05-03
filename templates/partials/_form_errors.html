@@ -1,0 +1,32 @@
+{% if form.errors or lines.errors or lines.non_form_errors %}
+    <div class="alert alert-danger shadow-sm border-0 mb-4" role="alert">
+        <h6 class="fw-bold mb-2"><i class="bi bi-x-circle me-2"></i> برجاء تصحيح الأخطاء التالية:</h6>
+        <ul class="mb-0 small">
+            {% for field in form %}
+                {% for error in field.errors %}
+                    <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+                {% endfor %}
+            {% endfor %}
+            {% for error in form.non_field_errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+            
+            {% if lines %}
+                {% for line_form in lines %}
+                    {% if line_form.errors %}
+                        <li><strong>السطر {{ forloop.counter }}:</strong>
+                            {% for field in line_form %}
+                                {% for error in field.errors %}
+                                    {{ field.label }}: {{ error }} 
+                                {% endfor %}
+                            {% endfor %}
+                        </li>
+                    {% endif %}
+                {% endfor %}
+                {% for error in lines.non_form_errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            {% endif %}
+        </ul>
+    </div>
+{% endif %}

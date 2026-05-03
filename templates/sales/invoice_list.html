@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block title %}فواتير المبيعات{% endblock %}
+{% block header %}قائمة فواتير المبيعات{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'sales:invoice_create' %}" class="btn btn-primary">إنشاء فاتورة جديدة</a>
+</div>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>رقم الفاتورة</th>
+            <th>التاريخ</th>
+            <th>العميل</th>
+            <th>الإجمالي</th>
+            <th>الحالة</th>
+            <th>العمليات</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for invoice in invoices %}
+        <tr>
+            <td>{{ invoice.number }}</td>
+            <td>{{ invoice.date }}</td>
+            <td>{{ invoice.customer.name }}</td>
+            <td>{{ invoice.total }}</td>
+            <td>{{ invoice.get_status_display }}</td>
+            <td>
+                <!-- Add links to view/edit/post -->
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="6" class="text-center">لا توجد فواتير مبيعات</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

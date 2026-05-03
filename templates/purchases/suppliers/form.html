@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}{% if object %}تعديل مورد{% else %}مورد جديد{% endif %}{% endblock %}
+{% block header %}{% if object %}تعديل مورد{% else %}مورد جديد{% endif %}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-body">
+        <form method="post" novalidate>
+          {% csrf_token %}
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">كود المورد</label>
+              {{ form.code }}
+            </div>
+            <div class="col-md-8">
+              <label class="form-label">اسم المورد *</label>
+              {{ form.name }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">الرقم الضريبي</label>
+              {{ form.tax_number }}
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">أجل السداد (يوم)</label>
+                {{ form.payment_terms_days }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">الهاتف</label>
+              {{ form.phone }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">البريد الإلكتروني</label>
+              {{ form.email }}
+            </div>
+            <div class="col-12">
+              <label class="form-label">العنوان</label>
+              {{ form.address }}
+            </div>
+          </div>
+          </div>
+          <div class="mt-4 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">حفظ</button>
+            <a href="{% url 'purchases:supplier-list' %}" class="btn btn-secondary">إلغاء</a>
+          </div>
+          {% if not object %}
+            <div class="mt-3 text-muted small">
+              سيتم إنشاء حساب محاسبي تلقائياً للمورد تحت شجرة الموردين (خصوم)
+            </div>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

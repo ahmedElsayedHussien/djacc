@@ -1,0 +1,142 @@
+from django.views.generic import ListView, CreateView, UpdateView, DetailView
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.urls import reverse_lazy
+from django.contrib import messages
+from django.shortcuts import get_object_or_404, redirect
+from django.db import transaction
+from django.views import View
+from .models import CashBox, BankAccount, CashTransfer
+from .forms import CashBoxForm, BankAccountForm, CashTransferForm
+from .services import TreasuryService
+from datetime import date
+
+class CashBoxListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    model = CashBox
+    template_name = 'treasury/cashboxes/list.html'
+    permission_required = 'treasury.view_cashbox'
+
+    def get_queryset(self):
+        return CashBox.objects.select_related('account', 'responsible_user').filter(is_active=True)
+
+class CashBoxCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = CashBox
+    form_class = CashBoxForm
+    template_name = 'treasury/cashboxes/form.html'
+    permission_required = 'treasury.add_cashbox'
+    success_url = reverse_lazy('treasury:cashbox-list')
+
+    def form_valid(self, form):
+        cash_box = TreasuryService.create_cash_box(form.cleaned_data)
+        messages.success(self.request,
+            f'تم إنشاء الخزنة "{cash_box.name}" — كود الحساب: {cash_box.account.code}')
+        return redirect(self.success_url)
+
+class CashBoxUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = CashBox
+    form_class = CashBoxForm
+    template_name = 'treasury/cashboxes/form.html'
+    permission_required = 'treasury.change_cashbox'
+    success_url = reverse_lazy('treasury:cashbox-list')
+
+    def form_valid(self, form):
+        TreasuryService.update_cash_box(self.get_object(), form.cleaned_data)
+        messages.success(self.request, f'تم تحديث بيانات الخزنة "{self.get_object().name}"')
+        return redirect(self.success_url)
+
+class BankAccountListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    model = BankAccount
+    template_name = 'treasury/banks/list.html'
+    permission_required = 'treasury.view_bankaccount'
+
+    def get_queryset(self):
+        return BankAccount.objects.select_related('account').filter(is_active=True)
+
+class BankAccountCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = BankAccount
+    form_class = BankAccountForm
+    template_name = 'treasury/banks/form.html'
+    permission_required = 'treasury.add_bankaccount'
+    success_url = reverse_lazy('treasury:bank-list')
+
+    def form_valid(self, form):
+        bank = TreasuryService.create_bank_account(form.cleaned_data)
+        messages.success(self.request, f'تم إنشاء الحساب البنكي "{bank.name}"')
+        return redirect(self.success_url)
+
+class BankAccountUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = BankAccount
+    form_class = BankAccountForm
+    template_name = 'treasury/banks/form.html'
+    permission_required = 'treasury.change_bankaccount'
+    success_url = reverse_lazy('treasury:bank-list')
+
+    def form_valid(self, form):
+        TreasuryService.update_bank_account(self.get_object(), form.cleaned_data)
+        messages.success(self.request, f'تم تحديث بيانات الحساب البنكي "{self.get_object().name}"')
+        return redirect(self.success_url)
+
+class CashTransferListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    model = CashTransfer
+    template_name = 'treasury/transfers/list.html'
+    context_object_name = 'transfers'
+    permission_required = 'treasury.view_cashtransfer'
+
+class CashTransferCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = CashTransfer
+    form_class = CashTransferForm
+    template_name = 'treasury/transfers/form.html'
+    success_url = reverse_lazy('treasury:transfer-list')
+    permission_required = 'treasury.add_cashtransfer'
+
+    def form_valid(self, form):
+        with transaction.atomic():
+            from apps.core.services import DocumentService
+            form.instance.number = DocumentService.generate_number(CashTransfer, 'XFER')
+            self.object = form.save()
+            
+            # This will now rollback correctly on failure
+            TreasuryService.process_transfer(self.object, self.request.user)
+            messages.success(self.request, f'تم تنفيذ التحويل {self.object.number} وترحيله')
+            
+        return redirect(self.success_url)
+
+class CashBoxDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    model = CashBox
+    template_name = 'treasury/cashboxes/detail.html'
+    context_object_name = 'cashbox'
+    permission_required = 'treasury.view_cashbox'
+
+    def get_context_data(self, **kwargs):
+        from apps.core.utils import get_account_balance
+        ctx = super().get_context_data(**kwargs)
+        ctx['balance'] = get_account_balance(self.object.account, as_of_date=date.today())
+        return ctx
+
+class BankAccountDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    model = BankAccount
+    template_name = 'treasury/banks/detail.html'
+    context_object_name = 'bank'
+    permission_required = 'treasury.view_bankaccount'
+
+    def get_context_data(self, **kwargs):
+        from apps.core.utils import get_account_balance
+        ctx = super().get_context_data(**kwargs)
+        ctx['balance'] = get_account_balance(self.object.account, as_of_date=date.today())
+        return ctx
+
+class CashTransferDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    model = CashTransfer
+    template_name = 'treasury/transfers/detail.html'
+    context_object_name = 'transfer'
+    permission_required = 'treasury.view_cashtransfer'
+class CashTransferReverseView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'treasury.change_cashtransfer'
+    
+    def post(self, request, pk):
+        transfer = get_object_or_404(CashTransfer, pk=pk)
+        try:
+            TreasuryService.reverse_transfer(transfer, request.user)
+            messages.success(request, f'تم عكس التحويل {transfer.number} بنجاح')
+        except Exception as e:
+            messages.error(request, f'خطأ أثناء العكس: {e}')
+        return redirect('treasury:transfer-detail', pk=pk)

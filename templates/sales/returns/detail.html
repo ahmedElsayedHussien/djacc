@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block title %}تفاصيل المرتجع{% endblock %}
+{% block header %}مرتجع مبيعات: {{ sales_return.number }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0">بيانات المرتجع</h5></div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr><th>رقم المرتجع:</th><td>{{ sales_return.number }}</td></tr>
+                    <tr><th>التاريخ:</th><td>{{ sales_return.date|date:'Y-m-d' }}</td></tr>
+                    <tr><th>العميل:</th><td>{{ sales_return.customer.name }}</td></tr>
+                    <tr><th>المندوب:</th><td>{{ sales_return.sales_rep.name|default:"-" }}</td></tr>
+                    <tr><th>الفاتورة الأصلية:</th><td>{{ sales_return.invoice.number|default:"-" }}</td></tr>
+                    <tr><th>الحالة:</th>
+                        <td>
+                            {% if sales_return.status == 'draft' %}
+                            <span class="badge bg-secondary">مسودة</span>
+                            {% elif sales_return.status == 'posted' %}
+                            <span class="badge bg-success">مرحلة</span>
+                            {% else %}
+                            <span class="badge bg-danger">ملغاة</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr><th>القيد المحاسبي:</th>
+                        <td>
+                            {% if sales_return.journal_entry %}
+                            <a href="/admin/core/journalentry/{{ sales_return.journal_entry.pk }}/change/">{{ sales_return.journal_entry.number }}</a>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+
+                {% if sales_return.status == 'draft' %}
+                <form method="post" action="{% url 'sales:return-post' sales_return.pk %}" class="mt-3">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success w-100" onclick="return confirm('تأكيد ترحيل المرتجع؟ سيتم تعديل المخزون والحسابات.');">
+                        <i class="bi bi-check-circle"></i> ترحيل المرتجع
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">بنود المرتجع</h5></div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>الصنف</th>
+                                <th>المستودع</th>
+                                <th>الكمية</th>
+                                <th>السعر</th>
+                                <th>الضريبة %</th>
+                                <th>الإجمالي</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for line in sales_return.lines.all %}
+                            <tr>
+                                <td>{{ line.item.name }}</td>
+                                <td>{{ line.warehouse.name }}</td>
+                                <td>{{ line.quantity|floatformat:2 }}</td>
+                                <td>{{ line.unit_price|floatformat:2 }}</td>
+                                <td>{{ line.tax_percent }}%</td>
+                                <td>{{ line.total|floatformat:2 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="fw-bold fs-5">
+                            <tr>
+                                <td colspan="5" class="text-end">الإجمالي الصافي:</td>
+                                <td>{{ sales_return.total|floatformat:2 }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

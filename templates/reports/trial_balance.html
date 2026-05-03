@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% block title %}ميزان المراجعة{% endblock %}
+{% block header %}ميزان المراجعة بالمجاميع والأرصدة{% endblock %}
+{% block content %}
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label fw-bold">من تاريخ</label>
+                <input type="date" name="from" class="form-control" value="{{ from_date }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold">إلى تاريخ</label>
+                <input type="date" name="to" class="form-control" value="{{ to_date }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100 rounded-pill">تحديث</button>
+            </div>
+            <div class="col-md-2">
+                <button type="button" onclick="window.print()" class="btn btn-outline-secondary w-100 rounded-pill">طباعة</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover align-middle mb-0 text-center">
+                <thead class="table-light">
+                    <tr>
+                        <th rowspan="2" class="align-middle">كود الحساب</th>
+                        <th rowspan="2" class="align-middle text-start">اسم الحساب</th>
+                        <th colspan="2">أرصدة افتتاحية</th>
+                        <th colspan="2">حركة الفترة</th>
+                        <th colspan="2">أرصدة ختامية</th>
+                    </tr>
+                    <tr>
+                        <th>مدين</th>
+                        <th>دائن</th>
+                        <th>مدين</th>
+                        <th>دائن</th>
+                        <th class="table-primary">مدين</th>
+                        <th class="table-primary">دائن</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td><code>{{ row.account.code }}</code></td>
+                        <td class="text-start">{{ row.account.name }}</td>
+                        <td class="text-muted small">{{ row.op_debit|floatformat:2 }}</td>
+                        <td class="text-muted small">{{ row.op_credit|floatformat:2 }}</td>
+                        <td>{{ row.mov_debit|floatformat:2 }}</td>
+                        <td>{{ row.mov_credit|floatformat:2 }}</td>
+                        <td class="fw-bold text-danger">{{ row.cl_debit|floatformat:2 }}</td>
+                        <td class="fw-bold text-success">{{ row.cl_credit|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="py-4 text-muted">لا يوجد بيانات لعرضها.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

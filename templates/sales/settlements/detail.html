@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% block title %}تفاصيل تسوية مندوب{% endblock %}
+{% block header %}تسوية يومية: {{ settlement.number }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0">بيانات التسوية</h5></div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr><th>رقم التسوية:</th><td>{{ settlement.number }}</td></tr>
+                    <tr><th>تاريخ التسوية:</th><td>{{ settlement.date|date:'Y-m-d' }}</td></tr>
+                    <tr><th>المندوب:</th><td>{{ settlement.sales_rep.name }}</td></tr>
+                    <tr><th>تم الإنشاء بواسطة:</th><td>{{ settlement.created_by.username }}</td></tr>
+                    <tr><th>وقت الإنشاء:</th><td>{{ settlement.created_at|date:'Y-m-d H:i' }}</td></tr>
+                    <tr><th>الحالة:</th>
+                        <td>
+                            {% if settlement.status == 'draft' %}
+                            <span class="badge bg-secondary">مسودة</span>
+                            {% elif settlement.status == 'posted' %}
+                            <span class="badge bg-success">مرحلة</span>
+                            {% else %}
+                            <span class="badge bg-danger">ملغاة</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr><th>مستلم في:</th>
+                        <td>
+                            {% if settlement.to_cash_box %}{{ settlement.to_cash_box.name }}{% endif %}
+                            {% if settlement.to_bank %}{{ settlement.to_bank.name }}{% endif %}
+                        </td>
+                    </tr>
+                    <tr><th>القيد المحاسبي:</th>
+                        <td>
+                            {% if settlement.journal_entry %}
+                            <a href="/admin/core/journalentry/{{ settlement.journal_entry.pk }}/change/">{{ settlement.journal_entry.number }}</a>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="row text-center mb-4">
+            <div class="col-md-4">
+                <div class="p-3 border rounded bg-light">
+                    <h6>إجمالي الفواتير النقدية</h6>
+                    <h4>{{ settlement.total_sales }}</h4>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 border rounded bg-success-subtle">
+                    <h6>النقدية المستلمة الفعلي</h6>
+                    <h4 class="text-success">{{ settlement.cash_delivered }}</h4>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 border rounded {% if settlement.difference > 0 %}bg-danger-subtle{% elif settlement.difference < 0 %}bg-warning-subtle{% else %}bg-light{% endif %}">
+                    <h6>الفرق (الذمة)</h6>
+                    <h4 class="{% if settlement.difference > 0 %}text-danger{% elif settlement.difference < 0 %}text-warning{% endif %}">
+                        {{ settlement.difference }}
+                    </h4>
+                    {% if settlement.difference > 0 %}
+                    <small class="text-danger">مبلغ مستحق على المندوب</small>
+                    {% elif settlement.difference < 0 %}
+                    <small class="text-warning">مبلغ دائن للمندوب</small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">الفواتير المرتبطة بالتسوية</h5></div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>رقم الفاتورة</th>
+                                <th>العميل</th>
+                                <th>الإجمالي</th>
+                                <th>عرض</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for line in settlement.invoice_lines.all %}
+                            <tr>
+                                <td>{{ line.invoice.number }}</td>
+                                <td>{{ line.invoice.customer.name }}</td>
+                                <td>{{ line.invoice.total }}</td>
+                                <td>
+                                    <a href="{% url 'sales:invoice-detail' line.invoice.pk %}" class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center">لا توجد فواتير.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="fw-bold">
+                            <tr>
+                                <td colspan="2" class="text-end">الإجمالي:</td>
+                                <td colspan="2">{{ settlement.total_sales }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

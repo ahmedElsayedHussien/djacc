@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+{% block title %}دفتر الأستاذ (كشف حساب){% endblock %}
+{% block header %}دفتر الأستاذ (كشف حساب){% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">الحساب</label>
+                <select name="account" class="form-select select2" required>
+                    <option value="">اختر الحساب...</option>
+                    {% for acc in accounts %}
+                    <option value="{{ acc.id }}" {% if selected_account == acc.id %}selected{% endif %}>
+                        {{ acc.code }} - {{ acc.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">من تاريخ</label>
+                <input type="date" name="from" class="form-control" value="{{ from_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">إلى تاريخ</label>
+                <input type="date" name="to" class="form-control" value="{{ to_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary w-100">عرض دفتر الأستاذ</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if report %}
+<div class="card border-0 shadow-sm mb-5">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
+        <div>
+            <h5 class="mb-1 fw-bold text-primary">دفتر أستاذ: {{ report.account.name }}</h5>
+            <small class="text-muted">كود الحساب: {{ report.account.code }} | النوع: {{ report.account.get_account_type_display }}</small>
+        </div>
+        <div class="text-end">
+            <span class="badge bg-soft-info text-info p-2">الفترة: {{ from_date }} - {{ to_date }}</span>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="card bg-light border-0">
+                    <div class="card-body text-center p-3">
+                        <h6 class="text-muted mb-2">الرصيد الافتتاحي</h6>
+                        <h4 class="mb-0 {% if report.opening_balance > 0 %}text-success{% elif report.opening_balance < 0 %}text-danger{% endif %}">
+                            {{ report.opening_balance|floatformat:2 }}
+                        </h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-light border-0">
+                    <div class="card-body text-center p-3">
+                        <h6 class="text-muted mb-2">صافي الحركة</h6>
+                        <h4 class="mb-0 {% if report.net_movement > 0 %}text-success{% elif report.net_movement < 0 %}text-danger{% endif %}">
+                            {{ report.net_movement|floatformat:2 }}
+                        </h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-primary text-white border-0">
+                    <div class="card-body text-center p-3">
+                        <h6 class="text-white-50 mb-2">الرصيد الختامي</h6>
+                        <h4 class="mb-0 fw-bold">{{ report.closing_balance|floatformat:2 }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle border">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 120px;">التاريخ</th>
+                        <th style="width: 120px;">رقم القيد</th>
+                        <th>البيان / الوصف</th>
+                        <th class="text-end" style="width: 130px;">مدين (+)</th>
+                        <th class="text-end" style="width: 130px;">دائن (-)</th>
+                        <th class="text-end" style="width: 150px;">الرصيد</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="table-info">
+                        <td colspan="3" class="fw-bold">رصيد ما قبل الفترة</td>
+                        <td colspan="2"></td>
+                        <td class="text-end fw-bold">{{ report.opening_balance|floatformat:2 }}</td>
+                    </tr>
+                    {% for line in report.lines %}
+                    <tr>
+                        <td>{{ line.date|date:'Y-m-d' }}</td>
+                        <td>
+                            <a href="{% url 'core:journal-detail' line.entry_id %}" class="text-decoration-none">
+                                {{ line.entry_number }}
+                            </a>
+                        </td>
+                        <td>{{ line.description }}</td>
+                        <td class="text-end text-success">{% if line.debit > 0 %}{{ line.debit|floatformat:2 }}{% else %}-{% endif %}</td>
+                        <td class="text-end text-danger">{% if line.credit > 0 %}{{ line.credit|floatformat:2 }}{% else %}-{% endif %}</td>
+                        <td class="text-end fw-bold">{{ line.balance|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">لا توجد حركات خلال هذه الفترة</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light fw-bold">
+                    <tr>
+                        <td colspan="3">الإجمالي النهائي</td>
+                        <td class="text-end text-success">
+                            {# Summing in template is hard without custom tags, but usually not needed for ledger #}
+                        </td>
+                        <td class="text-end text-danger"></td>
+                        <td class="text-end text-primary fs-5">{{ report.closing_balance|floatformat:2 }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer bg-white py-3 text-center border-top">
+        <button class="btn btn-outline-dark" onclick="window.print()">
+            <i class="bi bi-printer me-2"></i> طباعة كشف الحساب
+        </button>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <div class="mb-3">
+            <i class="bi bi-journal-text text-muted" style="font-size: 3rem;"></i>
+        </div>
+        <h5 class="text-muted">الرجاء اختيار حساب وفترة زمنية لعرض "دفتر الأستاذ"</h5>
+    </div>
+</div>
+{% endif %}
+
+<style>
+    @media print {
+        .card-header, .card-footer, form, .btn, .breadcrumb { display: none !important; }
+        .card { border: none !important; box-shadow: none !important; }
+        .table-dark { background-color: #000 !important; color: #fff !important; }
+        body { background-color: #fff !important; }
+    }
+    .bg-soft-info { background-color: #e0f7fa; }
+</style>
+{% endblock %}

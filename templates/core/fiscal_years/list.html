@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}السنوات المالية{% endblock %}
+{% block header %}إدارة السنوات المالية{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">قائمة السنوات المالية</h5>
+        <a href="{% url 'core:fiscalyear-create' %}" class="btn btn-primary">
+            <i class="bi bi-calendar-plus"></i> إضافة سنة مالية
+        </a>
+    </div>
+    <div class="card-body">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>الاسم</th>
+                    <th>تاريخ البداية</th>
+                    <th>تاريخ النهاية</th>
+                    <th>الحالة</th>
+                    <th>إجراءات</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for fy in fiscal_years %}
+                <tr>
+                    <td>{{ fy.name }}</td>
+                    <td>{{ fy.start_date }}</td>
+                    <td>{{ fy.end_date }}</td>
+                    <td>
+                        {% if not fy.is_closed %}
+                        <span class="badge bg-success">مفتوحة</span>
+                        {% else %}
+                        <span class="badge bg-danger">مغلقة</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if not fy.is_closed %}
+                        <form method="post" action="{% url 'core:fiscalyear-close' fy.pk %}" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من إغلاق السنة المالية؟ لا يمكن التراجع عن هذا الإجراء.');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-lock"></i> إغلاق
+                            </button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center">لا يوجد سنوات مالية مضافة.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

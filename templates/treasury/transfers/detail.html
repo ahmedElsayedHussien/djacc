@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block title %}تفاصيل التحويل النقدي{% endblock %}
+{% block header %}تحويل نقدي: {{ transfer.number }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white"><h5 class="mb-0">سند تحويل</h5></div>
+            <div class="card-body">
+                <div class="row text-center mb-4">
+                    <div class="col-md-5">
+                        <div class="p-3 border rounded bg-light">
+                            <h6 class="text-muted">من حـ/</h6>
+                            <p class="fs-5 fw-bold mb-0">
+                                {% if transfer.from_cash_box %}
+                                {{ transfer.from_cash_box.name }} (خزينة)
+                                {% else %}
+                                {{ transfer.from_bank.name }} (بنك)
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-center justify-content-center">
+                        <i class="bi bi-arrow-left-right fs-1 text-primary"></i>
+                    </div>
+                    <div class="col-md-5">
+                        <div class="p-3 border rounded bg-light">
+                            <h6 class="text-muted">إلى حـ/</h6>
+                            <p class="fs-5 fw-bold mb-0">
+                                {% if transfer.to_cash_box %}
+                                {{ transfer.to_cash_box.name }} (خزينة)
+                                {% else %}
+                                {{ transfer.to_bank.name }} (بنك)
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-sm-6">
+                        <h6 class="text-muted">المبلغ المحول:</h6>
+                        <p class="fs-3 fw-bold text-primary">{{ transfer.amount|floatformat:2 }}</p>
+                    </div>
+                    <div class="col-sm-6 text-sm-end">
+                        <h6 class="text-muted">تاريخ العملية:</h6>
+                        <p class="fs-5">{{ transfer.date|date:'Y-m-d' }}</p>
+                    </div>
+                </div>
+
+                {% if transfer.notes %}
+                <div class="mb-4">
+                    <h6 class="text-muted">ملاحظات:</h6>
+                    <div class="p-2 border rounded">{{ transfer.notes }}</div>
+                </div>
+                {% endif %}
+
+                <div class="alert alert-secondary">
+                    <div class="row">
+                        <div class="col-sm-6">
+                            <strong>القيد المحاسبي:</strong> 
+                            {% if transfer.journal_entry %}
+                            <a href="/admin/core/journalentry/{{ transfer.journal_entry.pk }}/change/">{{ transfer.journal_entry.number }}</a>
+                            {% else %}
+                            <span class="text-muted">قيد الانتظار</span>
+                            {% endif %}
+                        </div>
+                        <div class="col-sm-6 text-sm-end">
+                            <strong>رقم السند:</strong> {{ transfer.number }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer text-center">
+                <button class="btn btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer"></i> طباعة السند</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

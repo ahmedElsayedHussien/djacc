@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}التحويلات المخزنية{% endblock %}
+{% block header %}التحويلات بين المستودعات{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">سجل التحويلات</h5>
+        <a href="{% url 'inventory:transfer-create' %}" class="btn btn-primary">
+            <i class="bi bi-arrow-left-right"></i> إنشاء طلب تحويل
+        </a>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>الرقم</th>
+                        <th>التاريخ</th>
+                        <th>الصنف</th>
+                        <th>من مستودع</th>
+                        <th>إلى مستودع</th>
+                        <th>الكمية</th>
+                        <th>الحالة</th>
+                        <th>إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tr in transfers %}
+                    <tr>
+                        <td>{{ tr.number }}</td>
+                        <td>{{ tr.date }}</td>
+                        <td>{{ tr.item.name }}</td>
+                        <td>{{ tr.from_warehouse.name }}</td>
+                        <td>{{ tr.to_warehouse.name }}</td>
+                        <td>{{ tr.quantity }}</td>
+                        <td>
+                            <span class="badge {% if tr.status == 'posted' %}bg-success{% else %}bg-warning{% endif %}">
+                                {{ tr.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if tr.status == 'draft' %}
+                            <form method="post" action="{% url 'inventory:transfer-post' tr.pk %}" style="display:inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-success">ترحيل وتحديث المخزون</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center">لا يوجد تحويلات مسجلة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
