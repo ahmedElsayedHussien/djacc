@@ -163,8 +163,8 @@ class InventoryService:
         ✅ Fix #1: إعادة الكميات للمخازن بناءً على الفاتورة المعكوسة.
         """
         for line in invoice.lines.all():
-            base_qty = line.quantity
-            if hasattr(line, 'unit') and line.unit:
+            base_qty = getattr(line, 'base_quantity', line.quantity)
+            if not hasattr(line, 'base_quantity') and hasattr(line, 'unit') and line.unit:
                 base_qty = line.item.convert_to_base(line.quantity, line.unit)
 
             InventoryService.record_movement(
@@ -188,8 +188,8 @@ class InventoryService:
         """
         for line in invoice.lines.all():
             # Convert quantity to base unit if unit is specified
-            base_qty = line.quantity
-            if hasattr(line, 'unit') and line.unit:
+            base_qty = getattr(line, 'base_quantity', line.quantity)
+            if not hasattr(line, 'base_quantity') and hasattr(line, 'unit') and line.unit:
                 base_qty = line.item.convert_to_base(line.quantity, line.unit)
 
             # سعر وحدة الأساس = سعر وحدة الشراء / معامل التحويل

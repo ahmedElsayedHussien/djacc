@@ -220,6 +220,7 @@ class SalesReturnLine(models.Model):
     sales_return = models.ForeignKey(SalesReturn, on_delete=models.CASCADE, related_name='lines')
     item = models.ForeignKey('inventory.Item', on_delete=models.PROTECT)
     warehouse = models.ForeignKey('inventory.Warehouse', on_delete=models.PROTECT)
+    unit = models.ForeignKey('inventory.UnitOfMeasure', on_delete=models.PROTECT, null=True, blank=True)
     quantity = models.DecimalField(max_digits=14, decimal_places=4)
     base_quantity = models.DecimalField(max_digits=14, decimal_places=4, default=0, help_text="الكمية بالوحدة الأساسية")
     unit_price = models.DecimalField(max_digits=18, decimal_places=2)
@@ -332,7 +333,9 @@ class Quotation(models.Model):
 class QuotationLine(models.Model):
     quotation = models.ForeignKey(Quotation, on_delete=models.CASCADE, related_name='lines')
     item = models.ForeignKey('inventory.Item', on_delete=models.PROTECT)
+    unit = models.ForeignKey('inventory.UnitOfMeasure', on_delete=models.PROTECT, null=True, blank=True)
     quantity = models.DecimalField(max_digits=14, decimal_places=4, default=1)
+    base_quantity = models.DecimalField(max_digits=14, decimal_places=4, default=0, help_text="الكمية بالوحدة الأساسية")
     unit_price = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     extra_discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0, verbose_name="نسبة خصم إضافية %")

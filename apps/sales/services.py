@@ -204,9 +204,9 @@ class SalesService:
                     'cost_center': invoice.cost_center
                 })
             
-            # COGS entry (✅ Fix #1: استخدام الكمية الأساسية × التكلفة الحقيقية)
+            # COGS entry (✅ Fix #1: استخدام الكمية الأساسية من السطر)
             cost = line_costs.get(line.id, line.cost)
-            base_qty = line.item.convert_to_base(line.quantity, line.unit) if line.unit else line.quantity
+            base_qty = line.base_quantity
             
             lines.append({
                 'account': line.cost_of_goods_account, 
@@ -367,9 +367,9 @@ class SalesService:
                 'description': f'مردودات مبيعات - {line.item.name}'
             })
             
-            # Inventory reversal entry (✅ Fix #2: استخدام الكمية الأساسية)
+            # Inventory reversal entry (✅ Fix #2: استخدام الكمية الأساسية من السطر)
             cost = line.cost # Use stored cost
-            base_qty = line.item.convert_to_base(line.quantity, line.unit) if line.unit else line.quantity
+            base_qty = line.base_quantity
 
             lines.append({
                 'account': line.item.inventory_account, 

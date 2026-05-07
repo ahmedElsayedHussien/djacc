@@ -99,10 +99,11 @@ class PurchaseReturnForm(forms.ModelForm):
 class PurchaseReturnLineForm(forms.ModelForm):
     class Meta:
         model = PurchaseReturnLine
-        fields = ['item', 'warehouse', 'quantity', 'unit_cost', 'tax_type', 'tax_percent', 'tax_type2', 'tax_percent2']
+        fields = ['item', 'warehouse', 'unit', 'quantity', 'unit_cost', 'tax_type', 'tax_percent', 'tax_type2', 'tax_percent2']
         widgets = {
             'item': forms.Select(attrs={'class': 'form-select'}),
             'warehouse': forms.Select(attrs={'class': 'form-select'}),
+            'unit': forms.Select(attrs={'class': 'form-select'}),
             'quantity': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
             'unit_cost': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
             'tax_type': forms.Select(attrs={'class': 'form-select'}),
