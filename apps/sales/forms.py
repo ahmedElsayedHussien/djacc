@@ -177,9 +177,10 @@ class QuotationForm(forms.ModelForm):
 class QuotationLineForm(forms.ModelForm):
     class Meta:
         model = QuotationLine
-        fields = ['item', 'quantity', 'unit_price', 'discount_percent', 'extra_discount_percent', 'tax_type', 'total']
+        fields = ['item', 'unit', 'quantity', 'unit_price', 'discount_percent', 'extra_discount_percent', 'tax_type', 'total']
         widgets = {
             'item': forms.Select(attrs={'class': 'form-select'}),
+            'unit': forms.Select(attrs={'class': 'form-select'}),
             'quantity': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
             'unit_price': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
             'discount_percent': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
@@ -228,11 +229,12 @@ PriceListItemFormSet = inlineformset_factory(
 class SalesReturnLineForm(forms.ModelForm):
     class Meta:
         model = SalesReturnLine
-        fields = ['item', 'warehouse', 'quantity', 'unit_price', 'discount_percent', 'tax_type', 'tax_percent', 'total', 'return_account', 'cogs_account']
+        fields = ['item', 'warehouse', 'unit', 'quantity', 'unit_price', 'discount_percent', 'tax_type', 'tax_percent', 'tax_type2', 'tax_percent2', 'total', 'return_account', 'cogs_account']
         widgets = {
-            'item': forms.Select(attrs={'class': 'form-select'}),
+            'item': forms.Select(attrs={'class': 'form-select item-select'}),
             'warehouse': forms.Select(attrs={'class': 'form-select'}),
-            'quantity': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
+            'unit': forms.Select(attrs={'class': 'form-select unit-select'}),
+            'quantity': forms.NumberInput(attrs={'class': 'form-control qty-input', 'step': 'any'}),
             'unit_price': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
             'discount_percent': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
             'tax_type': forms.Select(attrs={'class': 'form-select'}),
