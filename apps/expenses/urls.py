@@ -16,5 +16,6 @@ urlpatterns = [
     path('create/', views.ExpenseCreateView.as_view(), name='expense-create'),
     path('<int:pk>/', views.ExpenseDetailView.as_view(), name='expense-detail'),
     path('<int:pk>/post/', views.ExpensePostView.as_view(), name='expense-post'),
+    path('<int:pk>/reverse/', views.ExpenseReverseView.as_view(), name='expense-reverse'),
     path('<int:pk>/approve/', views.ExpenseApproveView.as_view(), name='expense-approve'),
 ]

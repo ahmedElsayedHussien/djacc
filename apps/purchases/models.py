@@ -112,6 +112,7 @@ class PurchaseReturn(models.Model):
     total = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     
     notes = models.TextField(blank=True)
+    cost_center = models.ForeignKey('core.CostCenter', null=True, blank=True, on_delete=models.SET_NULL)
     journal_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
 

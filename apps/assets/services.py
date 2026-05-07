@@ -185,68 +185,79 @@ class AssetService:
     def run_depreciation(target_date: date, created_by) -> int:
         """
         يجرى حساب وإثبات إهلاك كافة الأصول النشطة حتى التاريخ المحدد (عادة نهاية الشهر).
+        تم تحديثها لتستخدم savepoints لضمان استمرارية العملية في حال فشل أصل معين.
         """
         active_assets = Asset.objects.filter(status=Asset.Status.ACTIVE)
         processed_count = 0
+        errors = []
         
         for asset in active_assets:
-            # Check if already depreciated for this month
-            month_start = target_date.replace(day=1)
-            if DepreciationLog.objects.filter(asset=asset, date__gte=month_start, date__lte=target_date).exists():
-                continue
-                
-            # Calculate monthly amount
-            annual_rate = asset.depreciation_rate / Decimal('100')
-            monthly_amount = (asset.purchase_value - asset.salvage_value) * annual_rate / Decimal('12')
-            monthly_amount = monthly_amount.quantize(Decimal('0.01'))
-            
-            # Ensure we don't exceed book value
-            remaining_to_depreciate = asset.book_value - asset.salvage_value
-            if monthly_amount > remaining_to_depreciate:
-                monthly_amount = remaining_to_depreciate
-            
-            if monthly_amount <= 0:
-                asset.status = Asset.Status.FULLY_DEPRECIATED
-                asset.save()
-                continue
+            try:
+                with transaction.atomic(): # ✅ استخدام savepoint لكل أصل
+                    # Check if already depreciated for this month
+                    month_start = target_date.replace(day=1)
+                    if DepreciationLog.objects.filter(asset=asset, date__gte=month_start, date__lte=target_date).exists():
+                        continue
+                        
+                    # Calculate monthly amount
+                    annual_rate = asset.depreciation_rate / Decimal('100')
+                    monthly_amount = (asset.purchase_value - asset.salvage_value) * annual_rate / Decimal('12')
+                    monthly_amount = monthly_amount.quantize(Decimal('0.01'))
+                    
+                    # Ensure we don't exceed book value
+                    remaining_to_depreciate = asset.book_value - asset.salvage_value
+                    if monthly_amount > remaining_to_depreciate:
+                        monthly_amount = remaining_to_depreciate
+                    
+                    if monthly_amount <= 0:
+                        asset.status = Asset.Status.FULLY_DEPRECIATED
+                        asset.save()
+                        continue
 
-            # 1. Create Journal Entry
-            lines = [
-                {
-                    'account': asset.category.depreciation_expense_account,
-                    'debit': monthly_amount,
-                    'credit': 0,
-                    'description': f'إهلاك شهر {target_date.month}/{target_date.year} - {asset.name}'
-                },
-                {
-                    'account': asset.category.accumulated_depreciation_account,
-                    'debit': 0,
-                    'credit': monthly_amount,
-                    'description': f'مجمع إهلاك - {asset.name}'
-                }
-            ]
-            
-            entry = JournalService.create_entry(
-                date_val=target_date,
-                entry_type=JournalEntry.EntryType.MANUAL,
-                description=f'قيد إهلاك أصول - {target_date.strftime("%B %Y")}',
-                lines=lines,
-                created_by=created_by,
-                source_document=asset
-            )
-            
-            # 2. Record Log
-            DepreciationLog.objects.create(
-                asset=asset,
-                date=target_date,
-                amount=monthly_amount,
-                journal_entry=entry
-            )
-            
-            # 3. Audit Log
-            AuditService.log(created_by, 'Depreciate', asset, f'إثبات إهلاك شهري بقيمة {monthly_amount}')
-            
-            processed_count += 1
+                    # 1. Create Journal Entry
+                    lines = [
+                        {
+                            'account': asset.category.depreciation_expense_account,
+                            'debit': monthly_amount,
+                            'credit': 0,
+                            'description': f'إهلاك شهر {target_date.month}/{target_date.year} - {asset.name}'
+                        },
+                        {
+                            'account': asset.category.accumulated_depreciation_account,
+                            'debit': 0,
+                            'credit': monthly_amount,
+                            'description': f'مجمع إهلاك - {asset.name}'
+                        }
+                    ]
+                    
+                    entry = JournalService.create_entry(
+                        date_val=target_date,
+                        entry_type=JournalEntry.EntryType.MANUAL,
+                        description=f'قيد إهلاك أصول - {target_date.strftime("%B %Y")}',
+                        lines=lines,
+                        created_by=created_by,
+                        source_document=asset
+                    )
+                    
+                    # 2. Record Log
+                    DepreciationLog.objects.create(
+                        asset=asset,
+                        date=target_date,
+                        amount=monthly_amount,
+                        journal_entry=entry
+                    )
+                    
+                    # 3. Audit Log
+                    AuditService.log(created_by, 'Depreciate', asset, f'إثبات إهلاك شهري بقيمة {monthly_amount}')
+                    
+                    processed_count += 1
+            except Exception as e:
+                errors.append(f"خطأ في إهلاك الأصل {asset.name}: {str(e)}")
+
+        if errors:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error("\n".join(errors))
             
         return processed_count
 

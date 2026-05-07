@@ -14,7 +14,18 @@ class TreasuryService:
     @transaction.atomic
     def create_cash_box(validated_data: dict) -> CashBox:
         parent = Account.objects.select_for_update().get(code=TreasuryService.CASHBOX_PARENT_CODE)
-        next_seq = Account.objects.filter(parent=parent).count() + 1
+        # ✅ Fix: Use max code instead of count() to avoid duplicates if a middle account is deleted
+        last_account = Account.objects.filter(parent=parent).order_by('-code').first()
+        if last_account:
+            try:
+                # Extract sequence from code (e.g., 111105 -> 05)
+                last_seq = int(last_account.code[len(parent.code):])
+                next_seq = last_seq + 1
+            except (ValueError, IndexError):
+                next_seq = Account.objects.filter(parent=parent).count() + 1
+        else:
+            next_seq = 1
+            
         account_code = f'{parent.code}{next_seq:02d}'
 
         account = Account.objects.create(
@@ -34,7 +45,17 @@ class TreasuryService:
     @transaction.atomic
     def create_bank_account(validated_data: dict) -> BankAccount:
         parent = Account.objects.select_for_update().get(code=TreasuryService.BANK_PARENT_CODE)
-        next_seq = Account.objects.filter(parent=parent).count() + 1
+        # ✅ Fix: Use max code instead of count()
+        last_account = Account.objects.filter(parent=parent).order_by('-code').first()
+        if last_account:
+            try:
+                last_seq = int(last_account.code[len(parent.code):])
+                next_seq = last_seq + 1
+            except (ValueError, IndexError):
+                next_seq = Account.objects.filter(parent=parent).count() + 1
+        else:
+            next_seq = 1
+
         account_code = f'{parent.code}{next_seq:02d}'
 
         account = Account.objects.create(

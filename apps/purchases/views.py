@@ -44,56 +44,79 @@ class PurchaseReturnCreateView(LoginRequiredMixin, PermissionRequiredMixin, Crea
             form.instance.total = 0
             self.object = form.save()
             
-            if lines.is_valid():
-                lines.instance = self.object
-                lines.save()
-                
-                # Calculate totals (Egyptian Tax Compliance)
-                gross_total = 0
-                discount_total = 0
-                tax_total_added = 0
-                tax_total_deducted = 0
-                
-                for line in self.object.lines.all():
-                    line_subtotal = line.quantity * line.unit_cost
-                    line_discount = line_subtotal * (line.discount_percent / 100)
-                    net_line = line_subtotal - line_discount
+            try:
+                if lines.is_valid():
+                    lines.instance = self.object
+                    lines.save()
                     
-                    # Tax 1
-                    tax1 = net_line * (line.tax_percent / 100)
-                    if line.tax_type and line.tax_type.category in ['wht', 'salary', 'insurance']:
-                        tax_total_deducted += tax1
-                        tax1_signed = -tax1
-                    else:
-                        tax_total_added += tax1
-                        tax1_signed = tax1
+                    # ... (rest of the logic inside the previous block)
+                    # I will replace the whole block to be safe
+                    gross_total = 0
+                    discount_total = 0
+                    tax_total_added = 0
+                    tax_total_deducted = 0
+                    
+                    for line in self.object.lines.all():
+                        # ✅ Fix: Quantity validation against original invoice
+                        if self.object.invoice:
+                            from django.db.models import Sum
+                            original_line = self.object.invoice.lines.filter(item=line.item).first()
+                            if not original_line:
+                                raise ValueError(f"الصنف {line.item.name} غير موجود في الفاتورة الأصلية")
+                            
+                            previous_returned = PurchaseReturnLine.objects.filter(
+                                purchase_return__invoice=self.object.invoice,
+                                purchase_return__status='posted',
+                                item=line.item
+                            ).aggregate(total=Sum('quantity'))['total'] or 0
+                            
+                            available = original_line.quantity - previous_returned
+                            if line.quantity > available:
+                                raise ValueError(
+                                    f"الكمية المرتجعة للصنف {line.item.name} ({line.quantity}) "
+                                    f"تتجاوز الكمية المتاحة للإرجاع ({available})"
+                                )
 
-                    # Tax 2
-                    tax2 = net_line * (line.tax_percent2 / 100)
-                    if line.tax_type2 and line.tax_type2.category in ['wht', 'salary', 'insurance']:
-                        tax_total_deducted += tax2
-                        tax2_signed = -tax2
-                    else:
-                        tax_total_added += tax2
-                        tax2_signed = tax2
-                    
-                    line.total = net_line + tax1_signed + tax2_signed
-                    # Calculate base quantity
-                    if hasattr(line, 'unit') and line.unit:
-                        line.base_quantity = line.item.convert_to_base(line.quantity, line.unit)
-                    else:
-                        line.base_quantity = line.quantity
-                    line.save()
-                    
-                    gross_total += line_subtotal
-                    discount_total += line_discount
+                        line_subtotal = line.quantity * line.unit_cost
+                        line_discount = line_subtotal * (line.discount_percent / 100)
+                        net_line = line_subtotal - line_discount
+                        
+                        tax1 = net_line * (line.tax_percent / 100)
+                        if line.tax_type and line.tax_type.category in ['wht', 'salary', 'insurance']:
+                            tax_total_deducted += tax1
+                            tax1_signed = -tax1
+                        else:
+                            tax_total_added += tax1
+                            tax1_signed = tax1
 
-                self.object.subtotal = gross_total
-                self.object.discount_amount = discount_total
-                self.object.tax_amount = tax_total_added - tax_total_deducted
-                self.object.total = gross_total - discount_total + tax_total_added - tax_total_deducted
-                self.object.save()
-            else:
+                        tax2 = net_line * (line.tax_percent2 / 100)
+                        if line.tax_type2 and line.tax_type2.category in ['wht', 'salary', 'insurance']:
+                            tax_total_deducted += tax2
+                            tax2_signed = -tax2
+                        else:
+                            tax_total_added += tax2
+                            tax2_signed = tax2
+                        
+                        line.total = net_line + tax1_signed + tax2_signed
+                        if hasattr(line, 'unit') and line.unit:
+                            line.base_quantity = line.item.convert_to_base(line.quantity, line.unit)
+                        else:
+                            line.base_quantity = line.quantity
+                        line.save()
+                        
+                        gross_total += line_subtotal
+                        discount_total += line_discount
+
+                    self.object.subtotal = gross_total
+                    self.object.discount_amount = discount_total
+                    self.object.tax_amount = tax_total_added - tax_total_deducted
+                    self.object.total = gross_total - discount_total + tax_total_added - tax_total_deducted
+                    self.object.save()
+                else:
+                    return self.form_invalid(form)
+            except ValueError as e:
+                messages.error(self.request, str(e))
+                transaction.set_rollback(True)
                 return self.form_invalid(form)
         return redirect(self.success_url)
 

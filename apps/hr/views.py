@@ -307,31 +307,31 @@ class ApproveLeaveView(LoginRequiredMixin, PermissionRequiredMixin, View):
         if leave.status != LeaveRequest.Status.PENDING:
             messages.error(request, 'لا يمكن تغيير حالة طلب ليس قيد الانتظار.')
             return redirect('hr:leave-list')
-            
-        # Check balance and deduct
-        balance = LeaveBalance.objects.filter(
-            employee=leave.employee, 
-            leave_type=leave.leave_type, 
-            year=leave.start_date.year
-        ).first()
-        
-        if not balance:
-            messages.error(request, 'لا يوجد رصيد إجازات مسجل لهذا الموظف في السنة الحالية.')
-            return redirect('hr:leave-list')
-            
-        if balance.remaining_days < leave.total_days:
-            messages.warning(request, f'رصيد الموظف غير كافٍ. المتبقي: {balance.remaining_days} أيام، المطلوب: {leave.total_days}.')
-            return redirect('hr:leave-list')
-            
-        # Proceed with approval
+
+        # ✅ Atomicity Fix: التحقق من الرصيد وخصمه داخل transaction واحدة مع select_for_update
+        # لمنع Race Condition في حالة موافقة على طلبين في نفس الوقت
         with transaction.atomic():
+            balance = LeaveBalance.objects.select_for_update().filter(
+                employee=leave.employee,
+                leave_type=leave.leave_type,
+                year=leave.start_date.year
+            ).first()
+
+            if not balance:
+                messages.error(request, 'لا يوجد رصيد إجازات مسجل لهذا الموظف في السنة الحالية.')
+                return redirect('hr:leave-list')
+
+            if balance.remaining_days < leave.total_days:
+                messages.warning(request, f'رصيد الموظف غير كافٍ. المتبقي: {balance.remaining_days} أيام، المطلوب: {leave.total_days}.')
+                return redirect('hr:leave-list')
+
             leave.status = LeaveRequest.Status.APPROVED
             leave.approved_by = request.user
             leave.save()
-            
+
             balance.used_days += leave.total_days
             balance.save()
-            
+
         messages.success(request, f'تم الموافقة على الإجازة للموظف {leave.employee} وخصم {leave.total_days} يوم من رصيده.')
         return redirect('hr:leave-list')
 

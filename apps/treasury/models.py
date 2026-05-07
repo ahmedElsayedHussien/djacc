@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from decimal import Decimal
 
 class CashBox(models.Model):
     code = models.CharField(max_length=20, unique=True)
@@ -73,7 +74,12 @@ class CashTransfer(models.Model):
     from_bank = models.ForeignKey(BankAccount, null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_out')
     to_cash_box = models.ForeignKey(CashBox, null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_in')
     to_bank = models.ForeignKey(BankAccount, null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_in')
-    amount = models.DecimalField(max_digits=18, decimal_places=2)
+    from django.core.validators import MinValueValidator
+    amount = models.DecimalField(
+        max_digits=18, 
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))]
+    )
     description = models.TextField()
     
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)

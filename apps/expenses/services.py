@@ -17,6 +17,15 @@ class ExpenseService:
             raise ValueError("هذا المصروف مرحل بالفعل")
         if expense.status != Expense.Status.APPROVED:
             raise ValueError("يجب اعتماد المصروف قبل الترحيل")
+            
+        # ✅ Fix: Validate payment source
+        if expense.payment_method == 'cash' and not expense.cash_box:
+            raise ValueError("يجب تحديد الخزنة للدفع النقدي")
+        if expense.payment_method == 'bank' and not expense.bank_account:
+            raise ValueError("يجب تحديد الحساب البنكي للدفع عبر البنك")
+        if expense.payment_method == 'custody' and not expense.custody:
+            raise ValueError("يجب تحديد العهدة")
+
         lines = []
         
         # Taxes processing
@@ -117,7 +126,7 @@ class ExpenseService:
             created_by=reversed_by
         )
         
-        expense.status = 'rejected' # Or add a 'cancelled' status if preferred
+        expense.status = Expense.Status.REVERSED # ✅ Fixed status
         expense.save()
         
         from apps.core.services import AuditService
@@ -160,6 +169,23 @@ class CustodyService:
         """
         if settlement.is_posted:
             raise ValueError("هذه التسوية مرحلة بالفعل")
+            
+        custody = settlement.custody
+        # ✅ Fix: Over-settlement validation
+        posted_expenses = custody.expense_set.filter(status='posted', settlement__isnull=True)
+        current_expenses_total = posted_expenses.aggregate(t=Sum('amount'))['t'] or 0
+        
+        # Calculate what has already been settled
+        already_settled = custody.settled_amount # Sum of previous settlements
+        remaining_to_settle = custody.amount - already_settled
+        
+        total_this_settlement = current_expenses_total + settlement.returned_amount
+        
+        if total_this_settlement > remaining_to_settle:
+            raise ValueError(
+                f"خطأ في التسوية: المبلغ المطلوب تسويته ({total_this_settlement}) "
+                f"أكبر من الرصيد المتبقي للعهدة ({remaining_to_settle})"
+            )
             
         lines = []
         entry = None

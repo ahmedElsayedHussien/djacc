@@ -216,8 +216,9 @@ class LoadingOrderRequestView(LoginRequiredMixin, PermissionRequiredMixin, View)
     def post(self, request, pk):
         order = get_object_or_404(LoadingOrder, pk=pk)
         if order.status == LoadingOrder.Status.DRAFT:
-            order.status = LoadingOrder.Status.PENDING
-            order.save()
+            with transaction.atomic():
+                order.status = LoadingOrder.Status.PENDING
+                order.save()
             messages.success(request, f'تم إرسال طلب التحميل {order.number} للاعتماد')
         return redirect('inventory:loading-detail', pk=pk)
 

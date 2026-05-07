@@ -13,6 +13,7 @@ class Expense(models.Model):
         DRAFT = 'draft', 'مسودة'
         APPROVED = 'approved', 'معتمد'
         POSTED = 'posted', 'مرحّل'
+        REVERSED = 'reversed', 'معكوس'
         REJECTED = 'rejected', 'مرفوض'
 
     number = models.CharField(max_length=50, unique=True)

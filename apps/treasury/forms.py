@@ -56,6 +56,21 @@ class CashTransferForm(forms.ModelForm):
             'from_bank': forms.Select(attrs={'class': 'form-select'}),
             'to_cash_box': forms.Select(attrs={'class': 'form-select'}),
             'to_bank': forms.Select(attrs={'class': 'form-select'}),
-            'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        # Trigger model clean for source/destination validation
+        instance = CashTransfer(**cleaned_data)
+        try:
+            instance.clean()
+        except forms.ValidationError as e:
+            raise forms.ValidationError(e.message)
+        
+        amount = cleaned_data.get('amount')
+        if amount and amount <= 0:
+            self.add_error('amount', 'يجب أن يكون المبلغ أكبر من صفر')
+            
+        return cleaned_data

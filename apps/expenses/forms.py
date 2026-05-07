@@ -116,4 +116,22 @@ class CustodySettlementForm(forms.ModelForm):
         if returned_amount > 0 and not cash_box:
             raise forms.ValidationError('يجب تحديد الخزنة لاستلام النقدية المرتجعة.')
             
+        # ✅ Fix: Over-settlement validation in Form
+        if self.instance and hasattr(self, 'custody_obj'):
+            custody = self.custody_obj
+            from django.db.models import Sum
+            # Get expenses already posted but not yet settled
+            posted_expenses = custody.expense_set.filter(status='posted', settlement__isnull=True)
+            current_expenses_total = posted_expenses.aggregate(t=Sum('amount'))['t'] or 0
+            
+            already_settled = custody.settled_amount
+            remaining = custody.amount - already_settled
+            
+            total_this_time = current_expenses_total + returned_amount
+            
+            if total_this_time > remaining:
+                raise forms.ValidationError(
+                    f'إجمالي المصروفات ({current_expenses_total}) + المرتجع ({returned_amount}) '
+                    f'أكبر من الرصيد المتبقي للعهدة ({remaining}).'
+                )
         return cleaned

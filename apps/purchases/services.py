@@ -12,7 +12,17 @@ class SupplierService:
     @transaction.atomic
     def create_supplier(validated_data: dict) -> Supplier:
         parent = Account.objects.select_for_update().get(code=SupplierService.SUPPLIERS_PARENT_CODE)
-        next_seq = Account.objects.filter(parent=parent).count() + 1
+        # ✅ Fix: Use max code instead of count() to avoid duplicates
+        last_account = Account.objects.filter(parent=parent).order_by('-code').first()
+        if last_account:
+            try:
+                last_seq = int(last_account.code[len(parent.code):])
+                next_seq = last_seq + 1
+            except (ValueError, IndexError):
+                next_seq = Account.objects.filter(parent=parent).count() + 1
+        else:
+            next_seq = 1
+
         account_code = f'{parent.code}{next_seq:03d}'
 
         account = Account.objects.create(
@@ -182,6 +192,7 @@ class PurchaseService:
 
         # 2. Update Invoice Status
         invoice.status = PurchaseInvoice.Status.CANCELLED
+        invoice.paid_amount = 0 # ✅ Fix: Reset paid amount
         invoice.save()
 
         # 3. Reduce Inventory Stock (Inverse of increase_stock)
@@ -222,11 +233,15 @@ class PurchaseService:
         
         # Determine source account
         if payment.payment_method == 'bank':
+            if not payment.bank_account:
+                raise ValueError("يجب تحديد الحساب البنكي للدفع عبر البنك")
             source_account = payment.bank_account.account
         elif payment.payment_method == 'cheque':
             # شيكات مسحوبة - حساب وسيط 2141
             source_account = Account.objects.get(code=getattr(settings, 'CHEQUES_ISSUED_ACCOUNT', '2141'))
         else:
+            if not payment.cash_box:
+                raise ValueError("يجب تحديد الخزنة للدفع النقدي")
             source_account = payment.cash_box.account
             
         # Credit Bank/Cash/Cheque

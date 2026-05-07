@@ -24,32 +24,37 @@ class ExpenseCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView)
 
     def form_valid(self, form):
         from apps.core.services import DocumentService
-        expense = form.instance
-        expense.number = DocumentService.generate_number(Expense, 'EXP')
-        expense.created_by = self.request.user
+        from django.db import transaction
         
-        # Calculate Taxes
-        subtotal = expense.subtotal
-        tax1_val = 0
-        if expense.tax_type:
-            rate = expense.tax_percent if expense.tax_percent else expense.tax_type.rate
-            tax1_val = subtotal * (rate / 100)
-            if expense.tax_type.category in ['wht', 'salary', 'insurance']:
-                tax1_val = -tax1_val # Deduction
-        
-        tax2_val = 0
-        if expense.tax_type2:
-            rate2 = expense.tax_percent2 if expense.tax_percent2 else expense.tax_type2.rate
-            tax2_val = subtotal * (rate2 / 100)
-            if expense.tax_type2.category in ['wht', 'salary', 'insurance']:
-                tax2_val = -tax2_val # Deduction
-        
-        expense.tax_amount = abs(tax1_val) + abs(tax2_val) # Total absolute taxes
-        expense.total = subtotal + tax1_val + tax2_val # Net Payable
-        expense.amount = expense.total # Final Net Paid
-        
+        with transaction.atomic():
+            expense = form.instance
+            expense.number = DocumentService.generate_number(Expense, 'EXP')
+            expense.created_by = self.request.user
+            
+            # Calculate Taxes
+            subtotal = expense.subtotal
+            tax1_val = 0
+            if expense.tax_type:
+                rate = expense.tax_percent if expense.tax_percent else expense.tax_type.rate
+                tax1_val = subtotal * (rate / 100)
+                if expense.tax_type.category in ['wht', 'salary', 'insurance']:
+                    tax1_val = -tax1_val # Deduction
+            
+            tax2_val = 0
+            if expense.tax_type2:
+                rate2 = expense.tax_percent2 if expense.tax_percent2 else expense.tax_type2.rate
+                tax2_val = subtotal * (rate2 / 100)
+                if expense.tax_type2.category in ['wht', 'salary', 'insurance']:
+                    tax2_val = -tax2_val # Deduction
+            
+            expense.tax_amount = abs(tax1_val) + abs(tax2_val) # Total absolute taxes
+            expense.total = subtotal + tax1_val + tax2_val # Net Payable
+            expense.amount = expense.total # Final Net Paid
+            
+            response = super().form_valid(form)
+            
         messages.success(self.request, f'تم تسجيل المصروف {expense.number} بنجاح')
-        return super().form_valid(form)
+        return response
 
 class ExpenseApproveView(LoginRequiredMixin, PermissionRequiredMixin, View):
     permission_required = 'expenses.change_expense'
@@ -89,6 +94,21 @@ class ExpensePostView(LoginRequiredMixin, PermissionRequiredMixin, View):
             messages.error(request, f'خطأ في الترحيل: {e}')
         return redirect('expenses:expense-detail', pk=pk)
 
+class ExpenseReverseView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'expenses.change_expense'
+    
+    def post(self, request, pk):
+        from .services import ExpenseService
+        from django.shortcuts import get_object_or_404
+        expense = get_object_or_404(Expense, pk=pk)
+        
+        try:
+            ExpenseService.reverse_expense(expense, request.user)
+            messages.success(request, f'تم عكس المصروف {expense.number} وإنشاء قيد عكسي بنجاح.')
+        except Exception as e:
+            messages.error(request, f'خطأ في العكس: {e}')
+        return redirect('expenses:expense-detail', pk=pk)
+
 class ExpenseCategoryListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = ExpenseCategory
     template_name = 'expenses/categories/list.html'
@@ -120,7 +140,7 @@ class CustodyCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView)
         
         with transaction.atomic():
             form.instance.number = DocumentService.generate_number(Custody, 'CUS')
-            form.instance.created_by = self.request.user
+            # Fix: created_by removed as it doesn't exist in Custody model
             response = super().form_valid(form)
             CustodyService.issue_custody(self.object, self.request.user)
             messages.success(self.request, f'تم صرف العهدة رقم {self.object.number} وإنشاء القيد المحاسبي بنجاح.')
@@ -162,13 +182,19 @@ class CustodySettlementCreateView(LoginRequiredMixin, PermissionRequiredMixin, C
         ctx['remaining_balance'] = custody.amount - custody.settled_amount - total_expenses
         return ctx
         
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        from django.shortcuts import get_object_or_404
+        form.custody_obj = get_object_or_404(Custody, pk=self.kwargs['custody_pk'])
+        return form
+
     def form_valid(self, form):
         from django.shortcuts import get_object_or_404
         from .services import CustodyService
         from django.db import transaction
         
         with transaction.atomic():
-            custody = get_object_or_404(Custody, pk=self.kwargs['custody_pk'])
+            custody = form.custody_obj
             form.instance.custody = custody
             
             self.object = form.save()

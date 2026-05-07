@@ -175,10 +175,21 @@ class BankReconciliationDetailView(LoginRequiredMixin, PermissionRequiredMixin, 
 
 class BankReconciliationUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = BankReconciliation
-    fields = ['bank_account', 'statement_date', 'statement_balance', 'book_balance', 'is_reconciled', 'notes']
+    fields = ['bank_account', 'statement_date', 'statement_balance', 'book_balance', 'notes']
     template_name = 'treasury/bankreconciliations/form.html'
     permission_required = 'treasury.change_bankreconciliation'
     success_url = reverse_lazy('treasury:bankreconciliation-list')
+
+    def get_queryset(self):
+        # ✅ Fix: Prevent editing if already reconciled
+        return super().get_queryset().filter(is_reconciled=False)
+
+    def dispatch(self, request, *args, **kwargs):
+        obj = self.get_object()
+        if obj.is_reconciled:
+            messages.error(request, "لا يمكن تعديل تسوية بنكية منتهية.")
+            return redirect('treasury:bankreconciliation-detail', pk=obj.pk)
+        return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
         obj = form.save(commit=False)
