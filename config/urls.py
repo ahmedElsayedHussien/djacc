@@ -13,7 +13,9 @@ urlpatterns = [
     path('expenses/', include('apps.expenses.urls')),
     path('reports/', include('apps.reports.urls')),
     path('hr/', include('apps.hr.urls')),
+    path('assets/', include('apps.assets.urls')),
     path('accounts/', include('allauth.urls')),
+    path('access/', include('apps.users.urls')),
     path('', include('apps.core.urls')),
 ]
 

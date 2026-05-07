@@ -4,75 +4,121 @@
 
 {% block content %}
 <div class="row mb-4">
-    <div class="col-md-4">
-        <div class="card bg-primary text-white h-100 shadow-sm">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white h-100 shadow-sm border-0">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="text-uppercase mb-2 opacity-75">إجمالي الموظفين (نشط)</h6>
+                        <h6 class="text-uppercase mb-2 opacity-75">إجمالي الموظفين</h6>
                         <h2 class="mb-0 fw-bold">{{ total_employees|default:"0" }}</h2>
                     </div>
                     <div class="fs-1 opacity-50"><i class="bi bi-people-fill"></i></div>
                 </div>
             </div>
-            <div class="card-footer bg-transparent border-0">
-                <a href="#" class="text-white text-decoration-none">إدارة الموظفين <i class="bi bi-arrow-left"></i></a>
+            <div class="card-footer bg-white bg-opacity-10 border-0">
+                <a href="{% url 'hr:employee-list' %}" class="text-white text-decoration-none small">إدارة الملفات <i class="bi bi-arrow-left"></i></a>
             </div>
         </div>
     </div>
     
-    <div class="col-md-4">
-        <div class="card bg-warning text-dark h-100 shadow-sm">
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark h-100 shadow-sm border-0">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="text-uppercase mb-2 opacity-75">طلبات إجازة معلقة</h6>
+                        <h6 class="text-uppercase mb-2 opacity-75">إجازات معلقة</h6>
                         <h2 class="mb-0 fw-bold">{{ pending_leaves|default:"0" }}</h2>
                     </div>
                     <div class="fs-1 opacity-50"><i class="bi bi-calendar2-event"></i></div>
                 </div>
             </div>
-            <div class="card-footer bg-transparent border-0 border-dark">
-                <a href="#" class="text-dark text-decoration-none">مراجعة الطلبات <i class="bi bi-arrow-left"></i></a>
+            <div class="card-footer bg-dark bg-opacity-10 border-0">
+                <a href="{% url 'hr:leave-list' %}" class="text-dark text-decoration-none small">مراجعة الطلبات <i class="bi bi-arrow-left"></i></a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card bg-info text-white h-100 shadow-sm border-0">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-uppercase mb-2 opacity-75">سلف قيد الانتظار</h6>
+                        <h2 class="mb-0 fw-bold">{{ pending_loans|default:"0" }}</h2>
+                    </div>
+                    <div class="fs-1 opacity-50"><i class="bi bi-cash-coin"></i></div>
+                </div>
+            </div>
+            <div class="card-footer bg-white bg-opacity-10 border-0">
+                <a href="{% url 'hr:loan-list' %}" class="text-white text-decoration-none small">إدارة السلف <i class="bi bi-arrow-left"></i></a>
             </div>
         </div>
     </div>
     
-    <div class="col-md-4">
-        <div class="card bg-success text-white h-100 shadow-sm">
+    <div class="col-md-3">
+        <div class="card bg-danger text-white h-100 shadow-sm border-0">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="text-uppercase mb-2 opacity-75">فترة الرواتب الحالية</h6>
-                        <h4 class="mb-0 fw-bold">{{ latest_period.name|default:"لا توجد فترات" }}</h4>
-                        {% if latest_period %}
-                        <small class="opacity-75">الحالة: {{ latest_period.get_status_display }}</small>
-                        {% endif %}
+                        <h6 class="text-uppercase mb-2 opacity-75">مستندات منتهية</h6>
+                        <h2 class="mb-0 fw-bold">{{ expiring_docs_count|default:"0" }}</h2>
                     </div>
-                    <div class="fs-1 opacity-50"><i class="bi bi-cash-stack"></i></div>
+                    <div class="fs-1 opacity-50"><i class="bi bi-exclamation-octagon"></i></div>
                 </div>
             </div>
-            <div class="card-footer bg-transparent border-0">
-                <a href="#" class="text-white text-decoration-none">مسيرات الرواتب <i class="bi bi-arrow-left"></i></a>
+            <div class="card-footer bg-white bg-opacity-10 border-0">
+                <a href="#" class="text-white text-decoration-none small">تنبيهات الصلاحية <i class="bi bi-arrow-left"></i></a>
             </div>
         </div>
     </div>
 </div>
 
 <div class="row">
-    <div class="col-md-6">
+    <div class="col-md-8">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-cash-stack text-success"></i> حالة الرواتب والأجور</h5>
+                <a href="{% url 'hr:payroll-list' %}" class="btn btn-sm btn-outline-primary">عرض كافة الفترات</a>
+            </div>
+            <div class="card-body">
+                {% if latest_period %}
+                <div class="p-3 bg-light rounded-3 mb-3 border-start border-4 border-success">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="mb-1 fw-bold">{{ latest_period.name }}</h5>
+                            <p class="text-muted mb-0">من {{ latest_period.start_date }} إلى {{ latest_period.end_date }}</p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <span class="badge bg-success fs-6">{{ latest_period.get_status_display }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">لا توجد فترات رواتب مفتوحة حالياً.</div>
+                {% endif %}
+                <div class="d-grid">
+                    <a href="{% url 'hr:payroll-add' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> إنشاء مسير رواتب جديد لهذا الشهر</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
         <div class="card shadow-sm mb-4">
             <div class="card-header bg-white">
-                <h5 class="mb-0"><i class="bi bi-lightning-charge text-warning"></i> إجراءات سريعة</h5>
+                <h5 class="mb-0 fw-bold"><i class="bi bi-lightning-charge text-warning"></i> اختصارات سريعة</h5>
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
-                    <button class="btn btn-outline-primary text-start"><i class="bi bi-person-plus me-2"></i> إضافة موظف جديد</button>
-                    <button class="btn btn-outline-success text-start"><i class="bi bi-calculator me-2"></i> إنشاء مسير رواتب جديد</button>
-                    <button class="btn btn-outline-info text-start"><i class="bi bi-file-earmark-text me-2"></i> تقديم طلب إجازة (بوابة الموظف)</button>
+                    <a href="{% url 'hr:employee-add' %}" class="btn btn-outline-primary text-start"><i class="bi bi-person-plus me-2"></i> إضافة موظف جديد</a>
+                    <a href="{% url 'hr:leave-list' %}" class="btn btn-outline-warning text-dark text-start"><i class="bi bi-calendar-check me-2"></i> مراجعة طلبات الإجازة</a>
+                    <a href="{% url 'hr:loan-list' %}" class="btn btn-outline-info text-start"><i class="bi bi-wallet2 me-2"></i> إدارة السلف والعهد</a>
+                    <hr>
+                    <a href="{% url 'hr:ess-dashboard' %}" class="btn btn-outline-secondary text-start"><i class="bi bi-display me-2"></i> معاينة بوابة الموظف (ESS)</a>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
 {% endblock %}

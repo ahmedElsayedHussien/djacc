@@ -6,7 +6,7 @@ from apps.inventory.models import Item, Warehouse
 from apps.treasury.models import CashBox
 from apps.treasury.services import TreasuryService
 from apps.inventory.services import InventoryService
-from .models import SalesInvoice, Customer, SalesRepresentative, CustomerReceipt, IntermediaryCompany
+from .models import SalesInvoice, Customer, SalesRepresentative, CustomerReceipt, IntermediaryCompany, ReceiptAllocation
 
 class CustomerService:
     CUSTOMERS_PARENT_CODE = getattr(settings, 'CUSTOMERS_PARENT_ACCOUNT', '1121')
@@ -32,10 +32,12 @@ class CustomerService:
             parent=parent,
             is_leaf=True,
             currency='EGP',
+            initial_balance=validated_data.get('initial_balance', 0) or 0,
+            initial_balance_type=validated_data.get('initial_balance_type', 'debit'),
         )
 
         # Create the customer linked to that account
-        customer_data = {k: v for k, v in validated_data.items() if k not in ('code', 'account')}
+        customer_data = {k: v for k, v in validated_data.items() if k not in ('code', 'account', 'initial_balance', 'initial_balance_type')}
         customer = Customer.objects.create(
             account=account,
             code=validated_data.get('code'), # Use the code from validated_data
@@ -46,41 +48,80 @@ class CustomerService:
     @staticmethod
     @transaction.atomic
     def update_customer(customer: Customer, validated_data: dict) -> Customer:
-        # Keep account name in sync with customer name
+        # Update account fields
+        update_account = False
         if 'name' in validated_data and validated_data['name'] != customer.name:
             customer.account.name = validated_data['name']
-            customer.account.save(update_fields=['name'])
+            update_account = True
+        
+        if 'initial_balance' in validated_data:
+            customer.account.initial_balance = validated_data['initial_balance'] or 0
+            update_account = True
+            
+        if 'initial_balance_type' in validated_data:
+            customer.account.initial_balance_type = validated_data['initial_balance_type']
+            update_account = True
+            
+        if update_account:
+            customer.account.save(update_fields=['name', 'initial_balance', 'initial_balance_type'])
 
         for field, value in validated_data.items():
-            setattr(customer, field, value)
+            if field not in ('initial_balance', 'initial_balance_type'):
+                setattr(customer, field, value)
         customer.save()
         return customer
 
 class SalesRepresentativeService:
+    REP_INVENTORY_PARENT = getattr(settings, 'SALES_REP_INVENTORY_PARENT', '1134')
+
     @staticmethod
     @transaction.atomic
     def create_rep(validated_data: dict) -> SalesRepresentative:
         """
-        1. إنشاء مخزن للمندوب
+        1. إنشاء مخزن للمندوب (مع ربطه بحساب محاسبي آلياً)
         2. إنشاء خزنة للمندوب (مرتبطة بحساب محاسبي)
         3. إنشاء سجل المندوب
         """
-        # 1. Create Warehouse
-        warehouse = Warehouse.objects.create(
-            code=f"W-{validated_data['code']}",
-            name=f"مخزن مندوب - {validated_data['name']}"
+        employee = validated_data.get('employee')
+        rep_name = validated_data.get('name')
+        rep_user = validated_data.get('user')
+        
+        if employee:
+            rep_name = f"{employee.first_name} {employee.last_name}"
+            rep_user = employee.user
+
+        # 1. Create Warehouse Account
+        parent_inv = Account.objects.get_or_create(
+            code=SalesRepresentativeService.REP_INVENTORY_PARENT,
+            defaults={'name': 'بضاعة المندوبين', 'account_type': 'asset', 'is_leaf': False}
+        )[0]
+        
+        next_seq = Account.objects.filter(parent=parent_inv).count() + 1
+        warehouse_account = Account.objects.create(
+            code=f'{parent_inv.code}{next_seq:03d}',
+            name=f'مخزن مندوب - {rep_name}',
+            account_type='asset',
+            parent=parent_inv,
+            is_leaf=True,
         )
 
-        # 2. Create CashBox using TreasuryService
+        # 2. Create Warehouse
+        warehouse = Warehouse.objects.create(
+            code=f"W-{validated_data['code']}",
+            name=f"مخزن مندوب - {rep_name}",
+            gl_account=warehouse_account
+        )
+
+        # 3. Create CashBox using TreasuryService
         cash_box_data = {
             'code': f"CB-{validated_data['code']}",
-            'name': f"خزنة مندوب - {validated_data['name']}",
-            'responsible_user': validated_data['user'],
+            'name': f"خزنة مندوب - {rep_name}",
+            'responsible_user': rep_user,
             'currency': 'EGP'
         }
         cash_box = TreasuryService.create_cash_box(cash_box_data)
 
-        # 3. Create Rep (بدون account أولاً)
+        # 4. Create Rep (بدون account أولاً)
         rep_data = {k: v for k, v in validated_data.items()
                     if k not in ('warehouse', 'cash_box', 'account')}
         rep = SalesRepresentative.objects.create(
@@ -89,7 +130,7 @@ class SalesRepresentativeService:
             **rep_data
         )
 
-        # 4. Create accounting account for rep receivable  ← جديد
+        # 5. Create accounting account for rep receivable
         account = RepSettlementService.create_rep_account(rep)
         rep.account = account
         rep.save(update_fields=['account'])
@@ -115,16 +156,15 @@ class SalesService:
         if not invoice.lines.exists():
             raise ValueError("لا يمكن ترحيل فاتورة بدون أسطر")
 
-        # 1. Determine Debit Account (Customer vs CashBox)
-        if invoice.payment_type == SalesInvoice.PaymentType.CASH:
-            if not invoice.cash_box:
-                raise ValueError("يجب تحديد الخزنة للفواتير النقدية")
-            debit_account = invoice.cash_box.account
-        else:
-            debit_account = invoice.customer.account
+        # ✅ Fix #1 & #2: تحديث المخزون أولاً للحصول على التكلفة الحقيقية (بعد الـ lock) لضمان مطابقة القيد للمخازن
+        line_costs = InventoryService.reduce_stock(invoice)
+
+        # 1. Always Debit Customer for Sales Invoices (to track in AR)
+        # For Cash sales, we will create an auto-receipt next.
+        debit_account = invoice.customer.account
 
         lines = []
-        # Debit: Customer or CashBox
+        # Debit: Customer
         lines.append({
             'account': debit_account,
             'debit': invoice.total,
@@ -155,7 +195,7 @@ class SalesService:
             # DR Sales Discount (if any)
             discount_total = (line.quantity * line.unit_price) * (line.discount_percent / 100)
             if discount_total > 0:
-                discount_account = Account.objects.get(code=getattr(settings, 'SALES_DISCOUNT_ACCOUNT', '4130'))
+                discount_account = Account.objects.get(code=getattr(settings, 'SALES_DISCOUNT_ACCOUNT', '413'))
                 lines.append({
                     'account': discount_account,
                     'debit': discount_total,
@@ -164,11 +204,13 @@ class SalesService:
                     'cost_center': invoice.cost_center
                 })
             
-            # COGS entry
-            cost = line.cost # Use stored cost
+            # COGS entry (✅ Fix #1: استخدام الكمية الأساسية × التكلفة الحقيقية)
+            cost = line_costs.get(line.id, line.cost)
+            base_qty = line.item.convert_to_base(line.quantity, line.unit) if line.unit else line.quantity
+            
             lines.append({
                 'account': line.cost_of_goods_account, 
-                'debit': cost * line.quantity, 
+                'debit': cost * base_qty, 
                 'credit': 0,
                 'description': f'تكلفة مبيعات - {line.item.name}',
                 'cost_center': invoice.cost_center
@@ -176,32 +218,24 @@ class SalesService:
             lines.append({
                 'account': line.item.inventory_account, 
                 'debit': 0, 
-                'credit': cost * line.quantity,
+                'credit': cost * base_qty,
                 'description': f'صرف مخزون - {line.item.name}',
                 'cost_center': invoice.cost_center
             })
 
-        # Group taxes by account
+        # Group taxes by account (using net before tax after discount)
         tax_lines = {}
         for line in invoice.lines.all():
-            discount_val = (line.quantity * line.unit_price) * (line.discount_percent / 100)
-            net_after_discount = (line.quantity * line.unit_price) - discount_val
-            
-            # Tax 1
-            if line.tax_type:
-                tax_val = net_after_discount * (line.tax_type.rate / 100)
-                acc = line.tax_type.account
-                if acc.id not in tax_lines:
-                    tax_lines[acc.id] = {'account': acc, 'amount': 0, 'category': line.tax_type.category}
+            # Compute net amount before tax (after discount)
+            net_before_tax = line.quantity * line.unit_price * (1 - (line.discount_percent / 100))
+            # Determine applicable tax rate
+            tax_rate = line.tax_percent if line.tax_percent else (line.tax_type.rate if line.tax_type else 0)
+            tax_val = net_before_tax * (tax_rate / 100)
+            acc = line.tax_type.account if line.tax_type else None
+            if acc and acc.id not in tax_lines:
+                tax_lines[acc.id] = {'account': acc, 'amount': 0, 'category': line.tax_type.category if line.tax_type else ''}
+            if acc:
                 tax_lines[acc.id]['amount'] += tax_val
-                
-            # Tax 2
-            if line.tax_type2:
-                tax_val2 = net_after_discount * (line.tax_type2.rate / 100)
-                acc2 = line.tax_type2.account
-                if acc2.id not in tax_lines:
-                    tax_lines[acc2.id] = {'account': acc2, 'amount': 0, 'category': line.tax_type2.category}
-                tax_lines[acc2.id]['amount'] += tax_val2
 
         for tax_info in tax_lines.values():
             if tax_info['amount'] > 0:
@@ -227,8 +261,35 @@ class SalesService:
         invoice.journal_entry = entry
         invoice.status = SalesInvoice.Status.POSTED
         invoice.save()
-        
-        InventoryService.reduce_stock(invoice)
+
+
+        # 2. Handle Auto-Settlement for Cash Sales
+        if invoice.payment_type == SalesInvoice.PaymentType.CASH:
+            if not invoice.cash_box:
+                # This should have been validated at form level, but extra safety
+                raise ValueError("يجب تحديد الخزنة للفواتير النقدية لعمل التسوية الآلية")
+            
+            # Create a receipt automatically
+            from apps.core.services import DocumentService
+            receipt = CustomerReceipt.objects.create(
+                number=DocumentService.generate_number(CustomerReceipt, 'RCPT'),
+                date=invoice.date,
+                customer=invoice.customer,
+                amount=invoice.total,
+                payment_method='cash',
+                cash_box=invoice.cash_box,
+                reference=f"Settlement for {invoice.number}",
+                created_by=posted_by
+            )
+            # Create allocation
+            ReceiptAllocation.objects.create(
+                receipt=receipt,
+                invoice=invoice,
+                amount=invoice.total
+            )
+            # Post the receipt
+            SalesService.record_receipt(receipt, posted_by)
+
         AuditService.log(posted_by, 'Post', invoice, f'ترحيل فاتورة مبيعات رقم {invoice.number}')
         return entry
 
@@ -306,31 +367,36 @@ class SalesService:
                 'description': f'مردودات مبيعات - {line.item.name}'
             })
             
-            # Inventory reversal entry
+            # Inventory reversal entry (✅ Fix #2: استخدام الكمية الأساسية)
             cost = line.cost # Use stored cost
+            base_qty = line.item.convert_to_base(line.quantity, line.unit) if line.unit else line.quantity
+
             lines.append({
                 'account': line.item.inventory_account, 
-                'debit': cost * line.quantity, 
+                'debit': cost * base_qty, 
                 'credit': 0,
                 'description': f'إعادة للمخزون (مرتجع) - {line.item.name}'
             })
             lines.append({
                 'account': line.cogs_account, 
                 'debit': 0, 
-                'credit': cost * line.quantity,
+                'credit': cost * base_qty,
                 'description': f'عكس تكلفة مبيعات - {line.item.name}'
             })
 
         # Group taxes by account
         tax_lines = {}
         for line in sales_return.lines.all():
-            if line.tax_type:
-                tax_rate = line.tax_percent if line.tax_percent else line.tax_type.rate
-                tax_val = line.total * (tax_rate / 100)
-                acc = line.tax_type.account
-                if acc.id not in tax_lines:
-                    tax_lines[acc.id] = {'account': acc, 'amount': 0, 'category': line.tax_type.category}
-                tax_lines[acc.id]['amount'] += tax_val
+                # Compute net amount (price after discount, before tax)
+                net_before_tax = line.quantity * line.unit_price * (1 - (line.discount_percent / 100))
+                # Determine applicable tax rate
+                tax_rate = line.tax_percent if line.tax_percent else (line.tax_type.rate if line.tax_type else 0)
+                tax_val = net_before_tax * (tax_rate / 100)
+                acc = line.tax_type.account if line.tax_type else None
+                if acc and acc.id not in tax_lines:
+                    tax_lines[acc.id] = {'account': acc, 'amount': 0, 'category': line.tax_type.category if line.tax_type else ''}
+                if acc:
+                    tax_lines[acc.id]['amount'] += tax_val
 
         for tax_info in tax_lines.values():
             if tax_info['amount'] > 0:
@@ -358,13 +424,15 @@ class SalesService:
         
         # Increase stock
         from apps.inventory.services import InventoryService
+        from apps.inventory.models import StockMovement
         for line in sales_return.lines.all():
+            base_qty = line.item.convert_to_base(line.quantity, line.unit) if line.unit else line.quantity
             InventoryService.record_movement(
                 date_val=sales_return.date,
                 item=line.item,
                 warehouse=line.warehouse,
-                movement_type='sale_return',
-                quantity=line.quantity,
+                movement_type=StockMovement.MovementType.SALES_RETURN, # ✅ Fix #3: استخدام Enum
+                quantity=base_qty, # ✅ Fix #2: استخدام الكمية الأساسية
                 unit_cost=line.cost, # Use stored cost
                 source=sales_return,
                 reference=sales_return.number,
@@ -425,7 +493,14 @@ class SalesService:
         # Update paid_amount in related invoices
         for allocation in receipt.receiptallocation_set.all():
             invoice = allocation.invoice
-            invoice.paid_amount += allocation.amount
+            remaining = invoice.total - invoice.paid_amount
+            if allocation.amount > remaining:
+                # Limit allocation to remaining balance to prevent overpayment
+                actual_alloc = remaining
+            else:
+                actual_alloc = allocation.amount
+                
+            invoice.paid_amount += actual_alloc
             invoice.save()
         
         AuditService.log(posted_by, 'Record', receipt, f'تسجيل سند قبض رقم {receipt.number}')

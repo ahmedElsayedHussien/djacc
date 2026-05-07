@@ -4,9 +4,40 @@ from datetime import date
 
 class Department(models.Model):
     """البيانات الأساسية: الهيكل التنظيمي (الإدارات)"""
+    class DepartmentType(models.TextChoices):
+        PRODUCTION = 'production', 'إنتاج وعمليات'
+        SERVICE = 'service', 'خدمات وفني'
+        MARKETING = 'marketing', 'تسويق ومبيعات'
+        ADMIN = 'admin', 'إداري ومالي'
+        HR = 'hr', 'موارد بشرية'
+        IT = 'it', 'تكنولوجيا معلومات'
+        RD = 'rd', 'بحث وتطوير'
+        LEGAL = 'legal', 'شؤون قانونية'
+        PROCUREMENT = 'procurement', 'مشتريات ولوجستيات'
+        PROJECTS = 'projects', 'إدارة مشاريع'
+        TECH_OFFICE = 'technical', 'المكتب الفني'
+        PR = 'pr', 'العلاقات العامة'
+        OTHER = 'other', 'أخرى'
+
     name = models.CharField(max_length=100, unique=True, verbose_name="اسم الإدارة")
+    type = models.CharField(
+        max_length=20, 
+        choices=DepartmentType.choices, 
+        default=DepartmentType.OTHER,
+        verbose_name="نوع القسم/الإدارة"
+    )
+    description = models.TextField(blank=True, verbose_name="وصف المهام والمسؤوليات")
     manager = models.ForeignKey('Employee', on_delete=models.SET_NULL, null=True, blank=True, related_name='managed_departments', verbose_name="مدير الإدارة")
     parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='sub_departments', verbose_name="الإدارة الرئيسية")
+    
+    # ربط كل إدارة/فرع بمركز تكلفة محاسبي مخصص لها
+    cost_center = models.ForeignKey(
+        'core.CostCenter',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='departments',
+        verbose_name="مركز التكلفة المرتبط"
+    )
 
     class Meta:
         verbose_name = "إدارة"
@@ -14,6 +45,7 @@ class Department(models.Model):
 
     def __str__(self):
         return self.name
+
 
 class JobTitle(models.Model):
     """البيانات الأساسية: المسميات الوظيفية"""
@@ -62,9 +94,25 @@ class Employee(models.Model):
     contract_type = models.CharField(max_length=20, choices=ContractType.choices, default=ContractType.FULL_TIME, verbose_name="نوع العقد")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE, verbose_name="الحالة")
     
-    # الرواتب (ربط مبدئي سيتم تفصيله في موديول الرواتب)
+    # الرواتب
     basic_salary = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="الراتب الأساسي")
     bank_account_number = models.CharField(max_length=50, blank=True, verbose_name="رقم الحساب البنكي (IBAN)")
+
+    # التأمينات الاجتماعية
+    has_social_insurance = models.BooleanField(default=True, verbose_name="خاضع للتأمينات الاجتماعية")
+    social_insurance_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, default=11.00,
+        verbose_name="نسبة التأمينات (حصة الموظف %)",
+        help_text="مثال: 11 تعني 11% — تختلف حسب نوع التأمين (أجر متغير / ثابت / أصحاب أعمال)"
+    )
+
+    # ضريبة كسب العمل
+    has_taxes = models.BooleanField(default=True, verbose_name="خاضع لضريبة كسب العمل")
+    income_tax_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, default=10.00,
+        verbose_name="نسبة ضريبة كسب العمل (%)",
+        help_text="النسبة الفعلية للضريبة. في حال تطبيق الشرائح يتم تعديلها يدوياً في قسيمة الراتب."
+    )
 
     class Meta:
         verbose_name = "موظف"
@@ -247,14 +295,18 @@ class Payslip(models.Model):
     
     # تفاصيل الراتب
     basic_salary = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="الراتب الأساسي")
-    total_allowances = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="إجمالي البدلات")
-    total_deductions = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="إجمالي الاستقطاعات (بما فيها السلف)")
+    total_allowances = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="بدلات ثابتة")
+    other_additions = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="إضافات أخرى (مكافآت، إلخ)")
+    
+    total_deductions = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="خصم سلف")
+    other_deductions = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="استقطاعات أخرى (جزاءات، غياب)")
     
     # الضرائب والتأمينات
     social_insurance = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="تأمينات اجتماعية (حصة الموظف)")
     income_tax = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ضريبة كسب العمل")
     
     net_salary = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="صافي الراتب")
+    note = models.CharField(max_length=255, blank=True, verbose_name="ملاحظات")
     
     class Meta:
         unique_together = ['period', 'employee']
@@ -263,6 +315,24 @@ class Payslip(models.Model):
 
     def __str__(self):
         return f"راتب {self.employee} - {self.period.name}"
+
+class PayslipItem(models.Model):
+    """بنود إضافية متغيرة لقسيمة الراتب (مكافآت، جزاءات، إلخ)"""
+    class ItemType(models.TextChoices):
+        ADDITION = 'addition', 'إضافة (استحقاق)'
+        DEDUCTION = 'deduction', 'خصم (استقطاع)'
+
+    payslip = models.ForeignKey(Payslip, on_delete=models.CASCADE, related_name='items', verbose_name="قسيمة الراتب")
+    name = models.CharField(max_length=100, verbose_name="اسم البند")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="المبلغ")
+    item_type = models.CharField(max_length=10, choices=ItemType.choices, verbose_name="نوع البند")
+
+    class Meta:
+        verbose_name = "بند قسيمة راتب"
+        verbose_name_plural = "بنود قسائم الرواتب"
+
+    def __str__(self):
+        return f"{self.get_item_type_display()}: {self.name} - {self.amount}"
 
 
 # ==========================================
@@ -292,6 +362,22 @@ class Loan(models.Model):
 
     def __str__(self):
         return f"سلفة {self.amount} - {self.employee}"
+
+class LoanInstallment(models.Model):
+    """سجل سداد أقساط السلف المرتبط بقسائم الرواتب"""
+    loan = models.ForeignKey(Loan, on_delete=models.CASCADE, related_name='installments', verbose_name="السلفة")
+    payslip = models.ForeignKey('Payslip', on_delete=models.CASCADE, related_name='loan_installments', verbose_name="قسيمة الراتب")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="المبلغ المخصوم")
+    month = models.DateField(verbose_name="شهر القسط")
+
+    class Meta:
+        verbose_name = "قسط سلفة"
+        verbose_name_plural = "أقساط السلف"
+        unique_together = ['loan', 'payslip']
+
+    def __str__(self):
+        return f"قسط {self.amount} من {self.loan}"
+
 
 class EmployeeAsset(models.Model):
     """العهد العينية المسلمة للموظف (لابتوب، سيارة، إلخ)"""

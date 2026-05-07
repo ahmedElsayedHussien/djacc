@@ -15,6 +15,7 @@ class PurchaseReturnListView(LoginRequiredMixin, PermissionRequiredMixin, ListVi
     context_object_name = 'returns'
     permission_required = 'purchases.view_purchasereturn'
     ordering = ['-date', '-id']
+    paginate_by = 50
 
 class PurchaseReturnCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = PurchaseReturn
@@ -77,6 +78,11 @@ class PurchaseReturnCreateView(LoginRequiredMixin, PermissionRequiredMixin, Crea
                         tax2_signed = tax2
                     
                     line.total = net_line + tax1_signed + tax2_signed
+                    # Calculate base quantity
+                    if hasattr(line, 'unit') and line.unit:
+                        line.base_quantity = line.item.convert_to_base(line.quantity, line.unit)
+                    else:
+                        line.base_quantity = line.quantity
                     line.save()
                     
                     gross_total += line_subtotal
@@ -115,7 +121,7 @@ class SupplierListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     template_name = 'purchases/suppliers/list.html'
     context_object_name = 'suppliers'
     permission_required = 'purchases.view_supplier'
-    paginate_by = 25
+    paginate_by = 50
 
     def get_queryset(self):
         qs = Supplier.objects.select_related('account').order_by('code')
@@ -144,6 +150,11 @@ class SupplierUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView
     permission_required = 'purchases.change_supplier'
     success_url = reverse_lazy('purchases:supplier-list')
 
+    def form_valid(self, form):
+        SupplierService.update_supplier(self.object, form.cleaned_data)
+        messages.success(self.request, 'تم تحديث بيانات المورد بنجاح')
+        return redirect(self.success_url)
+
 class SupplierDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
     model = Supplier
     template_name = 'purchases/suppliers/detail.html'
@@ -163,6 +174,7 @@ class PurchaseInvoiceListView(LoginRequiredMixin, PermissionRequiredMixin, ListV
     context_object_name = 'invoices'
     permission_required = 'purchases.view_purchaseinvoice'
     ordering = ['-date', '-id']
+    paginate_by = 50
 
 class PurchaseInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = PurchaseInvoice
@@ -224,6 +236,11 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                         tax2_signed = tax2
                     
                     line.total = net_line + tax1_signed + tax2_signed
+                    # Calculate base quantity
+                    if line.unit:
+                        line.base_quantity = line.item.convert_to_base(line.quantity, line.unit)
+                    else:
+                        line.base_quantity = line.quantity
                     line.save()
                     
                     gross_total += line_subtotal
@@ -281,6 +298,7 @@ class SupplierPaymentListView(LoginRequiredMixin, PermissionRequiredMixin, ListV
     template_name = 'purchases/payments/list.html'
     context_object_name = 'payments'
     permission_required = 'purchases.view_supplierpayment'
+    paginate_by = 50
 
 class SupplierPaymentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = SupplierPayment

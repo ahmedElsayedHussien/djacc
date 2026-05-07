@@ -5,9 +5,25 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">شجرة الحسابات</h5>
-        <a href="{% url 'core:account-create' %}" class="btn btn-primary">
-            <i class="bi bi-plus-lg"></i> إضافة حساب جديد
-        </a>
+        <div class="d-flex gap-2">
+            {% if current_fiscal_year %}
+            <form method="post" action="{% url 'core:fiscalyear-post-opening' current_fiscal_year.pk %}" onsubmit="return confirm('هل تريد توليد القيد الافتتاحي بناءً على أرصدة دليل الحسابات؟');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-success">
+                    <i class="bi bi-journal-plus"></i> توليد القيد الافتتاحي
+                </button>
+            </form>
+            {% endif %}
+            <form method="post" action="{% url 'core:account-initialize' %}" onsubmit="return confirm('هل تريد إنشاء/تحديث شجرة الحسابات الافتراضية؟ لن يتم حذف أي حساب موجود.');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-primary">
+                    <i class="bi bi-diagram-3"></i> تجهيز الشجرة الافتراضية
+                </button>
+            </form>
+            <a href="{% url 'core:account-create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-lg"></i> إضافة حساب جديد
+            </a>
+        </div>
     </div>
     <div class="card-body">
         <form method="get" class="row g-2 mb-4">
@@ -96,6 +112,7 @@
                 </tbody>
             </table>
         </div>
+        {% include 'partials/pagination.html' %}
     </div>
 </div>
 {% endblock %}

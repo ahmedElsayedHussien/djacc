@@ -69,13 +69,56 @@ class FiscalYear(models.Model):
         ]
 
 class CostCenter(models.Model):
-    code = models.CharField(max_length=20, unique=True)
-    name = models.CharField(max_length=200)
-    parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.PROTECT)
-    is_active = models.BooleanField(default=True)
+    """
+    شجرة مراكز التكلفة — هرمية مثل دليل الحسابات.
+    المراكز الطرفية (is_leaf=True) فقط هي التي تُستخدم في قيود اليومية.
+    """
+    class CenterType(models.TextChoices):
+        PRODUCTION    = 'production',    'إنتاج / تشغيل'
+        SERVICE       = 'service',       'خدمات آلات ومعدات'
+        MARKETING     = 'marketing',     'خدمات تسويقية'
+        ADMIN         = 'admin',         'خدمات إدارية ومالية'
+        CAPITAL       = 'capital',       'عمليات رأسمالية'
+        OTHER         = 'other',         'أخرى'
+
+    code        = models.CharField(max_length=20, unique=True, verbose_name="الكود")
+    name        = models.CharField(max_length=200, verbose_name="الاسم")
+    center_type = models.CharField(max_length=20, choices=CenterType.choices,
+                                   default=CenterType.OTHER, verbose_name="نوع المركز")
+    parent      = models.ForeignKey('self', null=True, blank=True,
+                                    on_delete=models.PROTECT, related_name='children',
+                                    verbose_name="المركز الرئيسي")
+    is_leaf     = models.BooleanField(default=True,
+                                      verbose_name="مركز طرفي (يقبل قيوداً)")
+    description = models.TextField(blank=True, verbose_name="الوصف / الملاحظات")
+    is_active   = models.BooleanField(default=True, verbose_name="نشط")
+
+    class Meta:
+        verbose_name = "مركز تكلفة"
+        verbose_name_plural = "مراكز التكلفة"
+        ordering = ['code']
 
     def __str__(self):
         return f"{self.code} - {self.name}"
+
+    @property
+    def full_path(self):
+        """المسار الكامل من الجذر للمركز الحالي"""
+        parts = [self.name]
+        p = self.parent
+        while p:
+            parts.insert(0, p.name)
+            p = p.parent
+        return ' > '.join(parts)
+
+    @property
+    def level(self):
+        lvl = 0
+        p = self.parent
+        while p:
+            lvl += 1
+            p = p.parent
+        return lvl
 
 class JournalEntry(models.Model):
     """
@@ -108,10 +151,17 @@ class JournalEntry(models.Model):
     source_document = GenericForeignKey('content_type', 'object_id')  
     
     is_posted = models.BooleanField(default=False)
+    posted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='posted_entries')
+    posted_at = models.DateTimeField(null=True, blank=True)
+    
     is_reversed = models.BooleanField(default=False)
     reversed_by = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL)
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    reversed_at = models.DateTimeField(null=True, blank=True)
+    
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='created_entries')
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_entries')
+    updated_at = models.DateTimeField(auto_now=True)
 
     @property
     def total_debit(self):

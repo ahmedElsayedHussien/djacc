@@ -50,7 +50,13 @@ class JournalService:
             JournalLine.objects.create(entry=entry, **line_data)
 
         entry.is_posted = True
+        entry.posted_by = created_by
+        entry.posted_at = timezone.now()
         entry.save()
+        
+        from .services import AuditService
+        AuditService.log(created_by, 'Create & Post', entry, f'إنشاء وترحيل قيد آلي رقم {entry.number}')
+        
         return entry
 
     @staticmethod
@@ -75,7 +81,11 @@ class JournalService:
         
         entry.is_reversed = True
         entry.reversed_by = new_entry
+        entry.reversed_at = timezone.now()
         entry.save()
+        
+        from .services import AuditService
+        AuditService.log(created_by, 'Reverse', entry, f'عكس قيد رقم {entry.number} بواسطة القيد {new_entry.number}')
         
         return new_entry
 
@@ -111,7 +121,7 @@ class JournalService:
     @staticmethod
     @transaction.atomic
     def post_opening_balances(fiscal_year, created_by) -> JournalEntry:
-        """يحول initial_balance لكل حساب إلى قيد افتتاحي"""
+        """يحول initial_balance لكل حساب إلى قيد افتتاحي متزن باستخدام حساب الأرصدة الافتتاحية (35)"""
         from .models import Account
         from decimal import Decimal
 
@@ -120,13 +130,18 @@ class JournalService:
             return None
             
         lines = []
+        total_debit = Decimal('0')
+        total_credit = Decimal('0')
+        
         for acc in accounts:
             if acc.initial_balance_type == 'debit':
                 debit = acc.initial_balance
                 credit = Decimal(0)
+                total_debit += debit
             else:
                 debit = Decimal(0)
                 credit = acc.initial_balance
+                total_credit += credit
                 
             lines.append({
                 'account': acc,
@@ -135,10 +150,30 @@ class JournalService:
                 'description': f'رصيد افتتاحي - {acc.name}'
             })
             
-        # تحقق من التوازن، إذا لم يكن متوازناً، ضع الفرق في حساب الأرباح المرحلة أو رأس المال
-        # ولكن بما أن هذا مجرد أداة لتوليد القيد، إذا لم يكن متوازناً ستفشل العملية عبر create_entry
-        # للمرونة، يمكننا جعل المستخدم يضبط الأرصدة حتى تتوازن، أو نضيف حساب تسوية (Suspense Account)
-        # للتسهيل الآن، سنمررها للخدمة، وإذا لم تكن متوازنة ستعطي رسالة خطأ (وهو المطلوب لمنع اختلال الميزانية).
+        # موازنة القيد باستخدام حساب الأرصدة الافتتاحية (35)
+        difference = total_debit - total_credit
+        if difference != 0:
+            try:
+                clearing_account = Account.objects.get(code='35')
+            except Account.DoesNotExist:
+                raise ValueError("لا يمكن الموازنة لعدم وجود حساب الأرصدة الافتتاحية (35)")
+                
+            if difference > 0:
+                # الطرف المدين أكبر، نضيف الفرق للطرف الدائن
+                lines.append({
+                    'account': clearing_account,
+                    'debit': Decimal(0),
+                    'credit': difference,
+                    'description': 'رصيد افتتاحي وسيط (للموازنة)'
+                })
+            else:
+                # الطرف الدائن أكبر، نضيف الفرق للطرف المدين
+                lines.append({
+                    'account': clearing_account,
+                    'debit': abs(difference),
+                    'credit': Decimal(0),
+                    'description': 'رصيد افتتاحي وسيط (للموازنة)'
+                })
 
         entry = JournalService.create_entry(
             date_val=fiscal_year.start_date,
@@ -161,7 +196,7 @@ class JournalService:
         2. ترحيل الفرق إلى حساب أرباح/خسائر العام.
         """
         from django.conf import settings
-        from .models import Account, JournalLine
+        from .models import Account, JournalLine, AccountType
         from django.db.models import Sum
         from decimal import Decimal
 
@@ -170,7 +205,7 @@ class JournalService:
 
         # 1. جلب كل حسابات الإيرادات والمصروفات (الورقة فقط)
         closing_accounts = Account.objects.filter(
-            account_type__in=[Account.AccountType.REVENUE, Account.AccountType.EXPENSE],
+            account_type__in=[AccountType.REVENUE, AccountType.EXPENSE],
             is_leaf=True
         )
 
@@ -250,6 +285,162 @@ class JournalService:
 class AccountService:
     @staticmethod
     @transaction.atomic
+    def initialize_default_chart():
+        """
+        تنشئ شجرة الحسابات الافتراضية بالكامل (رئيسية وفرعية).
+        """
+        from .models import Account, AccountType, TaxType
+        
+        DEFAULT_ACCOUNTS = [
+            # ── 1. أصول ──
+            ('1', 'الأصول', AccountType.ASSET, None, False),
+              ('11', 'الأصول المتداولة', AccountType.ASSET, '1', False),
+                ('111', 'النقدية والبنوك', AccountType.ASSET, '11', False),
+                  ('1111', 'خزائن النقدية', AccountType.ASSET, '111', True),
+                  ('1112', 'البنوك', AccountType.ASSET, '111', True),
+                  ('1113', 'عهد نقدية / صندوق نثرية', AccountType.ASSET, '111', True), 
+                  ('1114', 'نقدية بالطريق', AccountType.ASSET, '111', True), 
+                ('112', 'الذمم المدينة', AccountType.ASSET, '11', False),
+                  ('1121', 'العملاء', AccountType.ASSET, '112', False),
+                  ('1122', 'ضريبة خصم وتحصيل - مدينة', AccountType.ASSET, '112', True),
+                ('113', 'المخزون', AccountType.ASSET, '11', False),
+                  ('1131', 'مخزون البضاعة', AccountType.ASSET, '113', True),
+                  ('1132', 'اعتمادات مستندية وبضاعة بالطريق', AccountType.ASSET, '113', True),
+                  ('1134', 'مخازن المناديب', AccountType.ASSET, '113', False),
+                ('114', 'سلف وعهد وذمم', AccountType.ASSET, '11', False),
+                  ('1141', 'ذمم مناديب المبيعات', AccountType.ASSET, '114', False),
+                  ('1142', 'عهد الموظفين', AccountType.ASSET, '114', False),
+                  ('1143', 'سلف الموظفين', AccountType.ASSET, '114', False), 
+                ('115', 'أوراق قبض', AccountType.ASSET, '11', False),
+                  ('1151', 'شيكات تحت التحصيل', AccountType.ASSET, '115', True),
+                ('116', 'أرصدة مدينة أخرى', AccountType.ASSET, '11', False), 
+                  ('1161', 'مصروفات مدفوعة مقدماً', AccountType.ASSET, '116', True), 
+              ('12', 'الأصول الثابتة', AccountType.ASSET, '1', False),
+                ('121', 'الأراضي والمباني', AccountType.ASSET, '12', True),
+                ('122', 'الآلات والمعدات', AccountType.ASSET, '12', True),
+                ('129', 'مجمع إهلاك الأصول', AccountType.ASSET, '12', False),
+              ('13', 'الأصول غير الملموسة', AccountType.ASSET, '1', False), 
+                ('131', 'برمجيات وتطبيقات', AccountType.ASSET, '13', True), 
+
+            # ── 2. خصوم ──
+            ('2', 'الخصوم', AccountType.LIABILITY, None, False),
+              ('21', 'الخصوم المتداولة', AccountType.LIABILITY, '2', False),
+                ('211', 'الذمم الدائنة', AccountType.LIABILITY, '21', False),
+                  ('2111', 'الموردون', AccountType.LIABILITY, '211', False),
+                ('212', 'الضرائب المستحقة', AccountType.LIABILITY, '21', False),
+                  ('2121', 'ضريبة القيمة المضافة', AccountType.LIABILITY, '212', True),
+                  ('2122', 'ضريبة الدخل المستحقة', AccountType.LIABILITY, '212', True),
+                  ('2123', 'ضريبة خصم وتحصيل - دائنة', AccountType.LIABILITY, '212', True),
+                ('213', 'مصروفات مستحقة', AccountType.LIABILITY, '21', False),
+                  ('2131', 'عمولات مناديب مستحقة', AccountType.LIABILITY, '213', True),
+                  ('2132', 'رواتب وأجور مستحقة', AccountType.LIABILITY, '213', True), 
+                  ('2133', 'تأمينات اجتماعية مستحقة', AccountType.LIABILITY, '213', True), 
+                ('214', 'أوراق دفع', AccountType.LIABILITY, '21', False), 
+                  ('2141', 'شيكات مسحوبة', AccountType.LIABILITY, '214', True), 
+                ('215', 'أرصدة دائنة أخرى', AccountType.LIABILITY, '21', False), 
+                  ('2151', 'إيرادات مقدمة', AccountType.LIABILITY, '215', True), 
+                ('216', 'المخصصات المتداولة', AccountType.LIABILITY, '21', False),
+                  ('2161', 'مخصص ديون مشكوك في تحصيلها', AccountType.LIABILITY, '216', True),
+                  ('2162', 'مخصص إجازات مستحقة', AccountType.LIABILITY, '216', True),
+                ('217', 'حسابات الشركاء', AccountType.LIABILITY, '21', False),
+                  ('2171', 'جاري الشركاء / المالك', AccountType.LIABILITY, '217', True),
+              ('22', 'الخصوم غير المتداولة', AccountType.LIABILITY, '2', False), 
+                ('221', 'قروض وتسهيلات بنكية', AccountType.LIABILITY, '22', True), 
+                ('222', 'مخصص مكافأة نهاية الخدمة', AccountType.LIABILITY, '22', True),
+
+            # ── 3. حقوق الملكية ──
+            ('3', 'حقوق الملكية', AccountType.EQUITY, None, False),
+              ('31', 'رأس المال', AccountType.EQUITY, '3', True),
+              ('32', 'الاحتياطيات', AccountType.EQUITY, '3', True),
+              ('33', 'الأرباح المرحلة', AccountType.EQUITY, '3', True),
+              ('34', 'أرباح/خسائر العام', AccountType.EQUITY, '3', True),
+              ('35', 'الأرصدة الافتتاحية', AccountType.EQUITY, '3', True),
+              ('36', 'المسحوبات الشخصية', AccountType.EQUITY, '3', True),
+
+            # ── 4. إيرادات ──
+            ('4', 'الإيرادات', AccountType.REVENUE, None, False),
+              ('41', 'إيرادات المبيعات', AccountType.REVENUE, '4', False),
+                ('411', 'مبيعات البضاعة', AccountType.REVENUE, '41', True),
+                ('412', 'إيرادات الخدمات', AccountType.REVENUE, '41', True),
+                ('413', 'مردودات ومسموحات المبيعات', AccountType.REVENUE, '41', True),
+                ('414', 'خصم مبيعات ممنوح', AccountType.REVENUE, '41', True), 
+              ('42', 'إيرادات أخرى', AccountType.REVENUE, '4', False),
+                ('421', 'فوائد بنكية دائنة', AccountType.REVENUE, '42', True), 
+                ('422', 'خصم مكتسب', AccountType.REVENUE, '42', True), 
+                ('423', 'أرباح فروق عملة', AccountType.REVENUE, '42', True),
+                ('424', 'فروقات تسوية وزيادة المخزون', AccountType.REVENUE, '42', True),
+
+            # ── 5. مصروفات ──
+            ('5', 'المصروفات', AccountType.EXPENSE, None, False),
+              ('51', 'تكلفة البضاعة المباعة', AccountType.EXPENSE, '5', False),
+                ('511', 'تكلفة المبيعات', AccountType.EXPENSE, '51', True),
+              ('52', 'مصروفات التشغيل', AccountType.EXPENSE, '5', False),
+                ('521', 'مصروفات الرواتب', AccountType.EXPENSE, '52', False),
+                  ('5210', 'الرواتب والأجور الأساسية', AccountType.EXPENSE, '521', True),
+                  ('5211', 'مصروف بدل السكن', AccountType.EXPENSE, '521', True),
+                  ('5212', 'مصروف بدل الانتقال', AccountType.EXPENSE, '521', True),
+                  ('5213', 'مصروف بدلات وإضافات أخرى', AccountType.EXPENSE, '521', True),
+                  ('5214', 'حصة المنشأة في التأمينات الاجتماعية', AccountType.EXPENSE, '521', True),
+                  ('5215', 'مصروف تعويضات ومكافأة نهاية الخدمة', AccountType.EXPENSE, '521', True),
+                ('522', 'مصروفات الإيجار', AccountType.EXPENSE, '52', True),
+                ('523', 'مصروفات المرافق', AccountType.EXPENSE, '52', True), 
+                ('524', 'مصروفات إدارية عامة', AccountType.EXPENSE, '52', True), 
+                ('525', 'مصروفات عمولات مناديب', AccountType.EXPENSE, '52', True),
+                ('526', 'مصروف الإهلاك', AccountType.EXPENSE, '52', False), 
+              ('53', 'مصروفات التمويل', AccountType.EXPENSE, '5', False),
+                ('531', 'عمولات ومصاريف بنكية', AccountType.EXPENSE, '53', True), 
+                ('532', 'فوائد قروض مدينة', AccountType.EXPENSE, '53', True), 
+              ('54', 'مصروفات وخسائر أخرى', AccountType.EXPENSE, '5', False),
+                ('541', 'خسائر فروق عملة', AccountType.EXPENSE, '54', True),
+                ('542', 'عجز وتوالف المخزون', AccountType.EXPENSE, '54', True),
+                ('543', 'ديون معدومة', AccountType.EXPENSE, '54', True),
+        ]
+
+        created_count = 0
+        accounts_map = {}
+        for code, name, acc_type, parent_code, is_leaf in DEFAULT_ACCOUNTS:
+            parent = accounts_map.get(parent_code) if parent_code else None
+            acc, created = Account.objects.get_or_create(
+                code=code,
+                defaults={
+                    'name': name,
+                    'account_type': acc_type,
+                    'parent': parent,
+                    'is_leaf': is_leaf
+                }
+            )
+            if not created:
+                # تحديث البيانات للحسابات الموجودة مسبقاً (Clean up)
+                acc.name = name
+                acc.parent = parent
+                acc.account_type = acc_type
+                acc.is_leaf = is_leaf
+                acc.save()
+                
+            accounts_map[code] = acc
+            if created:
+                created_count += 1
+        
+        # إنشاء الضرائب الافتراضية
+        taxes = [
+            ('ضريبة القيمة المضافة 14%', 'vat', 14.00, '2121'),
+            ('ضريبة أ.ت.ص 1% (مبيعات)', 'wht', 1.00, '1122'),
+            ('ضريبة أ.ت.ص 1% (مشتريات)', 'wht', 1.00, '2123'),
+        ]
+        for name, cat, rate, acc_code in taxes:
+            try:
+                acc = Account.objects.get(code=acc_code)
+                TaxType.objects.get_or_create(
+                    name=name,
+                    defaults={'category': cat, 'rate': rate, 'account': acc}
+                )
+            except Account.DoesNotExist:
+                continue
+
+        return created_count
+
+    @staticmethod
+    @transaction.atomic
     def setup_common_sub_accounts():
         """
         تضيف أشهر الحسابات الفرعية (Leaf Accounts) التي تحتاجها أغلب الشركات
@@ -257,24 +448,13 @@ class AccountService:
         from .models import Account, AccountType
         
         common_accounts = [
-            # الكود، الاسم، النوع، كود الأب
-            # ── نقدية وبنوك ──
             ('111101', 'الخزينة الرئيسية', AccountType.ASSET, '1111'),
-            ('111102', 'خزينة النثريات', AccountType.ASSET, '1111'),
             ('111201', 'البنك الأهلي المصري', AccountType.ASSET, '1112'),
-            ('111202', 'بنك مصر', AccountType.ASSET, '1112'),
-            
-            # ── مصروفات التشغيل (المرافق) ──
             ('5231', 'مصروفات كهرباء', AccountType.EXPENSE, '523'),
-            ('5232', 'مصروفات مياه', AccountType.EXPENSE, '523'),
-            ('5233', 'مصروفات تليفون وإنترنت', AccountType.EXPENSE, '523'),
-            
-            # ── مصروفات إدارية عامة ──
             ('5241', 'أدوات مكتبية ومطبوعات', AccountType.EXPENSE, '524'),
             ('5242', 'ضيافة وبوفيه', AccountType.EXPENSE, '524'),
             ('5243', 'نظافة وأدوات صحية', AccountType.EXPENSE, '524'),
             ('5244', 'مصاريف صيانة عمومية', AccountType.EXPENSE, '524'),
-            
             # ── إيرادات متنوعة ──
             ('421', 'إيرادات أوراق مالية', AccountType.REVENUE, '42'),
             ('422', 'أرباح بيع أصول ثابتة', AccountType.REVENUE, '42'),

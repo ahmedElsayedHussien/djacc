@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% block title %}تفاصيل التسوية البنكية{% endblock %}
+{% block header %}تفاصيل التسوية{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">ملخص التسوية</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        الحساب البنكي:
+                        <span class="fw-bold">{{ reconciliation.bank_account }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        تاريخ البيان:
+                        <span class="fw-bold">{{ reconciliation.statement_date }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        رصيد البنك:
+                        <span class="fw-bold text-primary">{{ reconciliation.statement_balance }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        رصيد الدفاتر:
+                        <span class="fw-bold">{{ reconciliation.book_balance }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        الفرق:
+                        <span class="fw-bold {% if reconciliation.difference == 0 %}text-success{% else %}text-danger{% endif %}">
+                            {{ reconciliation.difference }}
+                        </span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        الحالة:
+                        {% if reconciliation.is_reconciled %}
+                        <span class="badge bg-success">تمت المطابقة</span>
+                        {% else %}
+                        <span class="badge bg-warning">قيد المراجعة</span>
+                        {% endif %}
+                    </li>
+                </ul>
+                <div class="mt-3 d-grid">
+                    <a href="{% url 'treasury:bankreconciliation-update' reconciliation.pk %}" class="btn btn-outline-primary">تعديل البيانات</a>
+                </div>
+            </div>
+        </div>
+        
+        {% if reconciliation.notes %}
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h6 class="mb-0">ملاحظات</h6>
+            </div>
+            <div class="card-body">
+                <p class="mb-0 small">{{ reconciliation.notes }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                <h5 class="mb-0">المعاملات المرتبطة</h5>
+                <button class="btn btn-sm btn-success disabled">إضافة معاملة (قريباً)</button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>التاريخ</th>
+                                <th>البيان</th>
+                                <th>النوع</th>
+                                <th>المبلغ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for trans in reconciliation.transactions.all %}
+                            <tr>
+                                <td>{{ trans.date }}</td>
+                                <td>{{ trans.description }}</td>
+                                <td>{{ trans.get_transaction_type_display }}</td>
+                                <td>{{ trans.amount }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">
+                                    <i class="bi bi-info-circle me-1"></i> لا توجد معاملات مرتبطة بهذه التسوية بعد.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

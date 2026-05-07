@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}تعديل صلاحيات: {{ object.username }}{% endblock %}
+{% block header %}تعديل أدوار وصلاحيات الموظف: {{ object.first_name }} {{ object.last_name }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white border-bottom pb-0">
+                <h5 class="fw-bold mb-3"><i class="bi bi-person-gear text-primary me-2"></i> بيانات وتصاريح المستخدم: {{ object.username }}</h5>
+            </div>
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            {{ form.is_active|as_crispy_field }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.is_staff|as_crispy_field }}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    
+                    <h5 class="fw-bold mb-3 text-secondary">الأدوار الممنوحة لهذا الموظف</h5>
+                    <div class="alert alert-light border">
+                        <div style="max-height: 400px; overflow-y: auto; padding: 10px;">
+                            {{ form.groups }}
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info border-0 mt-3 small">
+                        <i class="bi bi-info-circle-fill me-1"></i>
+                        بمجرد منح الموظف أي دور (مجموعة صلاحيات)، سيحصل تلقائياً على كافة الصلاحيات المُدرجة داخل هذا الدور ولن يحتاج لصلاحيات فردية.
+                    </div>
+
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{% url 'users:user-list' %}" class="btn btn-outline-secondary px-4">إلغاء الرجوع</a>
+                        <button type="submit" class="btn btn-primary px-5 fw-bold">حفظ الصلاحيات</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

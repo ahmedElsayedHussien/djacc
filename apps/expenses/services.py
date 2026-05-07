@@ -44,8 +44,11 @@ class ExpenseService:
                 })
             else: # VAT / Others (Refundable)
                 # Rule 2: Refundable -> Debit tax asset, Expense stays at Net
+                tax_acc = t_type.account
+                if not tax_acc: return
+                
                 tax_entries.append({
-                    'account': t_type.account,
+                    'account': tax_acc,
                     'debit': tax_val,
                     'credit': 0,
                     'description': f'ضريبة {t_type.name} - مصروف {expense.number}'

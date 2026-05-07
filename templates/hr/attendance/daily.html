@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% load hr_tags %}
+{% block title %}سجل الحضور اليومي{% endblock %}
+{% block header %}سجل الحضور والغياب اليومي{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card shadow-sm border-0 bg-light">
+            <div class="card-body">
+                <form method="get" class="row align-items-center g-3">
+                    <div class="col-md-auto">
+                        <label class="fw-bold me-2">اختر التاريخ:</label>
+                    </div>
+                    <div class="col-md-3">
+                        <input type="date" name="date" class="form-control" value="{{ target_date|date:'Y-m-d' }}" onchange="this.form.submit()">
+                    </div>
+                    <div class="col-md">
+                        <span class="text-muted"><i class="bi bi-info-circle"></i> يمكنك العودة لتواريخ سابقة لمراجعة الحضور.</span>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-calendar-check text-primary"></i> قائمة الموظفين ليوم {{ target_date|date:"Y-m-d" }}</h5>
+    </div>
+    <div class="card-body p-0">
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="date" value="{{ target_date|date:'Y-m-d' }}">
+            
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>الموظف</th>
+                            <th>القسم</th>
+                            <th style="width: 200px;">الحالة</th>
+                            <th>وقت الحضور</th>
+                            <th>وقت الانصراف</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for emp in employees %}
+                        {% with record=records_dict|get_item:emp.id %}
+                        <tr>
+                            <td>
+                                <div class="fw-bold">{{ emp.first_name }} {{ emp.last_name }}</div>
+                                <small class="text-muted">{{ emp.job_title.name }}</small>
+                            </td>
+                            <td>{{ emp.department.name }}</td>
+                            <td>
+                                <select name="status_{{ emp.id }}" class="form-select form-select-sm">
+                                    {% for val, label in status_choices %}
+                                    <option value="{{ val }}" {% if record and record.status == val %}selected{% elif not record and val == 'present' %}selected{% endif %}>
+                                        {{ label }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td>
+                                <input type="time" name="check_in_{{ emp.id }}" class="form-control form-control-sm" value="{{ record.check_in|time:'H:i' }}">
+                            </td>
+                            <td>
+                                <input type="time" name="check_out_{{ emp.id }}" class="form-control form-control-sm" value="{{ record.check_out|time:'H:i' }}">
+                            </td>
+                        </tr>
+                        {% endwith %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="card-footer bg-white text-end py-3">
+                <button type="submit" class="btn btn-success px-5 fw-bold"><i class="bi bi-save me-2"></i> حفظ كشف الحضور</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

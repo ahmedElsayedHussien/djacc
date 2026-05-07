@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views
+from . import views, report_views
 
 app_name = 'sales'
 
@@ -62,4 +62,17 @@ urlpatterns = [
     path('price-lists/create/', views.PriceListCreateView.as_view(), name='pricelist-create'),
     path('price-lists/<int:pk>/edit/', views.PriceListUpdateView.as_view(), name='pricelist-update'),
     path('price-lists/<int:pk>/delete/', views.PriceListDeleteView.as_view(), name='pricelist-delete'),
+    
+    # Representative Views
+    path('my-stock/', views.RepStockStatusView.as_view(), name='rep-stock'),
+
+    # Reports
+    path('reports/', report_views.SalesDashboardView.as_view(), name='report-dashboard'),
+    path('reports/sales-by-item/', report_views.SalesByItemReportView.as_view(), name='report-by-item'),
+    path('reports/sales-by-rep/', report_views.SalesByRepReportView.as_view(), name='report-by-rep'),
+    path('reports/sales-by-customer/', report_views.SalesByCustomerReportView.as_view(), name='report-by-customer'),
+    path('reports/returns/', report_views.SalesReturnReportView.as_view(), name='report-returns'),
+    path('reports/detailed/', report_views.DetailedSalesReportView.as_view(), name='report-detailed'),
+    path('reports/target-comparison/', report_views.SalesTargetComparisonView.as_view(), name='report-target-comparison'),
+    path('reports/aging/', report_views.SalesAgingReportView.as_view(), name='report-aging'),
 ]

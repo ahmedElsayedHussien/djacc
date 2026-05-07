@@ -205,11 +205,71 @@ class ReportService:
                 'description': mov.description or mov.entry.description,
                 'debit': mov.debit,
                 'credit': mov.credit,
-                'balance': running_balance
+                'balance': running_balance,
+                'entry_id': mov.entry_id
             })
             
         return {
             'customer': customer,
+            'opening_balance': opening_balance,
+            'lines': statement_lines,
+            'closing_balance': running_balance
+        }
+
+    @staticmethod
+    def rep_statement(rep_id: int, from_date: date, to_date: date) -> dict:
+        """
+        كشف حساب مندوب
+        """
+        from apps.sales.models import SalesRepresentative
+        rep = SalesRepresentative.objects.get(id=rep_id)
+        account = rep.account
+        
+        # This logic is identical to account statement logic
+        # 1. Check for opening entry
+        has_opening = JournalLine.objects.filter(
+            account=account,
+            entry__entry_type=JournalEntry.EntryType.OPENING,
+            entry__is_posted=True
+        ).exists()
+
+        init_debit = Decimal(0)
+        init_credit = Decimal(0)
+        if not has_opening:
+            if account.initial_balance_type == 'debit': init_debit = account.initial_balance
+            else: init_credit = account.initial_balance
+
+        # 2. Add movements before from_date
+        pre_movements = JournalLine.objects.filter(
+            account=account, 
+            entry__is_posted=True, 
+            entry__date__lt=from_date
+        ).aggregate(d=Sum('debit'), c=Sum('credit'))
+        
+        opening_balance = (init_debit + (pre_movements['d'] or 0)) - (init_credit + (pre_movements['c'] or 0))
+        
+        # Movements in period
+        movements = JournalLine.objects.filter(
+            account=account,
+            entry__is_posted=True,
+            entry__date__range=[from_date, to_date]
+        ).select_related('entry').order_by('entry__date', 'id')
+        
+        statement_lines = []
+        running_balance = opening_balance
+        for mov in movements:
+            running_balance += (mov.debit - mov.credit)
+            statement_lines.append({
+                'date': mov.entry.date,
+                'description': mov.description or mov.entry.description,
+                'debit': mov.debit,
+                'credit': mov.credit,
+                'balance': running_balance,
+                'entry_id': mov.entry_id
+            })
+            
+        return {
+            'rep': rep,
             'opening_balance': opening_balance,
             'lines': statement_lines,
             'closing_balance': running_balance
@@ -221,7 +281,7 @@ class ReportService:
         تقرير حالة المخزون
         """
         from apps.inventory.models import ItemLedger, Warehouse
-        qs = ItemLedger.objects.select_related('item', 'warehouse', 'item__unit', 'item__category')
+        qs = ItemLedger.objects.select_related('item', 'warehouse', 'item__base_unit', 'item__category')
         
         if warehouse_id:
             qs = qs.filter(warehouse_id=warehouse_id)

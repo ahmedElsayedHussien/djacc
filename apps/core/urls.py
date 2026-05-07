@@ -10,12 +10,14 @@ urlpatterns = [
     # Chart of Accounts
     path('accounts/', views.AccountListView.as_view(), name='account-list'),
     path('accounts/create/', views.AccountCreateView.as_view(), name='account-create'),
+    path('accounts/initialize/', views.AccountInitializeView.as_view(), name='account-initialize'),
     path('accounts/<int:pk>/edit/', views.AccountUpdateView.as_view(), name='account-edit'),
 
     # Fiscal Year
     path('fiscal-years/', views.FiscalYearListView.as_view(), name='fiscalyear-list'),
     path('fiscal-years/create/', views.FiscalYearCreateView.as_view(), name='fiscalyear-create'),
     path('fiscal-years/<int:pk>/close/', views.FiscalYearCloseView.as_view(), name='fiscalyear-close'),
+    path('fiscal-years/<int:pk>/post-opening/', views.FiscalYearPostOpeningView.as_view(), name='fiscalyear-post-opening'),
 
     # Cost Centers
     path('cost-centers/', views.CostCenterListView.as_view(), name='costcenter-list'),

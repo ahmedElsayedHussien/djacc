@@ -49,6 +49,17 @@
               <label class="form-label">قائمة الأسعار المرتبطة</label>
               {{ form.price_list }}
             </div>
+
+            <hr class="my-3">
+            <h6 class="fw-bold mb-2 text-primary"><i class="bi bi-bank me-2"></i> تهيئة الرصيد الافتتاحي (أول مرة فقط)</h6>
+            <div class="col-md-6">
+              <label class="form-label">{{ form.initial_balance.label }}</label>
+              {{ form.initial_balance }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">{{ form.initial_balance_type.label }}</label>
+              {{ form.initial_balance_type }}
+            </div>
             
             <hr class="my-4">
             <h6 class="fw-bold mb-3"><i class="bi bi-percent me-2"></i> إعدادات الضرائب والأتمتة</h6>

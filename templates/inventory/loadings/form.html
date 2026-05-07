@@ -109,6 +109,23 @@
         totalForms.value = currentCount + 1;
     });
 
-    // Auto-select warehouses based on Sales Rep (Future improvement via AJAX)
+    // Auto-select warehouses based on Sales Rep
+    const repMapping = {{ rep_warehouse_mapping|safe|default:"{}" }};
+    const repSelect = document.querySelector('select[name="sales_rep"]');
+    const warehouseSelect = document.querySelector('select[name="to_warehouse"]');
+
+    function updateWarehouse() {
+        const repId = repSelect.value;
+        if (repId && repMapping[repId]) {
+            warehouseSelect.value = repMapping[repId];
+        } else {
+            warehouseSelect.value = "";
+        }
+    }
+
+    repSelect.addEventListener('change', updateWarehouse);
+    
+    // Initial update if editing or pre-filled
+    updateWarehouse();
 </script>
 {% endblock %}

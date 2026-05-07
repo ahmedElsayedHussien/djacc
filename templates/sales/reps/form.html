@@ -14,30 +14,20 @@
                     {% csrf_token %}
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold">كود المندوب</label>
+                            <label class="form-label fw-semibold">الموظف المرتبط *</label>
+                            {{ form.employee }}
+                            <div class="form-text small text-muted">اختر الموظف لتحويله إلى مندوب مبيعات.</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">كود المندوب *</label>
                             {{ form.code }}
-                        </div>
-                        <div class="col-md-8">
-                            <label class="form-label fw-semibold">اسم المندوب</label>
-                            {{ form.name }}
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">المستخدم المرتبط</label>
-                            {{ form.user }}
-                            <div class="form-text small text-muted">يجب ربط المندوب بمستخدم للنظام لتسجيل الدخول.</div>
-                            {{ form.user.errors }}
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">الهاتف</label>
-                            {{ form.phone }}
-                            {{ form.phone.errors }}
                         </div>
                         <div class="col-md-4">
                             <label class="form-label fw-semibold">نسبة العمولة (%)</label>
                             {{ form.commission_rate }}
                             {{ form.commission_rate.errors }}
                         </div>
-                        <div class="col-md-8">
+                        <div class="col-md-6">
                             <label class="form-label fw-semibold">المنطقة الجغرافية</label>
                             {{ form.territory }}
                             {{ form.territory.errors }}

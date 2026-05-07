@@ -21,13 +21,40 @@ class SupplierService:
             account_type=parent.account_type,
             parent=parent,
             is_leaf=True,
+            initial_balance=validated_data.get('initial_balance', 0) or 0,
+            initial_balance_type=validated_data.get('initial_balance_type', 'credit'),
         )
-        supplier_data = {k: v for k, v in validated_data.items() if k not in ('code', 'account')}
+        supplier_data = {k: v for k, v in validated_data.items() if k not in ('code', 'account', 'initial_balance', 'initial_balance_type')}
         return Supplier.objects.create(
             account=account, 
             code=validated_data.get('code'),
             **supplier_data
         )
+
+    @staticmethod
+    @transaction.atomic
+    def update_supplier(supplier: Supplier, validated_data: dict) -> Supplier:
+        update_account = False
+        if 'name' in validated_data and validated_data['name'] != supplier.name:
+            supplier.account.name = validated_data['name']
+            update_account = True
+        
+        if 'initial_balance' in validated_data:
+            supplier.account.initial_balance = validated_data['initial_balance'] or 0
+            update_account = True
+            
+        if 'initial_balance_type' in validated_data:
+            supplier.account.initial_balance_type = validated_data['initial_balance_type']
+            update_account = True
+            
+        if update_account:
+            supplier.account.save(update_fields=['name', 'initial_balance', 'initial_balance_type'])
+
+        for field, value in validated_data.items():
+            if field not in ('initial_balance', 'initial_balance_type'):
+                setattr(supplier, field, value)
+        supplier.save()
+        return supplier
 
 class PurchaseService:
 
@@ -36,8 +63,8 @@ class PurchaseService:
     def post_invoice(invoice: PurchaseInvoice, posted_by) -> JournalEntry:
         """
         Purchase Invoice Journal Entry:
-        DR  Inventory Account (per line)     → quantity * unit_cost
-        DR  Tax Deductible (if applicable)   → tax_amount
+        DR  Inventory Account (per line)     → quantity * unit_cost + non-deductible taxes
+        DR  VAT (deductible)                 → tax_amount
         CR  Supplier (Payable)               → invoice.total
         """
         if invoice.status == PurchaseInvoice.Status.POSTED:
@@ -47,8 +74,43 @@ class PurchaseService:
             raise ValueError("لا يمكن ترحيل فاتورة بدون أسطر")
 
         lines = []
+        
+        # 1. Group by Inventory Account (Warehouse-aware)
+        # Sum (quantity * unit_cost) + (non-deductible taxes)
+        inv_account_totals = {}
+        tax_account_totals = {}
 
-        # Credit supplier payable
+        for line in invoice.lines.all():
+            # Determine target inventory account
+            acc = line.warehouse.gl_account or line.item.inventory_account
+            if not acc:
+                raise ValueError(f"يرجى تحديد حساب المخزون للصنف {line.item.name} أو للمخزن {line.warehouse.name}")
+            
+            line_amount = line.quantity * line.unit_cost
+            if acc.id not in inv_account_totals:
+                inv_account_totals[acc.id] = {'account': acc, 'amount': 0}
+            inv_account_totals[acc.id]['amount'] += line_amount
+
+            # Taxes
+            for tx_field in ['tax_type', 'tax_type2']:
+                tx_type = getattr(line, tx_field)
+                if tx_type:
+                    tx_rate = getattr(line, f"{tx_field.replace('_type', '')}_percent") or tx_type.rate
+                    tx_val = line_amount * (tx_rate / 100)
+                    
+                    if tx_type.category in ['table', 'customs']:
+                        # Capitalize: Add to inventory cost on the same account
+                        inv_account_totals[acc.id]['amount'] += tx_val
+                    else:
+                        # Record as separate tax account
+                        tax_acc = tx_type.account
+                        if not tax_acc: continue
+                        if tax_acc.id not in tax_account_totals:
+                            tax_account_totals[tax_acc.id] = {'account': tax_acc, 'amount': 0, 'category': tx_type.category}
+                        tax_account_totals[tax_acc.id]['amount'] += tx_val
+
+        # 2. Construct Journal Lines
+        # CR Supplier
         lines.append({
             'account': invoice.supplier.account, 
             'debit': 0, 
@@ -57,64 +119,19 @@ class PurchaseService:
             'cost_center': invoice.cost_center
         })
 
-        # Debit inventory per line
-        for line in invoice.lines.all():
+        # DR Inventory Accounts
+        for info in inv_account_totals.values():
             lines.append({
-                'account': line.item.inventory_account, 
-                'debit': line.quantity * line.unit_cost, 
+                'account': info['account'],
+                'debit': info['amount'],
                 'credit': 0,
-                'description': f'إضافة مخزون - {line.item.name}',
+                'description': f"مشتريات مخزنية - فاتورة {invoice.number}",
                 'cost_center': invoice.cost_center
             })
 
-        # Group taxes by account
-        tax_lines = {}
-        capitalized_tax_amount = 0  # For Table Tax and Customs which are added to inventory cost
-        
-        for line in invoice.lines.all():
-            line_amount = line.quantity * line.unit_cost
-            
-            # Process Tax 1
-            if line.tax_type:
-                tax_rate = line.tax_percent if line.tax_percent else line.tax_type.rate
-                tax_val = line_amount * (tax_rate / 100)
-                
-                if line.tax_type.category in ['table', 'customs']:
-                    # Capitalize: Add to inventory cost
-                    capitalized_tax_amount += tax_val
-                else:
-                    # Record as separate line (VAT, WHT, etc.)
-                    acc = line.tax_type.account
-                    if acc.id not in tax_lines:
-                        tax_lines[acc.id] = {'account': acc, 'amount': 0, 'category': line.tax_type.category}
-                    tax_lines[acc.id]['amount'] += tax_val
-            
-            # Process Tax 2
-            if hasattr(line, 'tax_type2') and line.tax_type2:
-                tax_rate2 = line.tax_percent2 if line.tax_percent2 else line.tax_type2.rate
-                tax_val2 = line_amount * (tax_rate2 / 100)
-                
-                if line.tax_type2.category in ['table', 'customs']:
-                    capitalized_tax_amount += tax_val2
-                else:
-                    acc2 = line.tax_type2.account
-                    if acc2.id not in tax_lines:
-                        tax_lines[acc2.id] = {'account': acc2, 'amount': 0, 'category': line.tax_type2.category}
-                    tax_lines[acc2.id]['amount'] += tax_val2
-
-        # 1. Main Inventory/Purchase Line (Capitalized with Table Tax/Customs)
-        lines.append({
-            'account': inventory_account,
-            'debit': invoice.subtotal + capitalized_tax_amount,
-            'credit': 0,
-            'description': f"مشتريات - فاتورة {invoice.number} (شاملة الضرائب غير المستردة)",
-            'cost_center': invoice.cost_center
-        })
-
-        # 2. Tax Lines (VAT, WHT, etc.)
-        for tax_info in tax_lines.values():
+        # DR/CR Tax Accounts
+        for tax_info in tax_account_totals.values():
             if tax_info['amount'] > 0:
-                # In Purchases: WHT and Insurance are credits (liabilities)
                 is_credit = (tax_info['category'] in ['wht', 'insurance', 'salary'])
                 lines.append({
                     'account': tax_info['account'],
@@ -137,6 +154,8 @@ class PurchaseService:
         invoice.status = PurchaseInvoice.Status.POSTED
         invoice.save()
         
+        # ✅ Fix: InventoryService increase_stock should also handle base quantities if needed, 
+        # but let's ensure we use the right quantity here.
         InventoryService.increase_stock(invoice)
         return entry
 
@@ -173,7 +192,7 @@ class PurchaseService:
                 item=line.item,
                 warehouse=line.warehouse,
                 movement_type=StockMovement.MovementType.ADJUSTMENT_OUT,
-                quantity=-line.quantity,
+                quantity=-line.base_quantity, # ✅ Fix #1: استخدام الكمية الأساسية
                 unit_cost=line.unit_cost,
                 source=invoice,
                 reference=f'Reverse {invoice.number}'
@@ -205,8 +224,8 @@ class PurchaseService:
         if payment.payment_method == 'bank':
             source_account = payment.bank_account.account
         elif payment.payment_method == 'cheque':
-            # شيكات مسحوبة - حساب وسيط 2132
-            source_account = Account.objects.get(code=getattr(settings, 'CHEQUES_ISSUED_ACCOUNT', '2132'))
+            # شيكات مسحوبة - حساب وسيط 2141
+            source_account = Account.objects.get(code=getattr(settings, 'CHEQUES_ISSUED_ACCOUNT', '2141'))
         else:
             source_account = payment.cash_box.account
             
@@ -233,7 +252,10 @@ class PurchaseService:
         # Update paid_amount in related invoices
         for allocation in payment.paymentallocation_set.all():
             invoice = allocation.invoice
-            invoice.paid_amount += allocation.amount
+            remaining = invoice.total - invoice.paid_amount
+            actual_alloc = min(allocation.amount, remaining)
+            
+            invoice.paid_amount += actual_alloc # ✅ Fix #2: منع الدفع الزائد
             invoice.save()
 
         from apps.core.services import AuditService
@@ -249,6 +271,7 @@ class PurchaseService:
         DR  Supplier (Payable ↓)         → total_amount
         CR  Inventory Account (↓)        → quantity * unit_cost
         CR  Tax Deductible (Reverse)     → tax_amount
+        CR  Discount (Reverse)           → discount_amount (✅ Fix #3: لموازنة القيد)
         """
         if purchase_return.status == 'posted':
             raise ValueError("هذا المرتجع مرحل بالفعل")
@@ -271,6 +294,20 @@ class PurchaseService:
                 'debit': 0,
                 'credit': line.quantity * line.unit_cost,
                 'description': f'مردودات مشتريات - {line.item.name}',
+                'cost_center': purchase_return.cost_center
+            })
+
+        # ✅ Fix #3: إضافة سطر للخصم لموازنة القيد
+        if purchase_return.discount_amount > 0:
+            # استخدام حساب خصم المشتريات (غالباً كود 422 أو من الإعدادات)
+            discount_acc_code = getattr(settings, 'PURCHASE_DISCOUNT_ACCOUNT', '422')
+            from apps.inventory.services import _get_or_create_account # أو استيراد مباشر
+            discount_acc = Account.objects.get(code=discount_acc_code)
+            lines.append({
+                'account': discount_acc,
+                'debit': 0,
+                'credit': purchase_return.discount_amount,
+                'description': f'خصم مكتسب (مرتجع {purchase_return.number})',
                 'cost_center': purchase_return.cost_center
             })
 
@@ -310,14 +347,16 @@ class PurchaseService:
         purchase_return.status = 'posted'
         purchase_return.save()
         
+        # ✅ Fix #1: record_movement الآن جزء من الـ transaction بسبب @transaction.atomic
+        from apps.inventory.models import StockMovement
         for line in purchase_return.lines.all():
             InventoryService.record_movement(
                 date_val=purchase_return.date,
                 item=line.item,
                 warehouse=line.warehouse,
-                movement_type='purchase_return',
-                quantity=-line.quantity,
-                unit_cost=getattr(line, 'unit_price', None) or line.unit_cost,
+                movement_type=StockMovement.MovementType.PURCHASE_RETURN,
+                quantity=-line.base_quantity, # ✅ Fix: استخدام الكمية الأساسية
+                unit_cost=line.unit_cost,
                 source=purchase_return,
                 reference=purchase_return.number,
             )

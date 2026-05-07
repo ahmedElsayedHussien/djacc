@@ -1,5 +1,5 @@
 from django.views.generic import TemplateView
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.utils import timezone
 from datetime import date, datetime
 from .services import ReportService
@@ -15,7 +15,8 @@ def parse_date(date_val, default=None):
             return default or date.today()
     return date_val
 
-class TrialBalanceView(LoginRequiredMixin, TemplateView):
+class TrialBalanceView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    permission_required = 'core.view_account'
     template_name = 'reports/trial_balance.html'
 
     def get_context_data(self, **kwargs):
@@ -34,7 +35,8 @@ class TrialBalanceView(LoginRequiredMixin, TemplateView):
         context['to_date'] = to_date
         return context
 
-class IncomeStatementView(LoginRequiredMixin, TemplateView):
+class IncomeStatementView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    permission_required = 'core.view_account'
     template_name = 'reports/income_statement.html'
 
     def get_context_data(self, **kwargs):
@@ -54,7 +56,8 @@ class IncomeStatementView(LoginRequiredMixin, TemplateView):
         context['to_date'] = to_date
         return context
 
-class BalanceSheetView(LoginRequiredMixin, TemplateView):
+class BalanceSheetView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    permission_required = 'core.view_account'
     template_name = 'reports/balance_sheet.html'
 
     def get_context_data(self, **kwargs):
@@ -72,7 +75,8 @@ class BalanceSheetView(LoginRequiredMixin, TemplateView):
         context['as_of_date'] = as_of_date
         return context
 
-class CustomerStatementView(LoginRequiredMixin, TemplateView):
+class CustomerStatementView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    permission_required = 'sales.view_customer'
     template_name = 'reports/customer_statement.html'
 
     def get_context_data(self, **kwargs):
@@ -92,7 +96,29 @@ class CustomerStatementView(LoginRequiredMixin, TemplateView):
             
         return context
 
-class StockStatusView(LoginRequiredMixin, TemplateView):
+class RepStatementView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    permission_required = 'sales.view_salesrepresentative'
+    template_name = 'reports/rep_statement.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from apps.sales.models import SalesRepresentative
+        rep_id = self.request.GET.get('rep')
+        from_date = parse_date(self.request.GET.get('from'), date.today().replace(day=1))
+        to_date = parse_date(self.request.GET.get('to'), date.today())
+        
+        context['reps'] = SalesRepresentative.objects.all()
+        context['from_date'] = from_date
+        context['to_date'] = to_date
+        
+        if rep_id:
+            context['report'] = ReportService.rep_statement(int(rep_id), from_date, to_date)
+            context['selected_rep'] = int(rep_id)
+            
+        return context
+
+class StockStatusView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    permission_required = 'inventory.view_item'
     template_name = 'reports/stock_status.html'
 
     def get_context_data(self, **kwargs):
@@ -107,7 +133,8 @@ class StockStatusView(LoginRequiredMixin, TemplateView):
             
         return context
 
-class RepCommissionView(LoginRequiredMixin, TemplateView):
+class RepCommissionView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    permission_required = 'sales.view_salesrepresentative'
     template_name = 'reports/rep_commission.html'
 
     def get_context_data(self, **kwargs):
@@ -119,7 +146,8 @@ class RepCommissionView(LoginRequiredMixin, TemplateView):
         context['to_date'] = to_date
         return context
 
-class CostCenterStatementView(LoginRequiredMixin, TemplateView):
+class CostCenterStatementView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    permission_required = 'core.view_costcenter'
     template_name = 'reports/cost_center_statement.html'
 
     def get_context_data(self, **kwargs):
@@ -139,7 +167,8 @@ class CostCenterStatementView(LoginRequiredMixin, TemplateView):
             
         return context
 
-class AccountStatementView(LoginRequiredMixin, TemplateView):
+class AccountStatementView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    permission_required = 'core.view_account'
     template_name = 'reports/account_statement.html'
 
     def get_context_data(self, **kwargs):

@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block title %}بضاعتي الحالية - {{ rep.name }}{% endblock %}
+
+{% block header %}
+<div class="d-flex align-items-center">
+    <i class="bi bi-box-seam fs-2 me-3 text-primary"></i>
+    <div>
+        <h4 class="mb-0">بضاعتي الحالية</h4>
+        <small class="text-muted">مستودع: {{ rep.warehouse.name }}</small>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-primary text-white">
+            <div class="card-body d-flex align-items-center">
+                <div class="flex-grow-1">
+                    <h6 class="text-uppercase small mb-1 opacity-75">عدد الأصناف</h6>
+                    <h3 class="mb-0">{{ report|length }}</h3>
+                </div>
+                <i class="bi bi-tag fs-1 opacity-25"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-success text-white">
+            <div class="card-body d-flex align-items-center">
+                <div class="flex-grow-1">
+                    <h6 class="text-uppercase small mb-1 opacity-75">إجمالي قيمة العهدة</h6>
+                    <h3 class="mb-0" id="header-total-value">0.00</h3>
+                </div>
+                <i class="bi bi-currency-dollar fs-1 opacity-25"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-info text-white">
+            <div class="card-body d-flex align-items-center">
+                <div class="flex-grow-1">
+                    <h6 class="text-uppercase small mb-1 opacity-75">الموقع الجغرافي</h6>
+                    <h3 class="mb-0">{{ rep.territory|default:"غير محدد" }}</h3>
+                </div>
+                <i class="bi bi-geo-alt fs-1 opacity-25"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold">قائمة الأرصدة المتوفرة</h5>
+        <div class="btn-group">
+            <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+                <i class="bi bi-printer me-1"></i> طباعة
+            </button>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-muted small text-uppercase">
+                    <tr>
+                        <th class="ps-4">كود الصنف</th>
+                        <th>اسم الصنف</th>
+                        <th class="text-center">الوحدة</th>
+                        <th class="text-center">الكمية</th>
+                        <th class="text-end">التكلفة</th>
+                        <th class="text-end pe-4">إجمالي القيمة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in report %}
+                    <tr {% if entry.quantity_on_hand <= entry.item.minimum_stock %}class="table-warning-light"{% endif %}>
+                        <td class="ps-4"><code>{{ entry.item.code }}</code></td>
+                        <td>
+                            <div class="fw-bold text-dark">{{ entry.item.name }}</div>
+                            <small class="text-muted">{{ entry.item.category.name }}</small>
+                        </td>
+                        <td class="text-center"><span class="badge bg-light text-dark border">{{ entry.item.base_unit.name }}</span></td>
+                        <td class="text-center">
+                            <span class="fs-5 fw-bold {% if entry.quantity_on_hand <= 0 %}text-danger{% else %}text-primary{% endif %}">
+                                {{ entry.quantity_on_hand }}
+                            </span>
+                        </td>
+                        <td class="text-end text-muted">{{ entry.average_cost|floatformat:2 }}</td>
+                        <td class="text-end pe-4 fw-bold text-success">{{ entry.total_value|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5">
+                            <i class="bi bi-inbox fs-1 text-muted d-block mb-3"></i>
+                            <p class="text-muted mb-0">لا توجد أصناف في مخزنك حالياً.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+    .table-warning-light { background-color: rgba(255, 193, 7, 0.05); }
+    code { font-weight: 600; color: #d63384; }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        let total = 0;
+        document.querySelectorAll('tbody tr').forEach(row => {
+            let cell = row.cells[5];
+            if (cell) {
+                let val = parseFloat(cell.innerText.replace(/,/g, ''));
+                if (!isNaN(val)) total += val;
+            }
+        });
+        const formattedTotal = total.toLocaleString(undefined, {minimumFractionDigits: 2});
+        document.getElementById('header-total-value').innerText = formattedTotal;
+    });
+</script>
+{% endblock %}

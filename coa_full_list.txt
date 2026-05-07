@@ -1,0 +1,89 @@
+Code | Name | Type | Balance Type
+--------------------------------------------------
+1 | الأصول | asset | debit | False
+11 | الأصول المتداولة | asset | debit | False
+111 | النقدية والبنوك | asset | debit | False
+1111 | خزائن النقدية | asset | debit | False
+111101 | خزنة مندوب - علي | asset | debit | True
+111102 | خزينة النثريات | asset | debit | True
+111103 | خزنة مندوب - test test | asset | debit | True
+1112 | البنوك | asset | debit | False
+111201 | البنك الأهلي المصري | asset | debit | True
+111202 | بنك مصر | asset | debit | True
+112 | الذمم المدينة | asset | debit | False
+1121 | العملاء | asset | debit | False
+1121001 | شركه | asset | debit | True
+1122 | ضريبة خصم وتحصيل - مدينة | asset | debit | True
+113 | المخزون | asset | debit | False
+1131 | مخزون البضاعة | asset | debit | True
+114 | سلف وعهد وذمم | asset | debit | False
+1141 | ذمم مناديب المبيعات | asset | debit | False
+1141001 | ذمة مندوب — علي | asset | debit | True
+1141002 | ذمة مندوب — test test | asset | debit | True
+1141003 | ذمة مندوب — Test Rep | asset | debit | True
+1142 | عهد الموظفين | asset | debit | False
+1143 | سلف الموظفين والقروض | asset | debit | True
+115 | أوراق قبض | asset | debit | False
+1151 | شيكات تحت التحصيل | asset | debit | True
+12 | الأصول الثابتة | asset | debit | False
+1201 | Main Inventory Account | asset | debit | True
+1202 | Rep Inventory Account | asset | debit | True
+121 | الأراضي والمباني | asset | debit | True
+122 | الآلات والمعدات | asset | debit | True
+129 | مجمع إهلاك الأصول | asset | debit | True
+1301 | Test Customer Account | asset | debit | True
+2 | الخصوم | liability | debit | False
+21 | الخصوم المتداولة | liability | debit | False
+211 | الذمم الدائنة | liability | debit | False
+2111 | الموردون | liability | debit | False
+2111001 | Global Trading Co | liability | debit | True
+2111002 | Global Trading Co | liability | debit | True
+212 | الضرائب المستحقة | liability | debit | False
+2121 | ضريبة القيمة المضافة | liability | debit | True
+2122 | ضريبة الدخل المستحقة | liability | debit | True
+2123 | ضريبة خصم وتحصيل - دائنة | liability | debit | True
+2124 | التأمينات الاجتماعية - ح/الموظف | liability | debit | True
+2125 | مصلحة الضرائب - كسب عمل | liability | debit | True
+2126 | استقطاعات أخرى من الموظفين | liability | debit | True
+213 | مصروفات مستحقة | liability | debit | False
+2131 | عمولات مناديب مستحقة | liability | debit | True
+2132 | شيكات مسحوبة | liability | debit | True
+2133 | رواتب وأجور مستحقة | liability | debit | True
+3 | حقوق الملكية | equity | debit | False
+31 | رأس المال | equity | debit | True
+32 | الاحتياطيات | equity | debit | True
+33 | الأرباح المرحلة | equity | debit | True
+34 | أرباح/خسائر العام | equity | debit | True
+35 | الأرصدة الافتتاحية | equity | debit | True
+4 | الإيرادات | revenue | debit | False
+41 | إيرادات المبيعات | revenue | debit | False
+411 | مبيعات البضاعة | revenue | debit | True
+412 | إيرادات الخدمات | revenue | debit | True
+413 | مردودات ومسموحات المبيعات | revenue | debit | True
+4130 | ??? ?????? ????? | revenue | debit | True
+4141 | فوائد بنكية | revenue | debit | True
+42 | إيرادات أخرى | revenue | debit | True
+421 | إيرادات أوراق مالية | revenue | debit | True
+422 | أرباح بيع أصول ثابتة | revenue | debit | True
+5 | المصروفات | expense | debit | False
+51 | تكلفة البضاعة المباعة | expense | debit | False
+511 | تكلفة المبيعات | expense | debit | True
+5161 | عمولات بنكية | expense | debit | True
+52 | مصروفات التشغيل | expense | debit | False
+5201 | General Expenses | expense | debit | True
+521 | مصروفات الرواتب | expense | debit | True
+5211 | مصروف بدل السكن | expense | debit | True
+5212 | مصروف بدل الانتقال | expense | debit | True
+5213 | مصروف بدلات وإضافات أخرى | expense | debit | True
+522 | مصروفات الإيجار | expense | debit | True
+523 | مصروفات المرافق | expense | debit | True
+5231 | مصروفات كهرباء | expense | debit | True
+5232 | مصروفات مياه | expense | debit | True
+5233 | مصروفات تليفون وإنترنت | expense | debit | True
+524 | مصروفات إدارية عامة | expense | debit | True
+5241 | أدوات مكتبية ومطبوعات | expense | debit | True
+5242 | ضيافة وبوفيه | expense | debit | True
+5243 | نظافة وأدوات صحية | expense | debit | True
+5244 | مصاريف صيانة عمومية | expense | debit | True
+525 | مصروفات عمولات مناديب | expense | debit | True
+53 | مصروفات التمويل | expense | debit | True

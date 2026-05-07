@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block title %}إدارة رصيد الإجازات{% endblock %}
+{% block header %}تعديل رصيد الإجازات{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-calendar-check me-2 text-primary"></i> تخصيص رصيد إجازات</h5>
+            </div>
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">نوع الإجازة</label>
+                        {{ form.leave_type }}
+                        {% if form.leave_type.errors %}<div class="text-danger small mt-1">{{ form.leave_type.errors }}</div>{% endif %}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">السنة</label>
+                            {{ form.year }}
+                            {% if form.year.errors %}<div class="text-danger small mt-1">{{ form.year.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">إجمالي الرصيد (أيام)</label>
+                            {{ form.total_days }}
+                            {% if form.total_days.errors %}<div class="text-danger small mt-1">{{ form.total_days.errors }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">الأيام المستهلكة (اختياري)</label>
+                        {{ form.used_days }}
+                        <div class="form-text">اتركها 0 إذا كان هذا رصيداً جديداً.</div>
+                        {% if form.used_days.errors %}<div class="text-danger small mt-1">{{ form.used_days.errors }}</div>{% endif %}
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary py-2 fw-bold">حفظ الرصيد</button>
+                        <a href="javascript:history.back()" class="btn btn-light py-2">إلغاء</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,237 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}تعديل قسيمة راتب: {{ object.employee }}{% endblock %}
+{% block header %}تعديل المبالغ يدوياً{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white border-bottom pb-0">
+                <h5 class="card-title fw-bold">
+                    <i class="bi bi-person-badge text-primary me-2"></i> {{ object.employee.first_name }} {{ object.employee.last_name }}
+                </h5>
+                <p class="text-muted small">مسير شهر: {{ object.period.name }}</p>
+            </div>
+            
+            <div class="card-body">
+                <div class="alert alert-info border-0 shadow-sm" role="alert">
+                    <i class="bi bi-info-circle-fill me-2"></i> 
+                    <strong>ملاحظة هامة:</strong> 
+                    أية تعديلات تقوم بها هنا ستؤثر مباشرة على (صافي الراتب) وعلى (قيد اليومية المحاسبي) الذي سيتم توليده لاحقاً.
+                </div>
+
+                <form method="post" id="payslip-form">
+                    {% csrf_token %}
+                    
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger shadow-sm border-0">
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+
+                    <div class="row">
+                        <!-- المستحقات -->
+                        <div class="col-md-6 border-end">
+                            <h6 class="fw-bold text-success mb-3">المستحقات (إضافة)</h6>
+                            {{ form.basic_salary|as_crispy_field }}
+                            {{ form.total_allowances|as_crispy_field }}
+                            {{ form.other_additions|as_crispy_field }}
+                        </div>
+                        
+                        <!-- الاستقطاعات -->
+                        <div class="col-md-6">
+                            <h6 class="fw-bold text-danger mb-3">الاستقطاعات (خصم)</h6>
+                            {{ form.social_insurance|as_crispy_field }}
+                            {{ form.income_tax|as_crispy_field }}
+                            {{ form.total_deductions|as_crispy_field }}
+                            {{ form.other_deductions|as_crispy_field }}
+                        </div>
+                    </div>
+
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <h6 class="fw-bold text-secondary mb-3">بنود متغيرة إضافية (مكافآت، جزاءات، إلخ)</h6>
+                            {{ items_formset.management_form }}
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm" id="items-table">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>اسم البند</th>
+                                            <th>المبلغ</th>
+                                            <th>النوع</th>
+                                            <th>حذف</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="formset-body">
+                                        {% if items_formset.non_form_errors %}
+                                            <tr>
+                                                <td colspan="4" class="text-danger">
+                                                    {{ items_formset.non_form_errors }}
+                                                </td>
+                                            </tr>
+                                        {% endif %}
+                                        {% for item_form in items_formset %}
+                                        <tr class="item-row">
+                                            {{ item_form.id }}
+                                            <td>
+                                                {{ item_form.name }}
+                                                {% if item_form.name.errors %}<div class="text-danger small">{{ item_form.name.errors }}</div>{% endif %}
+                                            </td>
+                                            <td>
+                                                {{ item_form.amount }}
+                                                {% if item_form.amount.errors %}<div class="text-danger small">{{ item_form.amount.errors }}</div>{% endif %}
+                                            </td>
+                                            <td>
+                                                {{ item_form.item_type }}
+                                                {% if item_form.item_type.errors %}<div class="text-danger small">{{ item_form.item_type.errors }}</div>{% endif %}
+                                            </td>
+                                            <td class="text-center align-middle">
+                                                {% if items_formset.can_delete %}
+                                                    {{ item_form.DELETE }}
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-success" id="add-item-btn">
+                                <i class="bi bi-plus-circle"></i> إضافة سطر جديد
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            {{ form.note|as_crispy_field }}
+                        </div>
+                    </div>
+
+                    <!-- الصافي المتوقع (Live Calculation Preview) -->
+                    <div class="mt-4 p-3 bg-light rounded text-center border">
+                        <span class="text-muted">صافي الراتب المتوقع بعد التعديل:</span>
+                        <h3 class="fw-bold text-primary mb-0 mt-1" id="live-net-salary">0.00</h3>
+                    </div>
+
+                    <hr class="my-4">
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'hr:payroll-detail' object.period.pk %}" class="btn btn-outline-secondary px-4">إلغاء</a>
+                        <button type="submit" class="btn btn-primary px-5 fw-bold">حفظ التعديلات</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Template for new row -->
+<template id="empty-row-template">
+    <tr class="item-row">
+        <td><input type="text" name="items-__prefix__-name" class="form-control item-name" placeholder="اسم البند" maxlength="100" id="id_items-__prefix__-name"></td>
+        <td><input type="number" name="items-__prefix__-amount" class="form-control item-amount" placeholder="المبلغ" step="0.01" id="id_items-__prefix__-amount"></td>
+        <td>
+            <select name="items-__prefix__-item_type" class="form-select item-type" id="id_items-__prefix__-item_type">
+                <option value="addition">إضافة (استحقاق)</option>
+                <option value="deduction">خصم (استقطاع)</option>
+            </select>
+        </td>
+        <td class="text-center align-middle">
+            <input type="checkbox" name="items-__prefix__-DELETE" id="id_items-__prefix__-DELETE">
+        </td>
+    </tr>
+</template>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const basicInput = document.getElementById('id_basic_salary');
+        const allowancesInput = document.getElementById('id_total_allowances');
+        const deductionsInput = document.getElementById('id_total_deductions');
+        const insuranceInput = document.getElementById('id_social_insurance');
+        const taxInput = document.getElementById('id_income_tax');
+        const netDisplay = document.getElementById('live-net-salary');
+        
+        // Formset DOM elements
+        const formsetBody = document.getElementById('formset-body');
+        const addBtn = document.getElementById('add-item-btn');
+        const emptyTemplate = document.getElementById('empty-row-template').innerHTML;
+        const totalForms = document.getElementById('id_items-TOTAL_FORMS');
+        
+        // Readonly summary fields
+        const otherAddDisplay = document.getElementById('id_other_additions');
+        const otherDedDisplay = document.getElementById('id_other_deductions');
+
+        function updateNet() {
+            const basic = parseFloat(basicInput.value) || 0;
+            const allow = parseFloat(allowancesInput.value) || 0;
+            const deduct = parseFloat(deductionsInput.value) || 0;
+            const ins = parseFloat(insuranceInput.value) || 0;
+            const tax = parseFloat(taxInput.value) || 0;
+
+            // حساب المجاميع من الصفوف (البنود المتغيرة)
+            let dynamicAdditions = 0;
+            let dynamicDeductions = 0;
+
+            document.querySelectorAll('.item-row').forEach(row => {
+                const deleteCheck = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+                if (deleteCheck && deleteCheck.checked) return; // Ignore deleted rows
+
+                const amountInput = row.querySelector('.item-amount');
+                const typeSelect = row.querySelector('.item-type');
+                
+                if (amountInput && typeSelect && amountInput.value) {
+                    const val = parseFloat(amountInput.value) || 0;
+                    if (typeSelect.value === 'addition') {
+                        dynamicAdditions += val;
+                    } else if (typeSelect.value === 'deduction') {
+                        dynamicDeductions += val;
+                    }
+                }
+            });
+
+            // Update readonly fields
+            if(otherAddDisplay) otherAddDisplay.value = dynamicAdditions.toFixed(2);
+            if(otherDedDisplay) otherDedDisplay.value = dynamicDeductions.toFixed(2);
+
+            const net = basic + allow + dynamicAdditions - deduct - dynamicDeductions - ins - tax;
+            netDisplay.innerText = net.toFixed(2);
+        }
+
+        // Attach event listeners to static fields
+        [basicInput, allowancesInput, deductionsInput, insuranceInput, taxInput].forEach(input => {
+            if(input) input.addEventListener('input', updateNet);
+        });
+
+        // Add new row logic
+        addBtn.addEventListener('click', function() {
+            const formCount = parseInt(totalForms.value);
+            const newRowHtml = emptyTemplate.replace(/__prefix__/g, formCount);
+            
+            formsetBody.insertAdjacentHTML('beforeend', newRowHtml);
+            totalForms.value = formCount + 1;
+            
+            // Attach event listeners to new row
+            const newRow = formsetBody.lastElementChild;
+            newRow.querySelector('.item-amount').addEventListener('input', updateNet);
+            newRow.querySelector('.item-type').addEventListener('change', updateNet);
+            newRow.querySelector('input[type="checkbox"]').addEventListener('change', updateNet);
+        });
+
+        // Attach event listeners to existing dynamic rows
+        document.querySelectorAll('.item-row').forEach(row => {
+            const amt = row.querySelector('.item-amount');
+            const type = row.querySelector('.item-type');
+            const chk = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+            
+            if(amt) amt.addEventListener('input', updateNet);
+            if(type) type.addEventListener('change', updateNet);
+            if(chk) chk.addEventListener('change', updateNet);
+        });
+
+        // Initial calculation
+        updateNet();
+    });
+</script>
+{% endblock %}

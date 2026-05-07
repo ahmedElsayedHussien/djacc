@@ -6,10 +6,11 @@ from apps.core.models import Account
 class WarehouseForm(forms.ModelForm):
     class Meta:
         model = Warehouse
-        fields = ['code', 'name', 'location']
+        fields = ['code', 'name', 'gl_account', 'location']
         widgets = {
             'code': forms.TextInput(attrs={'class': 'form-control'}),
             'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'gl_account': forms.Select(attrs={'class': 'form-select'}),
             'location': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
         }
 
@@ -74,23 +75,38 @@ class WarehouseTransferForm(forms.ModelForm):
         model = WarehouseTransfer
         fields = ['date', 'from_warehouse', 'to_warehouse', 'item', 'quantity', 'notes']
         widgets = {
-            'date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'from_warehouse': forms.Select(attrs={'class': 'form-select'}),
-            'to_warehouse': forms.Select(attrs={'class': 'form-select'}),
             'item': forms.Select(attrs={'class': 'form-select'}),
             'quantity': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'step': 'any'}),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        from_warehouse = cleaned_data.get('from_warehouse')
+        to_warehouse = cleaned_data.get('to_warehouse')
+
+        if from_warehouse and to_warehouse and from_warehouse == to_warehouse:
+            raise forms.ValidationError("المستودع المصدر والوجهة يجب أن يكونا مختلفين.")
+        return cleaned_data
+
 
 class LoadingOrderForm(forms.ModelForm):
     class Meta:
         model = LoadingOrder
         fields = ['number', 'date', 'sales_rep', 'from_warehouse', 'to_warehouse', 'notes']
         widgets = {
-            'number': forms.TextInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'number': forms.TextInput(attrs={
+                'class': 'form-control', 
+                'readonly': 'readonly', 
+                'placeholder': 'سيتم توليده تلقائياً'
+            }),
             'date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'sales_rep': forms.Select(attrs={'class': 'form-select'}),
             'from_warehouse': forms.Select(attrs={'class': 'form-select'}),
-            'to_warehouse': forms.Select(attrs={'class': 'form-select'}),
+            'to_warehouse': forms.Select(attrs={
+                'class': 'form-select', 
+                'style': 'pointer-events: none; background-color: #f8f9fa;',
+                'tabindex': '-1'
+            }),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
         }
 
@@ -128,7 +144,16 @@ class StockVoucherForm(forms.ModelForm):
         
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['offset_account'].queryset = Account.objects.filter(is_leaf=True, is_active=True).order_by('code')
+        from django.db.models import Q
+        # قصر الحسابات المقابلة على قائمة دقيقة جداً ومحددة لحالات الأذون المخزنية فقط:
+        # 35: أرصدة افتتاحية، 424: إيراد زيادة جرد، 542: خسائر عجز وتوالف، 524: مصاريف إدارية (للاستهلاك الداخلي)
+        exact_codes = ['35', '424', '542', '524']
+        allowed_accounts = Account.objects.filter(
+            code__in=exact_codes,
+            is_active=True,
+            is_leaf=True  # ✅ Fix #5: التأكد من اختيار حسابات ورقية فقط للقيود
+        ).order_by('code')
+        self.fields['offset_account'].queryset = allowed_accounts
 
 class StockVoucherLineForm(forms.ModelForm):
     class Meta:

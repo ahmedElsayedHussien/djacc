@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+{% block title %}تقرير أعمار الديون{% endblock %}
+{% block header %}تقرير أعمار الديون (Aging Report){% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card shadow-sm border-0" style="border-radius: 15px;">
+            <div class="card-body">
+                <form method="get" class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">تصفية حسب العميل</label>
+                        <select name="customer" class="form-select select2">
+                            <option value="">كل العملاء</option>
+                            {% for cust in customers %}
+                            <option value="{{ cust.id }}" {% if selected_customer == cust.id %}selected{% endif %}>
+                                {{ cust.name }} ({{ cust.code }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">عرض التقرير</button>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-outline-secondary" onclick="window.print()">
+                                <i class="bi bi-printer"></i> طباعة
+                            </button>
+                            <button type="button" class="btn btn-outline-success">
+                                <i class="bi bi-file-earmark-excel"></i> تصدير Excel
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4 g-3">
+    <div class="col-md-2">
+        <div class="card text-center border-0 bg-light-primary shadow-sm" style="background: #f0f9ff; border-radius: 12px;">
+            <div class="card-body py-3">
+                <small class="text-muted d-block mb-1">0 - 30 يوم</small>
+                <h5 class="fw-bold mb-0 text-primary">{{ summary.age_0_30|floatformat:2 }}</h5>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center border-0 shadow-sm" style="background: #fffbeb; border-radius: 12px;">
+            <div class="card-body py-3">
+                <small class="text-muted d-block mb-1">31 - 60 يوم</small>
+                <h5 class="fw-bold mb-0 text-warning">{{ summary.age_31_60|floatformat:2 }}</h5>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center border-0 shadow-sm" style="background: #fef2f2; border-radius: 12px;">
+            <div class="card-body py-3">
+                <small class="text-muted d-block mb-1">61 - 90 يوم</small>
+                <h5 class="fw-bold mb-0 text-danger">{{ summary.age_61_90|floatformat:2 }}</h5>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center border-0 shadow-sm" style="background: #450a0a; border-radius: 12px;">
+            <div class="card-body py-3">
+                <small class="text-white-50 d-block mb-1">أكثر من 90 يوم</small>
+                <h5 class="fw-bold mb-0 text-white">{{ summary.age_90_plus|floatformat:2 }}</h5>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center border-0 bg-primary text-white shadow-sm" style="border-radius: 12px;">
+            <div class="card-body py-3">
+                <small class="text-white-50 d-block mb-1">إجمالي الديون المستحقة</small>
+                <h5 class="fw-bold mb-0">{{ summary.total|floatformat:2 }}</h5>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Table -->
+<div class="card shadow-sm border-0" style="border-radius: 15px;">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="ps-4">الفاتورة</th>
+                        <th>التاريخ</th>
+                        <th>العميل</th>
+                        <th class="text-center">العمر (يوم)</th>
+                        <th>التصنيف</th>
+                        <th class="text-end">القيمة الإجمالية</th>
+                        <th class="text-end pe-4">المبلغ المتبقي</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in report_data %}
+                    <tr>
+                        <td class="ps-4">
+                            <a href="{% url 'sales:invoice-detail' item.invoice.id %}" class="fw-bold text-decoration-none">
+                                {{ item.invoice.number }}
+                            </a>
+                        </td>
+                        <td>{{ item.invoice.date|date:"Y-m-d" }}</td>
+                        <td>{{ item.customer.name }}</td>
+                        <td class="text-center">
+                            <span class="badge {% if item.age > 60 %}bg-danger{% elif item.age > 30 %}bg-warning text-dark{% else %}bg-info text-dark{% endif %}">
+                                {{ item.age }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if item.bucket == '0-30' %}
+                            <span class="text-primary">0 - 30 يوم</span>
+                            {% elif item.bucket == '31-60' %}
+                            <span class="text-warning">31 - 60 يوم</span>
+                            {% elif item.bucket == '61-90' %}
+                            <span class="text-danger">61 - 90 يوم</span>
+                            {% else %}
+                            <span class="text-danger fw-bold">90+ يوم</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">{{ item.total|floatformat:2 }}</td>
+                        <td class="text-end pe-4 fw-bold text-danger">{{ item.remaining|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="bi bi-check-circle fs-1 d-block mb-3"></i>
+                            لا توجد فواتير مستحقة حالياً.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

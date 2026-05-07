@@ -61,6 +61,12 @@ class BankReconciliation(models.Model):
 
 class CashTransfer(models.Model):
     """تحويل بين خزن أو بين حسابات"""
+    class Status(models.TextChoices):
+        DRAFT = 'draft', 'مسودة'
+        PENDING = 'pending', 'قيد التحويل (صادر)'
+        COMPLETED = 'completed', 'مكتمل (مستلم)'
+        CANCELLED = 'cancelled', 'ملغي'
+
     number = models.CharField(max_length=50, unique=True)
     date = models.DateField()
     from_cash_box = models.ForeignKey(CashBox, null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_out')
@@ -69,7 +75,16 @@ class CashTransfer(models.Model):
     to_bank = models.ForeignKey(BankAccount, null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_in')
     amount = models.DecimalField(max_digits=18, decimal_places=2)
     description = models.TextField()
-    journal_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL)
+    
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    
+    # القيود المحاسبية
+    issue_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, related_name='transfer_issue')
+    receive_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, related_name='transfer_receive')
+    
+    # بيانات الاستلام
+    received_at = models.DateTimeField(null=True, blank=True)
+    received_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='received_transfers')
 
     def clean(self):
         from django.core.exceptions import ValidationError

@@ -14,42 +14,42 @@ class AccountViewSet(viewsets.ReadOnlyModelViewSet):
     """ReadOnly to protect financial structure integrity"""
     queryset = Account.objects.all()
     serializer_class = AccountSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.DjangoModelPermissions]
 
 class JournalEntryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = JournalEntry.objects.all()
     serializer_class = JournalEntrySerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.DjangoModelPermissions]
 
 class CustomerViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.DjangoModelPermissions]
 
 class SalesInvoiceViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = SalesInvoice.objects.all()
     serializer_class = SalesInvoiceSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.DjangoModelPermissions]
 
 class SupplierViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.DjangoModelPermissions]
 
 class PurchaseInvoiceViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = PurchaseInvoice.objects.all()
     serializer_class = PurchaseInvoiceSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.DjangoModelPermissions]
 
 class TaxTypeViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = TaxType.objects.filter(is_active=True)
     serializer_class = TaxTypeSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.DjangoModelPermissions]
 
 class PriceListViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = PriceList.objects.filter(is_active=True)
     serializer_class = PriceListSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.DjangoModelPermissions]
 
     @action(detail=True, methods=['get'])
     def item_price(self, request, pk=None):
@@ -65,7 +65,7 @@ class PriceListViewSet(viewsets.ReadOnlyModelViewSet):
 class QuotationViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Quotation.objects.filter(is_active=True, status='active')
     serializer_class = QuotationSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.DjangoModelPermissions]
 
     @action(detail=False, methods=['get'])
     def active_for_sector(self, request):

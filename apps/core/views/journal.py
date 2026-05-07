@@ -88,6 +88,8 @@ class JournalEntryCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
             from ..services import DocumentService
             form.instance.number = DocumentService.generate_number(JournalEntry, 'JE')
             form.instance.is_posted = True  # Manual journal entries are posted immediately
+            form.instance.posted_by = self.request.user
+            form.instance.posted_at = timezone.now()
             
             # Find Fiscal Year
             from ..models import FiscalYear
@@ -133,6 +135,10 @@ class JournalEntryPostView(LoginRequiredMixin, PermissionRequiredMixin, View):
             messages.error(request, "هذا القيد مرحل بالفعل.")
         else:
             entry.is_posted = True
+            entry.posted_by = request.user
+            entry.posted_at = timezone.now()
             entry.save()
+            from ..services import AuditService
+            AuditService.log(request.user, 'Post', entry, f'ترحيل يدوي للقيد {entry.number}')
             messages.success(request, f"تم ترحيل القيد {entry.number} بنجاح.")
         return redirect('core:journal-detail', pk=pk)

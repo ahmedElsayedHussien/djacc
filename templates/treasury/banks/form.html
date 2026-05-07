@@ -34,7 +34,6 @@
                             <label class="form-label">العملة</label>
                             {{ form.currency }}
                         </div>
-                        {% if not object %}
                         <div class="col-md-4">
                             <label class="form-label">رصيد أول المدة</label>
                             {{ form.initial_balance }}
@@ -43,7 +42,6 @@
                             <label class="form-label">نوع الرصيد</label>
                             {{ form.initial_balance_type }}
                         </div>
-                        {% endif %}
                     </div>
                     
                     <div class="mt-4 d-flex gap-2">

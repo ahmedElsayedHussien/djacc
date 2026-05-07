@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}سجل الأصول الثابتة{% endblock %}
+{% block header %}إدارة الأصول الثابتة{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between mb-4">
+    <div class="d-flex gap-2">
+        <a href="{% url 'assets:asset-create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> إضافة أصل جديد
+        </a>
+        <a href="{% url 'assets:category-list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-tags"></i> تصنيفات الأصول
+        </a>
+    </div>
+    <form method="post" action="{% url 'assets:run-depreciation' %}" onsubmit="return confirm('هل تريد تشغيل الإهلاك لكافة الأصول عن الشهر الحالي؟');">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-warning">
+            <i class="bi bi-calculator"></i> تشغيل الإهلاك الشهري
+        </button>
+    </form>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>الكود</th>
+                        <th>اسم الأصل</th>
+                        <th>التصنيف</th>
+                        <th>تاريخ الشراء</th>
+                        <th>قيمة الشراء</th>
+                        <th>الإهلاك المتراكم</th>
+                        <th>القيمة الدفترية</th>
+                        <th>الحالة</th>
+                        <th>إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for asset in assets %}
+                    <tr>
+                        <td><code>{{ asset.code }}</code></td>
+                        <td>
+                            <div class="fw-bold">{{ asset.name }}</div>
+                            <small class="text-muted">{{ asset.location|default:"" }}</small>
+                        </td>
+                        <td>{{ asset.category.name }}</td>
+                        <td>{{ asset.purchase_date }}</td>
+                        <td>{{ asset.purchase_value|floatformat:2 }}</td>
+                        <td class="text-danger">{{ asset.total_depreciation|floatformat:2 }}</td>
+                        <td class="fw-bold">{{ asset.book_value|floatformat:2 }}</td>
+                        <td>
+                            {% if asset.status == 'active' %}
+                            <span class="badge bg-success">نشط</span>
+                            {% elif asset.status == 'fully_depreciated' %}
+                            <span class="badge bg-info">مهلك بالكامل</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ asset.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="#" class="btn btn-outline-primary"><i class="bi bi-eye"></i></a>
+                                <a href="#" class="btn btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-4 text-muted">لا يوجد أصول مسجلة حالياً.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

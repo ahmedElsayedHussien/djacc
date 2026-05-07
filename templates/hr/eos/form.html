@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block title %}إنشاء تسوية نهاية خدمة{% endblock %}
+{% block header %}تسوية نهاية خدمة{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6">{{ form.employee|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.termination_date|as_crispy_field }}</div>
+                    </div>
+                    <div class="mb-3">{{ form.reason|as_crispy_field }}</div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">{{ form.assets_returned|as_crispy_field }}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">{{ form.loans_settled|as_crispy_field }}</div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-md-4">{{ form.severance_pay|as_crispy_field }}</div>
+                        <div class="col-md-4">{{ form.leave_encashment|as_crispy_field }}</div>
+                        <div class="col-md-4">{{ form.total_settlement|as_crispy_field }}</div>
+                    </div>
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{% url 'hr:eos-list' %}" class="btn btn-outline-secondary">إلغاء</a>
+                        <button type="submit" class="btn btn-primary px-5">حفظ التسوية</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Simple script to auto-calculate total
+    document.addEventListener('DOMContentLoaded', function() {
+        const pay = document.querySelector('input[name="severance_pay"]');
+        const leave = document.querySelector('input[name="leave_encashment"]');
+        const total = document.querySelector('input[name="total_settlement"]');
+        
+        function calc() {
+            total.value = (parseFloat(pay.value) || 0) + (parseFloat(leave.value) || 0);
+        }
+        
+        pay.addEventListener('input', calc);
+        leave.addEventListener('input', calc);
+    });
+</script>
+{% endblock %}

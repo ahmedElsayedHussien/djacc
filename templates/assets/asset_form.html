@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% if object %}تعديل{% else %}إضافة{% endif %} أصل{% endblock %}
+{% block header %}{% if object %}تعديل{% else %}إضافة{% endif %} أصل ثابت{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="alert alert-info mb-4">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>ملاحظة محاسبية:</strong> يتم حساب الإهلاك بناءً على (قيمة الشراء - القيمة التخريدية). القيمة التخريدية هي القيمة المتوقعة للأصل كخردة في نهاية عمره.
+                </div>
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6">{{ form.code|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.name|as_crispy_field }}</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">{{ form.category|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.purchase_date|as_crispy_field }}</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">{{ form.purchase_value|as_crispy_field }}</div>
+                        <div class="col-md-4">{{ form.salvage_value|as_crispy_field }}</div>
+                        <div class="col-md-4">{{ form.depreciation_rate|as_crispy_field }}</div>
+                    </div>
+                    {% if not object %}
+                    <hr class="my-3">
+                    <h6 class="fw-bold text-primary mb-3"><i class="bi bi-journal-text me-2"></i>بيانات القيد المحاسبي (مطلوب)</h6>
+                    <div class="row">
+                        <div class="col-md-6">{{ form.initial_accumulated_depreciation|as_crispy_field }}</div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">حساب المقابل <span class="text-danger">*</span></label>
+                            <select name="offset_account_id" class="form-select" required>
+                                <option value="">--- اختر الحساب المقابل ---</option>
+                                {% for acc in offset_accounts %}
+                                <option value="{{ acc.pk }}">{{ acc.code }} — {{ acc.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">للترحيل من نظام قديم: استخدم ح/35 (أرصدة افتتاحية). للشراء الجديد: استخدم حساب المورد أو النقدية.</div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    <div class="row">
+                        <div class="col-md-6">{{ form.department|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.location|as_crispy_field }}</div>
+                    </div>
+                    {{ form.notes|as_crispy_field }}
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary px-4">حفظ</button>
+                        <a href="{% url 'assets:asset-list' %}" class="btn btn-outline-secondary">إلغاء</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -20,6 +20,9 @@ class CashBoxForm(forms.ModelForm):
         from django.contrib.auth import get_user_model
         User = get_user_model()
         self.fields['responsible_user'].queryset = User.objects.filter(is_active=True)
+        if self.instance and self.instance.pk and self.instance.account:
+            self.fields['initial_balance'].initial = self.instance.account.initial_balance
+            self.fields['initial_balance_type'].initial = self.instance.account.initial_balance_type
 
 class BankAccountForm(forms.ModelForm):
     class Meta:
@@ -36,6 +39,12 @@ class BankAccountForm(forms.ModelForm):
 
     initial_balance = forms.DecimalField(label='رصيد أول المدة', initial=0, widget=forms.NumberInput(attrs={'class': 'form-control'}))
     initial_balance_type = forms.ChoiceField(label='نوع الرصيد', choices=[('debit', 'مدين'), ('credit', 'دائن')], initial='debit', widget=forms.Select(attrs={'class': 'form-select'}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk and self.instance.account:
+            self.fields['initial_balance'].initial = self.instance.account.initial_balance
+            self.fields['initial_balance_type'].initial = self.instance.account.initial_balance_type
 
 class CashTransferForm(forms.ModelForm):
     class Meta:

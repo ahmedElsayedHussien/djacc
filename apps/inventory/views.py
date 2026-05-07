@@ -148,8 +148,35 @@ class LoadingOrderCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
     success_url = reverse_lazy('inventory:loading-list')
     permission_required = 'inventory.add_loadingorder'
 
+    def get_initial(self):
+        from django.utils import timezone
+        initial = super().get_initial()
+        initial['date'] = timezone.now().date()
+        if hasattr(self.request.user, 'salesrepresentative'):
+            initial['sales_rep'] = self.request.user.salesrepresentative
+        return initial
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        from apps.inventory.models import Warehouse
+        
+        # Exclude representative warehouses from the "From" warehouse list
+        # We assume any warehouse linked to a SalesRepresentative is a "Rep Warehouse"
+        form.fields['from_warehouse'].queryset = Warehouse.objects.exclude(
+            salesrepresentative__isnull=False
+        ).order_by('name')
+
+        if hasattr(self.request.user, 'salesrepresentative'):
+            form.fields['sales_rep'].widget.attrs['style'] = 'pointer-events: none; background-color: #f8f9fa;'
+            form.fields['sales_rep'].widget.attrs['tabindex'] = '-1'
+        return form
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        from apps.sales.models import SalesRepresentative
+        reps = SalesRepresentative.objects.select_related('warehouse')
+        ctx['rep_warehouse_mapping'] = {rep.id: rep.warehouse.id for rep in reps if rep.warehouse}
+        
         if self.request.POST:
             ctx['lines'] = LoadingOrderLineFormSet(self.request.POST)
         else:
@@ -159,6 +186,11 @@ class LoadingOrderCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
     def form_valid(self, form):
         ctx = self.get_context_data()
         lines = ctx['lines']
+        
+        # Ensure to_warehouse matches rep warehouse
+        if form.instance.sales_rep and form.instance.sales_rep.warehouse:
+            form.instance.to_warehouse = form.instance.sales_rep.warehouse
+            
         with transaction.atomic():
             from apps.core.services import DocumentService
             form.instance.number = DocumentService.generate_number(LoadingOrder, 'LOAD')
@@ -212,6 +244,19 @@ class LoadingOrderIssueView(LoginRequiredMixin, PermissionRequiredMixin, View):
         except Exception as e:
             messages.error(request, f'خطأ: {e}')
         return redirect('inventory:loading-detail', pk=pk)
+
+class LoadingOrderCancelView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'inventory.change_loadingorder'
+    
+    def post(self, request, pk):
+        order = get_object_or_404(LoadingOrder, pk=pk)
+        try:
+            LoadingService.cancel_loading(order, request.user)
+            messages.success(request, f'تم إلغاء طلب التحميل {order.number} بنجاح')
+        except Exception as e:
+            messages.error(request, f'خطأ: {e}')
+        return redirect('inventory:loading-detail', pk=pk)
+
 
 # --- Stock Voucher Views ---
 from .models import StockVoucher, StockVoucherLine
@@ -289,7 +334,8 @@ class StockVoucherReverseView(LoginRequiredMixin, PermissionRequiredMixin, View)
 
 from django.http import JsonResponse
 
-class ItemDetailsAPIView(LoginRequiredMixin, View):
+class ItemDetailsAPIView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'inventory.view_item'
     def get(self, request, pk):
         item = get_object_or_404(Item, pk=pk)
         units = []
@@ -297,8 +343,15 @@ class ItemDetailsAPIView(LoginRequiredMixin, View):
             units.append({'id': item.base_unit.id, 'name': item.base_unit.name, 'factor': 1})
         if item.sales_unit:
             units.append({'id': item.sales_unit.id, 'name': item.sales_unit.name, 'factor': float(item.conversion_factor)})
+        if item.purchase_unit and item.purchase_unit != item.base_unit and item.purchase_unit != item.sales_unit:
+            units.append({
+                'id': item.purchase_unit.id, 
+                'name': item.purchase_unit.name, 
+                'factor': float(item.purchase_conversion_factor)
+            })
         
         return JsonResponse({
             'units': units,
             'default_unit_id': item.sales_unit_id or item.base_unit_id
         })
+

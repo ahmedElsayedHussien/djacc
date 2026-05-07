@@ -58,6 +58,7 @@ class Item(models.Model):
 class Warehouse(models.Model):
     code = models.CharField(max_length=20, unique=True)
     name = models.CharField(max_length=200)
+    gl_account = models.ForeignKey('core.Account', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="حساب المخزون (أستاذ عام)")
     location = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
 
@@ -151,6 +152,7 @@ class LoadingOrder(models.Model):
     approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='approved_loadings')
     approved_at = models.DateTimeField(null=True, blank=True)
     issued_at = models.DateTimeField(null=True, blank=True)
+    journal_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, verbose_name="قيد اليومية")
     notes = models.TextField(blank=True)
 
     def __str__(self):

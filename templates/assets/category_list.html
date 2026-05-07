@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}تصنيفات الأصول{% endblock %}
+{% block header %}تصنيفات الأصول الثابتة{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{% url 'assets:category-create' %}" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i> إضافة تصنيف جديد
+    </a>
+    <a href="{% url 'assets:asset-list' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i> العودة لسجل الأصول
+    </a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <table class="table table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th>اسم التصنيف</th>
+                    <th>نسبة الإهلاك</th>
+                    <th>حساب الأصل</th>
+                    <th>حساب المصروف</th>
+                    <th>إجراءات</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cat in categories %}
+                <tr>
+                    <td>{{ cat.name }}</td>
+                    <td>{{ cat.default_depreciation_rate }}%</td>
+                    <td>{{ cat.asset_account.name }}</td>
+                    <td>{{ cat.depreciation_expense_account.name }}</td>
+                    <td>
+                        <a href="#" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center">لا يوجد تصنيفات مضافة.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

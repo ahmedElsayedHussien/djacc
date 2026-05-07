@@ -19,18 +19,24 @@
                         <th>المصدر</th>
                         <th>الوجهة</th>
                         <th>المبلغ</th>
+                        <th>الحالة</th>
                         <th>البيان</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for tr in transfers %}
                     <tr>
-                        <td>{{ tr.number }}</td>
-                        <td>{{ tr.date }}</td>
+                        <td><a href="{% url 'treasury:transfer-detail' tr.pk %}" class="fw-bold">{{ tr.number }}</a></td>
+                        <td>{{ tr.date|date:"Y-m-d" }}</td>
                         <td>{{ tr.from_cash_box.name|default:tr.from_bank.name }}</td>
                         <td>{{ tr.to_cash_box.name|default:tr.to_bank.name }}</td>
-                        <td><strong>{{ tr.amount }}</strong></td>
-                        <td>{{ tr.description }}</td>
+                        <td>{{ tr.amount|floatformat:2 }}</td>
+                        <td>
+                            <span class="badge {% if tr.status == 'completed' %}bg-success{% elif tr.status == 'pending' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                                {{ tr.get_status_display }}
+                            </span>
+                        </td>
+                        <td>{{ tr.description|truncatechars:30 }}</td>
                     </tr>
                     {% empty %}
                     <tr>

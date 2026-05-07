@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.validators import MinValueValidator
 from django.conf import settings
 
 class CustomerSector(models.Model):
@@ -31,10 +32,11 @@ class Customer(models.Model):
 
 class SalesRepresentative(models.Model):
     """مندوب مبيعات"""
+    employee = models.OneToOneField('hr.Employee', on_delete=models.CASCADE, related_name='sales_profile', null=True, blank=True, verbose_name="الموظف المرتبط")
     code = models.CharField(max_length=20, unique=True)
-    name = models.CharField(max_length=200)
+    name = models.CharField(max_length=200, help_text="سيتم جلبه تلقائياً من الموظف")
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
-    phone = models.CharField(max_length=20)
+    phone = models.CharField(max_length=20, blank=True)
     warehouse = models.ForeignKey('inventory.Warehouse', on_delete=models.PROTECT)  # مخزن المندوب
     cash_box = models.ForeignKey('treasury.CashBox', on_delete=models.PROTECT)       # خزنة المندوب
     account = models.OneToOneField(
@@ -47,6 +49,13 @@ class SalesRepresentative(models.Model):
     territory = models.CharField(max_length=200, blank=True)                         # المنطقة الجغرافية
     is_active = models.BooleanField(default=True)
     supervisor = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL) # المشرف
+
+    def save(self, *args, **kwargs):
+        if self.employee:
+            self.name = f"{self.employee.first_name} {self.employee.last_name}"
+            self.phone = self.employee.phone
+            self.user = self.employee.user
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
@@ -120,6 +129,7 @@ class SalesInvoiceLine(models.Model):
     warehouse = models.ForeignKey('inventory.Warehouse', on_delete=models.PROTECT)
     unit = models.ForeignKey('inventory.UnitOfMeasure', on_delete=models.PROTECT, null=True, blank=True)
     quantity = models.DecimalField(max_digits=14, decimal_places=4)
+    base_quantity = models.DecimalField(max_digits=14, decimal_places=4, default=0, help_text="الكمية بالوحدة الأساسية")
     unit_price = models.DecimalField(max_digits=18, decimal_places=2)
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     tax_type = models.ForeignKey('core.TaxType', null=True, blank=True, on_delete=models.PROTECT)
@@ -165,6 +175,22 @@ class ReceiptAllocation(models.Model):
     invoice = models.ForeignKey(SalesInvoice, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=18, decimal_places=2)
 
+class SalesTarget(models.Model):
+    """Target for a sales representative within a period"""
+    sales_rep = models.ForeignKey('SalesRepresentative', on_delete=models.PROTECT, related_name='targets')
+    target_amount = models.DecimalField(max_digits=18, decimal_places=2, validators=[MinValueValidator(0)])
+    start_date = models.DateField()
+    end_date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-start_date']
+        unique_together = ('sales_rep', 'start_date', 'end_date')
+
+    def __str__(self):
+        return f"{self.sales_rep.name} - {self.target_amount} ({self.start_date} to {self.end_date})"
+
 class SalesReturn(models.Model):
     class Status(models.TextChoices):
         DRAFT = 'draft', 'مسودة'
@@ -195,7 +221,9 @@ class SalesReturnLine(models.Model):
     item = models.ForeignKey('inventory.Item', on_delete=models.PROTECT)
     warehouse = models.ForeignKey('inventory.Warehouse', on_delete=models.PROTECT)
     quantity = models.DecimalField(max_digits=14, decimal_places=4)
+    base_quantity = models.DecimalField(max_digits=14, decimal_places=4, default=0, help_text="الكمية بالوحدة الأساسية")
     unit_price = models.DecimalField(max_digits=18, decimal_places=2)
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     tax_type = models.ForeignKey('core.TaxType', null=True, blank=True, on_delete=models.PROTECT)
     tax_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     tax_type2 = models.ForeignKey('core.TaxType', null=True, blank=True, on_delete=models.PROTECT, related_name='+')
@@ -275,16 +303,24 @@ class Quotation(models.Model):
     class Status(models.TextChoices):
         DRAFT = 'draft', 'مسودة'
         ACTIVE = 'active', 'نشط'
+        INVOICED = 'invoiced', 'محول لفاتورة'
         EXPIRED = 'expired', 'منتهي'
         CANCELLED = 'cancelled', 'ملغي'
 
     number = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=200, verbose_name="اسم العرض", default="عرض جديد")
-    sector = models.ForeignKey(CustomerSector, on_delete=models.PROTECT, verbose_name="القطاع المستهدف")
+    customer = models.ForeignKey(Customer, on_delete=models.PROTECT, verbose_name="العميل", null=True, blank=True)
+    sector = models.ForeignKey(CustomerSector, on_delete=models.PROTECT, verbose_name="القطاع المستهدف", null=True, blank=True)
+    sales_rep = models.ForeignKey(SalesRepresentative, on_delete=models.PROTECT, null=True, blank=True, verbose_name="مندوب المبيعات")
     start_date = models.DateField(verbose_name="تاريخ البدء")
     end_date = models.DateField(verbose_name="تاريخ الانتهاء")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
     is_active = models.BooleanField(default=True)
+    
+    subtotal = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    discount_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    total = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     
     notes = models.TextField(blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
@@ -296,7 +332,13 @@ class Quotation(models.Model):
 class QuotationLine(models.Model):
     quotation = models.ForeignKey(Quotation, on_delete=models.CASCADE, related_name='lines')
     item = models.ForeignKey('inventory.Item', on_delete=models.PROTECT)
+    quantity = models.DecimalField(max_digits=14, decimal_places=4, default=1)
+    unit_price = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     extra_discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0, verbose_name="نسبة خصم إضافية %")
+    tax_type = models.ForeignKey('core.TaxType', null=True, blank=True, on_delete=models.PROTECT)
+    tax_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    total = models.DecimalField(max_digits=18, decimal_places=2, default=0)
 
     def __str__(self):
         return f"{self.item.name} - {self.extra_discount_percent}%"

@@ -12,4 +12,5 @@ urlpatterns = [
     path('rep-commission/', views.RepCommissionView.as_view(), name='rep_commission'),
     path('cost-center-statement/', views.CostCenterStatementView.as_view(), name='cost_center_statement'),
     path('account-statement/', views.AccountStatementView.as_view(), name='account_statement'),
+    path('rep-statement/', views.RepStatementView.as_view(), name='rep_statement'),
 ]

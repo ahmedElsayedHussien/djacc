@@ -29,8 +29,32 @@
                 <div class="card-header bg-white"><h5 class="mb-0 text-success"><i class="bi bi-briefcase-fill"></i> البيانات الوظيفية</h5></div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-4">{{ form.department|as_crispy_field }}</div>
-                        <div class="col-md-4">{{ form.job_title|as_crispy_field }}</div>
+                        <div class="col-md-4">
+                            <label class="form-label d-block">{{ form.department.label }}</label>
+                            <div class="input-group">
+                                {{ form.department }}
+                                <a href="{% url 'hr:department-add' %}" class="btn btn-outline-primary" title="إضافة قسم جديد" target="_blank">
+                                    <i class="bi bi-plus-lg"></i>
+                                </a>
+                            </div>
+                            <div id="new_department_wrapper" class="mt-2 d-none">
+                                <input type="text" name="new_department" class="form-control" placeholder="اكتب اسم القسم الجديد هنا...">
+                                <div class="form-text text-muted">سيتم إنشاء هذا القسم وحفظه آلياً.</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label d-block">{{ form.job_title.label }}</label>
+                            <div class="input-group">
+                                {{ form.job_title }}
+                                <a href="{% url 'hr:jobtitle-add' %}" class="btn btn-outline-success" title="إضافة مسمى وظيفي جديد" target="_blank">
+                                    <i class="bi bi-plus-lg"></i>
+                                </a>
+                            </div>
+                            <div id="new_job_title_wrapper" class="mt-2 d-none">
+                                <input type="text" name="new_job_title" class="form-control" placeholder="اكتب المسمى الوظيفي الجديد هنا...">
+                                <div class="form-text text-muted">سيتم إنشاء هذا المسمى وحفظه في النظام آلياً.</div>
+                            </div>
+                        </div>
                         <div class="col-md-4">{{ form.reports_to|as_crispy_field }}</div>
                     </div>
                     <div class="row">
@@ -47,10 +71,56 @@
                     <div class="row">
                         <div class="col-md-4">{{ form.basic_salary|as_crispy_field }}</div>
                         <div class="col-md-4">{{ form.bank_account_number|as_crispy_field }}</div>
-                        <div class="col-md-4">{{ form.user|as_crispy_field }}</div>
+                        <div class="col-md-4">
+                            <label class="form-label d-block">{{ form.user.label }}</label>
+                            <div class="input-group">
+                                {{ form.user }}
+                                <a href="{% url 'hr:user-add' %}" class="btn btn-outline-primary" title="إضافة مستخدم جديد" target="_blank">
+                                    <i class="bi bi-plus-lg"></i>
+                                </a>
+                            </div>
+                            {% if form.user.errors %}
+                                <div class="text-danger small mt-1">{{ form.user.errors }}</div>
+                            {% endif %}
+                        </div>
                     </div>
+
+                    <hr class="my-3">
+                    <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-shield-check me-1"></i> إعدادات الاستقطاعات الإلزامية</h6>
+                    <div class="row">
+                        <!-- التأمينات الاجتماعية -->
+                        <div class="col-md-6 mb-3">
+                            <div class="p-3 border rounded bg-light">
+                                <div class="form-check form-switch mb-2">
+                                    {{ form.has_social_insurance }}
+                                    <label class="form-check-label fw-semibold ms-2" for="{{ form.has_social_insurance.id_for_label }}">
+                                        <i class="bi bi-hospital me-1 text-info"></i> خاضع للتأمينات الاجتماعية
+                                    </label>
+                                </div>
+                                <label class="form-label small text-muted">نسبة التأمينات (حصة الموظف %)</label>
+                                {{ form.social_insurance_rate }}
+                                <div class="form-text">{{ form.social_insurance_rate.help_text }}</div>
+                            </div>
+                        </div>
+                        <!-- ضريبة كسب العمل -->
+                        <div class="col-md-6 mb-3">
+                            <div class="p-3 border rounded bg-light">
+                                <div class="form-check form-switch mb-2">
+                                    {{ form.has_taxes }}
+                                    <label class="form-check-label fw-semibold ms-2" for="{{ form.has_taxes.id_for_label }}">
+                                        <i class="bi bi-receipt me-1 text-danger"></i> خاضع لضريبة كسب العمل
+                                    </label>
+                                </div>
+                                <label class="form-label small text-muted">نسبة الضريبة (%)</label>
+                                {{ form.income_tax_rate }}
+                                <div class="form-text">{{ form.income_tax_rate.help_text }}</div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
+
 
             <div class="d-flex justify-content-between mb-5">
                 <a href="{% url 'hr:employee-list' %}" class="btn btn-outline-secondary px-4">إلغاء والعودة</a>
@@ -59,4 +129,85 @@
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const userSelect = document.querySelector('select[name="user"]');
+    const firstNameInput = document.querySelector('input[name="first_name"]');
+    const lastNameInput = document.querySelector('input[name="last_name"]');
+
+    if (userSelect) {
+        userSelect.addEventListener('change', function() {
+            const userId = this.value;
+            if (userId) {
+                fetch(`{% url "hr:api-user-info" %}?user_id=${userId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (!data.error) {
+                            // فقط نملأ الخانات إذا كانت فارغة، للسماح للمستخدم بالتعديل إذا أراد
+                            if (firstNameInput && !firstNameInput.value) {
+                                firstNameInput.value = data.first_name;
+                            }
+                            if (lastNameInput && !lastNameInput.value) {
+                                lastNameInput.value = data.last_name;
+                            }
+                        }
+                    })
+                    .catch(error => console.error('Error fetching user info:', error));
+            }
+        });
+    }
+
+    // ✦ إدارة الأقسام (الإدخال اليدوي)
+    const deptSelect = document.querySelector('select[name="department"]');
+    const newDeptWrapper = document.getElementById('new_department_wrapper');
+    const newDeptInput = document.querySelector('input[name="new_department"]');
+
+    if (deptSelect) {
+        const option = document.createElement('option');
+        option.value = 'CREATE_NEW';
+        option.text = '➕ إضافة قسم جديد...';
+        deptSelect.appendChild(option);
+
+        deptSelect.addEventListener('change', function() {
+            if (this.value === 'CREATE_NEW') {
+                newDeptWrapper.classList.remove('d-none');
+                newDeptInput.focus();
+                newDeptInput.required = true;
+            } else {
+                newDeptWrapper.classList.add('d-none');
+                newDeptInput.required = false;
+                newDeptInput.value = '';
+            }
+        });
+    }
+
+    // ✦ إدارة المسميات الوظيفية (الإدخال اليدوي)
+    const jobTitleSelect = document.querySelector('select[name="job_title"]');
+    const newJobTitleWrapper = document.getElementById('new_job_title_wrapper');
+    const newJobTitleInput = document.querySelector('input[name="new_job_title"]');
+
+    if (jobTitleSelect) {
+        // إضافة خيار "إضافة مسمى جديد" في نهاية القائمة
+        const option = document.createElement('option');
+        option.value = 'CREATE_NEW';
+        option.text = '➕ إضافة مسمى جديد...';
+        jobTitleSelect.appendChild(option);
+
+        jobTitleSelect.addEventListener('change', function() {
+            if (this.value === 'CREATE_NEW') {
+                newJobTitleWrapper.classList.remove('d-none');
+                newJobTitleInput.focus();
+                newJobTitleInput.required = true;
+            } else {
+                newJobTitleWrapper.classList.add('d-none');
+                newJobTitleInput.required = false;
+                newJobTitleInput.value = '';
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

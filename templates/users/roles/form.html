@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% if object %}تعديل دور{% else %}إضافة دور جديد{% endif %}{% endblock %}
+{% block header %}{% if object %}تعديل دور: {{ object.name }}{% else %}إنشاء دور (مجموعة صلاحيات) جديد{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <h5 class="fw-bold mb-4 text-primary">بيانات الدور الأساسية</h5>
+                    {{ form.name|as_crispy_field }}
+                    
+                    <hr class="my-4">
+                    
+                    <h5 class="fw-bold mb-3 text-secondary">الصلاحيات המتاحة</h5>
+                    
+                    <!-- إخفاء الحقل الأصلي -->
+                    <div class="d-none">
+                        {{ form.permissions }}
+                    </div>
+
+                    <div class="accordion" id="permissionsAccordion">
+                        {% for app, perms in grouped_permissions.items %}
+                        <div class="accordion-item mb-2 border rounded">
+                            <h2 class="accordion-header" id="heading-{{ app }}">
+                                <button class="accordion-button collapsed fw-bold py-2 bg-light" type="button" data-bs-toggle="collapse" data-bs-toggle="collapse" data-bs-target="#collapse-{{ app }}" aria-expanded="false" aria-controls="collapse-{{ app }}">
+                                    صلاحيات قسم: {{ app|upper }}
+                                    <span class="badge bg-secondary ms-auto rounded-pill">{{ perms|length }}</span>
+                                </button>
+                            </h2>
+                            <div id="collapse-{{ app }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ app }}">
+                                <div class="accordion-body">
+                                    <div class="row">
+                                        {% for perm in perms %}
+                                        <div class="col-md-6 mb-2">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input permission-checkbox" 
+                                                       type="checkbox" 
+                                                       name="permissions" 
+                                                       value="{{ perm.id }}" 
+                                                       id="perm_{{ perm.id }}"
+                                                       {% if perm.id in role_permissions %}checked{% endif %}>
+                                                <label class="form-check-label" for="perm_{{ perm.id }}">
+                                                    {{ perm.name }} <small class="text-muted">({{ perm.codename }})</small>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{% url 'users:role-list' %}" class="btn btn-outline-secondary px-4">إلغاء</a>
+                        <button type="submit" class="btn btn-primary px-5 fw-bold">حفظ الدور</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

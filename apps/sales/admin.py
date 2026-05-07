@@ -1,8 +1,19 @@
 from django.contrib import admin
 from .models import (
     Customer, CustomerSector, SalesInvoice, SalesInvoiceLine, 
-    CustomerReceipt, ReceiptAllocation, PriceList, PriceListItem, Quotation, QuotationLine
+    CustomerReceipt, ReceiptAllocation, PriceList, PriceListItem, Quotation, QuotationLine,
+    SalesRepresentative, SalesTarget
 )
+
+@admin.register(SalesRepresentative)
+class SalesRepresentativeAdmin(admin.ModelAdmin):
+    list_display = ('code', 'name', 'warehouse', 'cash_box', 'is_active')
+    search_fields = ('code', 'name')
+
+@admin.register(SalesTarget)
+class SalesTargetAdmin(admin.ModelAdmin):
+    list_display = ('sales_rep', 'target_amount', 'start_date', 'end_date')
+    list_filter = ('start_date', 'sales_rep')
 
 @admin.register(CustomerSector)
 class CustomerSectorAdmin(admin.ModelAdmin):

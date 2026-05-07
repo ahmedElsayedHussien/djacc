@@ -26,7 +26,6 @@
                         {{ form.responsible_user }}
                     </div>
 
-                    {% if not object %}
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">رصيد أول المدة</label>
@@ -37,7 +36,6 @@
                             {{ form.initial_balance_type }}
                         </div>
                     </div>
-                    {% endif %}
                     
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">حفظ</button>

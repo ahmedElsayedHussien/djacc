@@ -19,6 +19,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.sites',
+    'django.contrib.humanize',
     
     # Third party
     'rest_framework',
@@ -38,6 +39,8 @@ INSTALLED_APPS = [
     'apps.treasury',
     'apps.reports',
     'apps.hr',
+    'apps.assets',
+    'apps.users',
 ]
 
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
@@ -143,7 +146,7 @@ RETAINED_EARNINGS_ACCOUNT     = '34'     # أرباح مرحلة
 BANK_CHARGES_ACCOUNT          = '5161'   # عمولات بنكية
 INTEREST_REVENUE_ACCOUNT      = '4141'   # فوائد بنكية
 CUSTODY_ACCOUNTS_PARENT       = '1142'   # عهد الموظفين
-SALES_DISCOUNT_ACCOUNT        = '4130'   # خصم مبيعات ممنوح
+SALES_DISCOUNT_ACCOUNT        = '413'    # مردودات وخصم مبيعات (Fix #1: توافق مع شجرة الحسابات)
 DEFAULT_INVENTORY_ACCOUNT     = '1131'   # مخزون البضاعة
 ALLOW_NEGATIVE_STOCK          = False    # السماح بالسحب بالسالب
 CASH_PARENT_ACCOUNT           = '1111'   # الأب لحسابات الصناديق

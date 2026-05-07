@@ -35,6 +35,13 @@
                     </td>
                     <td>
                         {% if not fy.is_closed %}
+                        <form method="post" action="{% url 'core:fiscalyear-post-opening' fy.pk %}" style="display:inline;" onsubmit="return confirm('هل تريد توليد القيد الافتتاحي بناءً على أرصدة دليل الحسابات؟');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-journal-plus"></i> توليد القيد الافتتاحي
+                            </button>
+                        </form>
+                        
                         <form method="post" action="{% url 'core:fiscalyear-close' fy.pk %}" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من إغلاق السنة المالية؟ لا يمكن التراجع عن هذا الإجراء.');">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-sm btn-outline-danger">

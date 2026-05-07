@@ -2,14 +2,28 @@ from django.views.generic import ListView, CreateView, UpdateView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.urls import reverse_lazy
 from django.contrib import messages
+from django.shortcuts import redirect
+from django.views import View
 from ..models import Account, CostCenter
 from ..forms import AccountForm, CostCenterForm
+from ..services import AccountService
+
+class AccountInitializeView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'core.add_account'
+    
+    def post(self, request, *args, **kwargs):
+        count = AccountService.initialize_default_chart()
+        # Also run sub-accounts
+        sub_count = AccountService.setup_common_sub_accounts()
+        messages.success(request, f'تم إنشاء/تحديث {count + sub_count} حساب في شجرة الحسابات بنجاح.')
+        return redirect('core:account-list')
 
 class AccountListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = Account
     template_name = 'core/accounts/list.html'
     context_object_name = 'accounts'
     permission_required = 'core.view_account'
+    paginate_by = 50
 
     def get_queryset(self):
         qs = Account.objects.select_related('parent').order_by('code')
@@ -67,6 +81,10 @@ class AccountListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
                 acc.current_balance = debit - credit
             else:
                 acc.current_balance = credit - debit
+        
+        # Get active fiscal year for the "Generate Opening Entry" button
+        from ..models import FiscalYear
+        ctx['current_fiscal_year'] = FiscalYear.objects.filter(is_closed=False).order_by('start_date').first()
                 
         return ctx
 
@@ -97,6 +115,7 @@ class CostCenterListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     template_name = 'core/cost_centers/list.html'
     context_object_name = 'cost_centers'
     permission_required = 'core.view_costcenter'
+    paginate_by = 50
 
     def get_queryset(self):
         return CostCenter.objects.select_related('parent').order_by('code')

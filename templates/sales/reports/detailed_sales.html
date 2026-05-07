@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}تقرير المبيعات التفصيلي{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2 class="fw-bold"><i class="bi bi-list-check me-2"></i>تقرير مبيعات الحركة التفصيلي</h2>
+            <hr>
+        </div>
+    </div>
+
+    <!-- Advanced Filters -->
+    <div class="card shadow-sm border-0 mb-4" style="border-radius: 15px;">
+        <div class="card-body p-4">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">من تاريخ</label>
+                    <input type="date" name="date_from" class="form-control" value="{{ request.GET.date_from }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">إلى تاريخ</label>
+                    <input type="date" name="date_to" class="form-control" value="{{ request.GET.date_to }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">العميل</label>
+                    <select name="customer" class="form-select">
+                        <option value="">كل العملاء</option>
+                        {% for customer in customers %}
+                        <option value="{{ customer.id }}" {% if request.GET.customer == customer.id|stringformat:"i" %}selected{% endif %}>
+                            {{ customer.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">المندوب</label>
+                    <select name="rep" class="form-select">
+                        <option value="">كل المناديب</option>
+                        {% for rep in reps %}
+                        <option value="{{ rep.id }}" {% if request.GET.rep == rep.id|stringformat:"i" %}selected{% endif %}>
+                            {{ rep.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-12 d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary px-5 shadow-sm">
+                        <i class="bi bi-filter me-1"></i> عرض التقرير
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="card shadow-sm border-0" style="border-radius: 15px;">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>التاريخ</th>
+                            <th>رقم الفاتورة</th>
+                            <th>العميل</th>
+                            <th>المندوب</th>
+                            <th>الصنف</th>
+                            <th class="text-center">الكمية</th>
+                            <th class="text-end">السعر</th>
+                            <th class="text-end">الخصم</th>
+                            <th class="text-end">الضريبة</th>
+                            <th class="text-end">الصافي</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for line in report_data %}
+                        <tr>
+                            <td>{{ line.invoice.date|date:"Y-m-d" }}</td>
+                            <td><span class="badge bg-light text-dark border">{{ line.invoice.number }}</span></td>
+                            <td>{{ line.invoice.customer.name }}</td>
+                            <td>{{ line.invoice.sales_rep.name }}</td>
+                            <td>{{ line.item.name }}</td>
+                            <td class="text-center fw-bold">{{ line.quantity|floatformat:2|intcomma }}</td>
+                            <td class="text-end">{{ line.unit_price|floatformat:2|intcomma }}</td>
+                            <td class="text-end text-danger">-{{ line.discount_amount|floatformat:2|intcomma }}</td>
+                            <td class="text-end text-muted">{{ line.tax_amount|floatformat:2|intcomma }}</td>
+                            <td class="text-end fw-bold text-success">{{ line.total|floatformat:2|intcomma }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center py-5 text-muted">
+                                <i class="bi bi-search d-block mb-2" style="font-size: 2rem;"></i>
+                                لا توجد بيانات مطابقة للفلاتر المختارة
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            {% include 'partials/pagination.html' %}
+        </div>
+    </div>
+</div>
+{% endblock %}

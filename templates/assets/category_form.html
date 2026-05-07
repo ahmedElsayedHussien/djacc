@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}إضافة تصنيف أصل{% endblock %}
+{% block header %}إضافة تصنيف أصل ثابت{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    {{ form.name|as_crispy_field }}
+                    {{ form.default_depreciation_rate|as_crispy_field }}
+                    {{ form.description|as_crispy_field }}
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary px-4">حفظ</button>
+                        <a href="{% url 'assets:category-list' %}" class="btn btn-outline-secondary">إلغاء</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

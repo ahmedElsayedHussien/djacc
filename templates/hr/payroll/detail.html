@@ -39,9 +39,104 @@
                 {% endif %}
             </div>
             {% endif %}
+
+            {% if period.status == 'posted' %}
+            <div class="card-footer bg-light d-flex gap-3">
+                <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#insuranceModal">
+                    <i class="bi bi-shield-check"></i> إثبات حصة المنشأة (تأمينات)
+                </button>
+                <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#paymentModal">
+                    <i class="bi bi-cash-stack"></i> إثبات صرف الرواتب
+                </button>
+                {% if period.journal_entry %}
+                <a href="{% url 'core:entry-detail' period.journal_entry.pk %}" class="btn btn-link text-decoration-none">
+                    <i class="bi bi-journal-text"></i> عرض قيد الاستحقاق
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
+
+<!-- Insurance Modal -->
+<div class="modal fade" id="insuranceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="post" action="{% url 'hr:payroll-post-insurance' period.pk %}" class="modal-content">
+            {% csrf_token %}
+            <div class="modal-header">
+                <h5 class="modal-title">إثبات تأمينات حصة المنشأة</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>سيتم إنشاء قيد محاسبي لتحميل المنشأة بحصتها في التأمينات الاجتماعية.</p>
+                <div class="mb-3">
+                    <label class="form-label">نسبة حصة المنشأة (%)</label>
+                    <input type="number" name="employer_rate" class="form-control" value="18.75" step="0.01">
+                    <div class="form-text">النسبة الافتراضية في مصر هي 18.75% من الأجر التأميني.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-primary">توليد القيد</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Payment Modal -->
+<div class="modal fade" id="paymentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="post" action="{% url 'hr:payroll-post-payment' period.pk %}" class="modal-content">
+            {% csrf_token %}
+            <div class="modal-header">
+                <h5 class="modal-title">إثبات صرف الرواتب</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>اختر مصدر الصرف (خزينة أو بنك):</p>
+                <div class="mb-3">
+                    <label class="form-label">نوع الحساب</label>
+                    <select name="source_type" class="form-select" id="source_type" required>
+                        <option value="cash">خزينة</option>
+                        <option value="bank">بنك</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الحساب</label>
+                    <select name="source_id" class="form-select" required>
+                        <optgroup label="الخزائن" id="cash_options">
+                            {% for cash in cash_boxes %}
+                            <option value="{{ cash.pk }}">{{ cash.name }} ({{ cash.current_balance }})</option>
+                            {% endfor %}
+                        </optgroup>
+                        <optgroup label="البنوك" id="bank_options" style="display:none;">
+                            {% for bank in bank_accounts %}
+                            <option value="{{ bank.pk }}">{{ bank.name }} ({{ bank.current_balance }})</option>
+                            {% endfor %}
+                        </optgroup>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-success">إتمام الصرف</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.getElementById('source_type').addEventListener('change', function() {
+        const cashOpt = document.getElementById('cash_options');
+        const bankOpt = document.getElementById('bank_options');
+        if (this.value === 'bank') {
+            cashOpt.style.display = 'none';
+            bankOpt.style.display = 'block';
+        } else {
+            cashOpt.style.display = 'block';
+            bankOpt.style.display = 'none';
+        }
+    });
+</script>
 
 <div class="card shadow-sm">
     <div class="card-header bg-white">
@@ -59,6 +154,9 @@
                         <th class="text-end text-warning">حصة التأمينات</th>
                         <th class="text-end text-danger">ضريبة الدخل</th>
                         <th class="text-end fw-bold bg-light">الصافي للموظف</th>
+                        {% if period.status == 'draft' %}
+                        <th class="text-center">إجراءات</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -74,15 +172,23 @@
                         <td class="text-end text-warning">{{ slip.social_insurance }}</td>
                         <td class="text-end text-danger">{{ slip.income_tax }}</td>
                         <td class="text-end fw-bold bg-light text-primary">{{ slip.net_salary }}</td>
+                        {% if period.status == 'draft' %}
+                        <td class="text-center">
+                            <a href="{% url 'hr:payslip-edit' slip.pk %}" class="btn btn-sm btn-outline-secondary" title="تعديل المبالغ يدوياً">
+                                <i class="bi bi-pencil"></i> تعديل
+                            </a>
+                        </td>
+                        {% endif %}
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="text-center py-5 text-muted">
+                        <td colspan="{% if period.status == 'draft' %}8{% else %}7{% endif %}" class="text-center py-5 text-muted">
                             <i class="bi bi-file-earmark-x fs-1 d-block mb-3"></i>
                             لم يتم توليد أي قسائم رواتب لهذه الفترة بعد.<br>
                             اضغط على زر "توليد قسائم الرواتب آلياً" بالأعلى للبدء.
                         </td>
                     </tr>
+
                     {% endfor %}
                 </tbody>
                 {% if payslips %}

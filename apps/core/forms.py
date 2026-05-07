@@ -82,12 +82,15 @@ class FiscalYearForm(forms.ModelForm):
 class CostCenterForm(forms.ModelForm):
     class Meta:
         model = CostCenter
-        fields = ['code', 'name', 'parent', 'is_active']
+        fields = ['code', 'name', 'center_type', 'parent', 'is_leaf', 'description', 'is_active']
         widgets = {
-            'code': forms.TextInput(attrs={'class': 'form-control'}),
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'parent': forms.Select(attrs={'class': 'form-select'}),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'code':        forms.TextInput(attrs={'class': 'form-control'}),
+            'name':        forms.TextInput(attrs={'class': 'form-control'}),
+            'center_type': forms.Select(attrs={'class': 'form-select'}),
+            'parent':      forms.Select(attrs={'class': 'form-select'}),
+            'is_leaf':     forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+            'is_active':   forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
     def __init__(self, *args, **kwargs):

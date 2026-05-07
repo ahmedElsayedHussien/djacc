@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 from django.db import transaction
 from django.views import View
-from .models import CashBox, BankAccount, CashTransfer
+from .models import CashBox, BankAccount, CashTransfer, BankReconciliation
 from .forms import CashBoxForm, BankAccountForm, CashTransferForm
 from .services import TreasuryService
 from datetime import date
@@ -92,13 +92,14 @@ class CashTransferCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
         with transaction.atomic():
             from apps.core.services import DocumentService
             form.instance.number = DocumentService.generate_number(CashTransfer, 'XFER')
+            form.instance.status = CashTransfer.Status.DRAFT
             self.object = form.save()
             
-            # This will now rollback correctly on failure
-            TreasuryService.process_transfer(self.object, self.request.user)
-            messages.success(self.request, f'تم تنفيذ التحويل {self.object.number} وترحيله')
+            # تلقائياً نقوم بإصدار القيد الأول (الخروج من المصدر)
+            TreasuryService.process_issue(self.object, self.request.user)
+            messages.success(self.request, f'تم إنشاء التحويل {self.object.number} وصرفه من المصدر (قيد الانتظار)')
             
-        return redirect(self.success_url)
+        return redirect('treasury:transfer-detail', pk=self.object.pk)
 
 class CashBoxDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
     model = CashBox
@@ -129,7 +130,78 @@ class CashTransferDetailView(LoginRequiredMixin, PermissionRequiredMixin, Detail
     template_name = 'treasury/transfers/detail.html'
     context_object_name = 'transfer'
     permission_required = 'treasury.view_cashtransfer'
+
+class CashTransferReceiveView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    """تأكيد استلام التحويل (الخطوة الثانية)"""
+    permission_required = 'treasury.change_cashtransfer'
+    
+    def post(self, request, pk):
+        transfer = get_object_or_404(CashTransfer, pk=pk)
+        try:
+            TreasuryService.process_receive(transfer, request.user)
+            messages.success(request, f'تم تأكيد استلام التحويل {transfer.number} بنجاح')
+        except Exception as e:
+            messages.error(request, f'خطأ أثناء التأكيد: {e}')
+        return redirect('treasury:transfer-detail', pk=pk)
+class BankReconciliationListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    model = BankReconciliation
+    template_name = 'treasury/bankreconciliations/list.html'
+    permission_required = 'treasury.view_bankreconciliation'
+    context_object_name = 'reconciliations'
+
+    def get_queryset(self):
+        return BankReconciliation.objects.select_related('bank_account').all()
+
+class BankReconciliationCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = BankReconciliation
+    fields = ['bank_account', 'statement_date', 'statement_balance', 'book_balance']
+    template_name = 'treasury/bankreconciliations/form.html'
+    permission_required = 'treasury.add_bankreconciliation'
+    success_url = reverse_lazy('treasury:bankreconciliation-list')
+
+    def form_valid(self, form):
+        # Calculate difference automatically
+        obj = form.save(commit=False)
+        obj.difference = obj.statement_balance - obj.book_balance
+        obj.save()
+        messages.success(self.request, f'تم إنشاء تسوية بنكية للبيان {obj.statement_date}')
+        return redirect(self.success_url)
+
+class BankReconciliationDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    model = BankReconciliation
+    template_name = 'treasury/bankreconciliations/detail.html'
+    permission_required = 'treasury.view_bankreconciliation'
+    context_object_name = 'reconciliation'
+
+class BankReconciliationUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = BankReconciliation
+    fields = ['bank_account', 'statement_date', 'statement_balance', 'book_balance', 'is_reconciled', 'notes']
+    template_name = 'treasury/bankreconciliations/form.html'
+    permission_required = 'treasury.change_bankreconciliation'
+    success_url = reverse_lazy('treasury:bankreconciliation-list')
+
+    def form_valid(self, form):
+        obj = form.save(commit=False)
+        obj.difference = obj.statement_balance - obj.book_balance
+        obj.save()
+        messages.success(self.request, f'تم تحديث تسوية بنكية للبيان {obj.statement_date}')
+        return redirect(self.success_url)
+
+class BankReconciliationMatchView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'treasury.change_bankreconciliation'
+    
+    def post(self, request, pk):
+        recon = get_object_or_404(BankReconciliation, pk=pk)
+        try:
+            from .services import BankReconciliationService
+            BankReconciliationService.reconcile(recon, request.user)
+            messages.success(request, f'تم إتمام المطابقة البنكية بنجاح')
+        except Exception as e:
+            messages.error(request, f'خطأ أثناء المطابقة: {e}')
+        return redirect('treasury:bankreconciliation-detail', pk=pk)
+
 class CashTransferReverseView(LoginRequiredMixin, PermissionRequiredMixin, View):
+
     permission_required = 'treasury.change_cashtransfer'
     
     def post(self, request, pk):

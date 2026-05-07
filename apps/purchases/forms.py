@@ -17,6 +17,24 @@ class SupplierForm(forms.ModelForm):
             'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
         }
 
+    initial_balance = forms.DecimalField(
+        max_digits=18, decimal_places=2, required=False, initial=0,
+        label='الرصيد الافتتاحي',
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'})
+    )
+    initial_balance_type = forms.ChoiceField(
+        choices=[('credit', 'دائن (له)'), ('debit', 'مدين (عليه)')],
+        required=False, initial='credit',
+        label='طبيعة الرصيد',
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk and self.instance.account_id:
+            self.fields['initial_balance'].initial = self.instance.account.initial_balance
+            self.fields['initial_balance_type'].initial = self.instance.account.initial_balance_type
+
 class PurchaseInvoiceForm(forms.ModelForm):
     class Meta:
         model = PurchaseInvoice

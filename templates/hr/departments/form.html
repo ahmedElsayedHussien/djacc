@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}إضافة قسم جديد{% endblock %}
+{% block header %}إضافة قسم جديد للهيكل التنظيمي{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white border-bottom py-3">
+                <h5 class="mb-0 fw-bold text-primary">
+                    <i class="bi bi-diagram-3-fill me-2"></i> بيانات القسم الجديد
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-6">{{ form.name|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.type|as_crispy_field }}</div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">{{ form.parent|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.cost_center|as_crispy_field }}</div>
+                    </div>
+                    
+                    {{ form.description|as_crispy_field }}
+                    
+                    <hr class="my-4">
+                    <div class="d-flex justify-content-between">
+                        <a href="javascript:history.back()" class="btn btn-outline-secondary px-4">رجوع</a>
+                        <button type="submit" class="btn btn-primary px-5 fw-bold">حفظ القسم</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

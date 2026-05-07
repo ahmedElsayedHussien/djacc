@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block title %}تأكيد حذف الدور{% endblock %}
+{% block header %}حذف دور{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow border-danger border-top border-3">
+            <div class="card-body p-4 text-center">
+                <i class="bi bi-exclamation-triangle text-danger" style="font-size: 3rem;"></i>
+                <h4 class="mt-3 fw-bold">هل أنت متأكد من حذف الدور؟</h4>
+                <p class="text-muted mt-2">
+                    أنت على وشك حذف الدور <strong>"{{ object.name }}"</strong>. 
+                    سيتم سحب الصلاحيات المرتبطة بهذا الدور من أي مستخدمين مسجلين به. 
+                    هذا الإجراء لا يمكن التراجع عنه.
+                </p>
+                <form method="post" class="mt-4 d-flex justify-content-center gap-3">
+                    {% csrf_token %}
+                    <a href="{% url 'users:role-list' %}" class="btn btn-outline-secondary px-4">إلغاء وتراجع</a>
+                    <button type="submit" class="btn btn-danger px-4 fw-bold">نعم، احذف الدور</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

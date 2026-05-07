@@ -30,6 +30,8 @@ urlpatterns = [
     path('loadings/<int:pk>/request/', views.LoadingOrderRequestView.as_view(), name='loading-request'),
     path('loadings/<int:pk>/approve/', views.LoadingOrderApproveView.as_view(), name='loading-approve'),
     path('loadings/<int:pk>/issue/', views.LoadingOrderIssueView.as_view(), name='loading-issue'),
+    path('loadings/<int:pk>/cancel/', views.LoadingOrderCancelView.as_view(), name='loading-cancel'),
+
 
     # Vouchers
     path('vouchers/', views.StockVoucherListView.as_view(), name='voucher-list'),

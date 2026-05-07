@@ -7,11 +7,11 @@
         <form method="get" class="row g-3 align-items-end">
             <div class="col-md-3">
                 <label class="form-label fw-bold">من تاريخ</label>
-                <input type="date" name="from" class="form-control" value="{{ from_date }}">
+                <input type="date" name="from" class="form-control" value="{{ from_date|date:'Y-m-d' }}">
             </div>
             <div class="col-md-3">
                 <label class="form-label fw-bold">إلى تاريخ</label>
-                <input type="date" name="to" class="form-control" value="{{ to_date }}">
+                <input type="date" name="to" class="form-control" value="{{ to_date|date:'Y-m-d' }}">
             </div>
             <div class="col-md-2">
                 <button type="submit" class="btn btn-primary w-100 rounded-pill">تحديث</button>

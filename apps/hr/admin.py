@@ -7,8 +7,9 @@ from .models import (
 
 @admin.register(Department)
 class DepartmentAdmin(admin.ModelAdmin):
-    list_display = ('name', 'manager', 'parent')
-    search_fields = ('name',)
+    list_display = ('name', 'type', 'manager', 'parent')
+    list_filter = ('type',)
+    search_fields = ('name', 'description')
 
 @admin.register(JobTitle)
 class JobTitleAdmin(admin.ModelAdmin):

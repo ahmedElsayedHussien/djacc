@@ -33,6 +33,18 @@
               <label class="form-label">البريد الإلكتروني</label>
               {{ form.email }}
             </div>
+
+            <hr class="my-3">
+            <h6 class="fw-bold mb-2 text-primary"><i class="bi bi-bank me-2"></i> تهيئة الرصيد الافتتاحي (أول مرة فقط)</h6>
+            <div class="col-md-6">
+              <label class="form-label">{{ form.initial_balance.label }}</label>
+              {{ form.initial_balance }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">{{ form.initial_balance_type.label }}</label>
+              {{ form.initial_balance_type }}
+            </div>
+            
             <div class="col-12">
               <label class="form-label">العنوان</label>
               {{ form.address }}

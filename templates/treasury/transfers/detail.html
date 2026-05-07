@@ -4,76 +4,156 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card shadow-sm">
-            <div class="card-header bg-dark text-white"><h5 class="mb-0">سند تحويل</h5></div>
-            <div class="card-body">
-                <div class="row text-center mb-4">
+    <div class="col-md-9">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">سند تحويل نقدي</h5>
+                <span class="badge {% if transfer.status == 'completed' %}bg-success{% elif transfer.status == 'pending' %}bg-warning{% else %}bg-secondary{% endif %}">
+                    {{ transfer.get_status_display }}
+                </span>
+            </div>
+            <div class="card-body p-4">
+                <!-- Transfer Visualization -->
+                <div class="row text-center mb-5 align-items-center">
                     <div class="col-md-5">
-                        <div class="p-3 border rounded bg-light">
-                            <h6 class="text-muted">من حـ/</h6>
+                        <div class="p-4 border rounded-3 bg-light shadow-sm">
+                            <i class="bi bi-wallet2 fs-2 text-muted mb-2"></i>
+                            <h6 class="text-uppercase small fw-bold text-muted">من حـ/ (المصدر)</h6>
                             <p class="fs-5 fw-bold mb-0">
                                 {% if transfer.from_cash_box %}
-                                {{ transfer.from_cash_box.name }} (خزينة)
+                                {{ transfer.from_cash_box.name }}
+                                <span class="badge bg-info text-dark ms-1">خزينة</span>
                                 {% else %}
-                                {{ transfer.from_bank.name }} (بنك)
+                                {{ transfer.from_bank.name }}
+                                <span class="badge bg-primary ms-1">بنك</span>
                                 {% endif %}
                             </p>
                         </div>
                     </div>
-                    <div class="col-md-2 d-flex align-items-center justify-content-center">
-                        <i class="bi bi-arrow-left-right fs-1 text-primary"></i>
+                    <div class="col-md-2">
+                        <div class="display-6 text-primary">
+                            <i class="bi bi-chevron-double-left d-none d-md-block"></i>
+                            <i class="bi bi-chevron-double-down d-md-none py-3"></i>
+                        </div>
                     </div>
                     <div class="col-md-5">
-                        <div class="p-3 border rounded bg-light">
-                            <h6 class="text-muted">إلى حـ/</h6>
+                        <div class="p-4 border rounded-3 bg-light shadow-sm">
+                            <i class="bi bi-safe fs-2 text-muted mb-2"></i>
+                            <h6 class="text-uppercase small fw-bold text-muted">إلى حـ/ (الوجهة)</h6>
                             <p class="fs-5 fw-bold mb-0">
                                 {% if transfer.to_cash_box %}
-                                {{ transfer.to_cash_box.name }} (خزينة)
+                                {{ transfer.to_cash_box.name }}
+                                <span class="badge bg-info text-dark ms-1">خزينة</span>
                                 {% else %}
-                                {{ transfer.to_bank.name }} (بنك)
+                                {{ transfer.to_bank.name }}
+                                <span class="badge bg-primary ms-1">بنك</span>
                                 {% endif %}
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <div class="row mb-4">
-                    <div class="col-sm-6">
-                        <h6 class="text-muted">المبلغ المحول:</h6>
-                        <p class="fs-3 fw-bold text-primary">{{ transfer.amount|floatformat:2 }}</p>
+                <!-- Details Grid -->
+                <div class="row g-4 mb-5">
+                    <div class="col-md-4">
+                        <div class="border-start border-4 border-primary ps-3">
+                            <small class="text-muted d-block">المبلغ</small>
+                            <span class="fs-2 fw-bold text-primary">{{ transfer.amount|floatformat:2 }}</span>
+                            <small class="text-muted">ج.م</small>
+                        </div>
                     </div>
-                    <div class="col-sm-6 text-sm-end">
-                        <h6 class="text-muted">تاريخ العملية:</h6>
-                        <p class="fs-5">{{ transfer.date|date:'Y-m-d' }}</p>
+                    <div class="col-md-4">
+                        <div class="border-start border-4 border-secondary ps-3">
+                            <small class="text-muted d-block">تاريخ التحويل</small>
+                            <span class="fs-4 fw-bold">{{ transfer.date|date:'Y-m-d' }}</span>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="border-start border-4 border-info ps-3">
+                            <small class="text-muted d-block">رقم السند</small>
+                            <span class="fs-4 fw-bold">{{ transfer.number }}</span>
+                        </div>
                     </div>
                 </div>
 
-                {% if transfer.notes %}
+                <!-- Status Timeline / Process -->
+                <div class="card bg-light border-0 mb-4">
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-3"><i class="bi bi-list-check me-2"></i>مسار العملية المحاسبية</h6>
+                        <div class="row">
+                            <!-- Step 1 -->
+                            <div class="col-md-6 border-end">
+                                <div class="d-flex align-items-start">
+                                    <div class="bg-success text-white rounded-circle px-2 py-1 me-3"><i class="bi bi-check"></i></div>
+                                    <div>
+                                        <p class="mb-0 fw-bold">1. صرف التحويل (Issue)</p>
+                                        <small class="text-muted">تم إخراج المبلغ من المصدر إلى حساب "نقدية بالطريق"</small>
+                                        {% if transfer.issue_entry %}
+                                        <div class="mt-2">
+                                            <span class="badge bg-white text-dark border">قيد رقم: {{ transfer.issue_entry.number }}</span>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Step 2 -->
+                            <div class="col-md-6 ps-md-4">
+                                <div class="d-flex align-items-start">
+                                    <div class="{% if transfer.status == 'completed' %}bg-success{% else %}bg-secondary{% endif %} text-white rounded-circle px-2 py-1 me-3">
+                                        {% if transfer.status == 'completed' %}<i class="bi bi-check"></i>{% else %}2{% endif %}
+                                    </div>
+                                    <div>
+                                        <p class="mb-0 fw-bold">2. تأكيد الاستلام (Receive)</p>
+                                        {% if transfer.status == 'completed' %}
+                                            <small class="text-success">تم الاستلام وإيداع المبلغ في الوجهة بنجاح.</small>
+                                            <div class="mt-2">
+                                                <span class="badge bg-white text-dark border">قيد رقم: {{ transfer.receive_entry.number }}</span>
+                                                <div class="small text-muted mt-1">بواسطة: {{ transfer.received_by }} في {{ transfer.received_at|date:"Y-m-d H:i" }}</div>
+                                            </div>
+                                        {% else %}
+                                            <small class="text-muted">في انتظار تأكيد استلام المبلغ في الجهة المحول إليها.</small>
+                                            {% if transfer.status == 'pending' %}
+                                            <div class="mt-3">
+                                                <form action="{% url 'treasury:transfer-receive' transfer.pk %}" method="post">
+                                                    {% csrf_token %}
+                                                    <button type="submit" class="btn btn-primary btn-sm shadow-sm">
+                                                        <i class="bi bi-check2-circle me-1"></i> تأكيد الاستلام الآن
+                                                    </button>
+                                                </form>
+                                            </div>
+                                            {% endif %}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if transfer.description %}
                 <div class="mb-4">
-                    <h6 class="text-muted">ملاحظات:</h6>
-                    <div class="p-2 border rounded">{{ transfer.notes }}</div>
+                    <h6 class="text-muted small fw-bold">البيان:</h6>
+                    <div class="p-3 bg-white border rounded">{{ transfer.description }}</div>
                 </div>
                 {% endif %}
-
-                <div class="alert alert-secondary">
-                    <div class="row">
-                        <div class="col-sm-6">
-                            <strong>القيد المحاسبي:</strong> 
-                            {% if transfer.journal_entry %}
-                            <a href="/admin/core/journalentry/{{ transfer.journal_entry.pk }}/change/">{{ transfer.journal_entry.number }}</a>
-                            {% else %}
-                            <span class="text-muted">قيد الانتظار</span>
-                            {% endif %}
-                        </div>
-                        <div class="col-sm-6 text-sm-end">
-                            <strong>رقم السند:</strong> {{ transfer.number }}
-                        </div>
-                    </div>
-                </div>
             </div>
-            <div class="card-footer text-center">
-                <button class="btn btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer"></i> طباعة السند</button>
+            <div class="card-footer bg-white p-3 text-center">
+                <div class="btn-group">
+                    <a href="{% url 'treasury:transfer-list' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-right"></i> العودة للقائمة
+                    </a>
+                    <button class="btn btn-outline-dark" onclick="window.print()">
+                        <i class="bi bi-printer"></i> طباعة السند
+                    </button>
+                    {% if transfer.status != 'cancelled' %}
+                    <form action="{% url 'treasury:transfer-reverse' transfer.pk %}" method="post" class="d-inline" onsubmit="return confirm('هل أنت متأكد من إلغاء هذا التحويل وعكس قيوده؟')">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-danger">
+                            <i class="bi bi-x-circle"></i> إلغاء التحويل
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>

@@ -110,4 +110,59 @@
         </div>
     </div>
 </div>
+
+<!-- Internal Audit Trail -->
+<div class="row mt-4 no-print">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-secondary text-white py-2">
+                <h6 class="mb-0"><i class="bi bi-shield-check me-2"></i>سجل المراجعة والتدقيق الداخلي (Internal Audit)</h6>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm table-striped mb-0 small">
+                    <thead class="table-light">
+                        <tr>
+                            <th>العملية</th>
+                            <th>المستخدم</th>
+                            <th>التاريخ والوقت</th>
+                            <th>ملاحظات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="badge bg-info text-dark">الإنشاء</span></td>
+                            <td>{% if entry.created_by %}{{ entry.created_by.get_full_name|default:entry.created_by.username }}{% else %}---{% endif %}</td>
+                            <td>{{ entry.created_at|date:"Y-m-d H:i:s" }}</td>
+                            <td>تم إنشاء مسودة القيد</td>
+                        </tr>
+                        {% if entry.is_posted %}
+                        <tr>
+                            <td><span class="badge bg-success">الترحيل</span></td>
+                            <td>{% if entry.posted_by %}{{ entry.posted_by.get_full_name|default:entry.posted_by.username }}{% else %}---{% endif %}</td>
+                            <td>{{ entry.posted_at|date:"Y-m-d H:i:s" }}</td>
+                            <td>تم اعتماد القيد وترحيله للحسابات</td>
+                        </tr>
+                        {% endif %}
+                        {% if entry.updated_by %}
+                        <tr>
+                            <td><span class="badge bg-warning text-dark">آخر تعديل</span></td>
+                            <td>{% if entry.updated_by %}{{ entry.updated_by.get_full_name|default:entry.updated_by.username }}{% else %}---{% endif %}</td>
+                            <td>{{ entry.updated_at|date:"Y-m-d H:i:s" }}</td>
+                            <td>تحديث بيانات القيد</td>
+                        </tr>
+                        {% endif %}
+                        {% if entry.is_reversed %}
+                        <tr>
+                            <td><span class="badge bg-danger">العكس / الإلغاء</span></td>
+                            <td>{{ entry.reversed_by.created_by.get_full_name|default:entry.reversed_by.created_by.username }}</td>
+                            <td>{{ entry.reversed_at|date:"Y-m-d H:i:s" }}</td>
+                            <td>تم إلغاء القيد بواسطة القيد رقم {{ entry.reversed_by.number }}</td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

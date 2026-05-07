@@ -37,3 +37,19 @@ class FiscalYearCloseView(LoginRequiredMixin, PermissionRequiredMixin, View):
         except Exception as e:
             messages.error(request, f'فشل الإقفال: {e}')
         return redirect('core:fiscalyear-list')
+
+class FiscalYearPostOpeningView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'core.change_fiscalyear'
+    
+    def post(self, request, pk):
+        from ..services import JournalService
+        fiscal_year = get_object_or_404(FiscalYear, pk=pk)
+        try:
+            entry = JournalService.post_opening_balances(fiscal_year, request.user)
+            if entry:
+                messages.success(request, f'تم إنشاء القيد الافتتاحي بنجاح برقم {entry.number}')
+            else:
+                messages.warning(request, 'لم يتم العثور على أرصدة افتتاحية للحسابات (Leaf Accounts)')
+        except Exception as e:
+            messages.error(request, f'فشل إنشاء القيد الافتتاحي: {e}')
+        return redirect('core:fiscalyear-list')

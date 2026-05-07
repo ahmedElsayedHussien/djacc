@@ -53,6 +53,12 @@
                     <li class="nav-item" role="presentation">
                         <button class="nav-link fw-bold" id="leaves-tab" data-bs-toggle="tab" data-bs-target="#leaves" type="button" role="tab">رصيد الإجازات</button>
                     </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold" id="payroll-tab" data-bs-toggle="tab" data-bs-target="#payroll" type="button" role="tab">سجل الرواتب</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold" id="loans-tab" data-bs-toggle="tab" data-bs-target="#loans" type="button" role="tab">السلف والعهد</button>
+                    </li>
                 </ul>
             </div>
             <div class="card-body">
@@ -120,7 +126,14 @@
                     
                     <!-- Leaves Tab -->
                     <div class="tab-pane fade" id="leaves" role="tabpanel">
-                        <h6 class="text-muted mb-4 mt-2">أرصدة الإجازات السنوية</h6>
+                        <div class="d-flex justify-content-between align-items-center mb-4 mt-2">
+                            <h6 class="text-muted mb-0">أرصدة الإجازات السنوية</h6>
+                            {% if perms.hr.add_leavebalance %}
+                            <a href="{% url 'hr:balance-add' employee.pk %}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-plus-circle me-1"></i> إضافة رصيد
+                            </a>
+                            {% endif %}
+                        </div>
                         {% if leave_balances %}
                         <div class="row g-3">
                             {% for balance in leave_balances %}
@@ -142,6 +155,13 @@
                                                 <span class="text-success fw-bold">{{ balance.remaining_days }}</span>
                                             </div>
                                         </div>
+                                        <div class="mt-3 pt-2 border-top d-flex justify-content-end">
+                                            {% if perms.hr.change_leavebalance %}
+                                            <a href="{% url 'hr:balance-edit' balance.pk %}" class="btn btn-link btn-sm p-0 text-decoration-none">
+                                                <i class="bi bi-pencil-square me-1"></i> تعديل
+                                            </a>
+                                            {% endif %}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -151,6 +171,75 @@
                         <div class="alert alert-light text-center py-4 text-muted">
                             <i class="bi bi-calendar-x fs-1 d-block mb-2"></i> لم يتم تخصيص رصيد إجازات بعد
                         </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Payroll History Tab -->
+                    <div class="tab-pane fade" id="payroll" role="tabpanel">
+                        <h6 class="text-muted mb-4 mt-2">سجل الرواتب والمستحقات</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>الفترة</th>
+                                        <th>الأساسي</th>
+                                        <th>البدلات</th>
+                                        <th>الاستقطاعات</th>
+                                        <th>الصافي</th>
+                                        <th>الحالة</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for slip in payslips %}
+                                    <tr>
+                                        <td>{{ slip.period.name }}</td>
+                                        <td>{{ slip.basic_salary }}</td>
+                                        <td>{{ slip.total_allowances }}</td>
+                                        <td>{{ slip.total_deductions }}</td>
+                                        <td class="fw-bold">{{ slip.net_salary }}</td>
+                                        <td>
+                                            {% if slip.period.status == 'posted' %}
+                                            <span class="badge bg-success">مدفوع</span>
+                                            {% else %}
+                                            <span class="badge bg-secondary">قيد المراجعة</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr><td colspan="6" class="text-center py-4 text-muted">لا توجد سجلات رواتب.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Loans Tab -->
+                    <div class="tab-pane fade" id="loans" role="tabpanel">
+                        <h6 class="text-muted mb-4 mt-2">السلف المالية والعهد</h6>
+                        {% if loans %}
+                        <div class="list-group">
+                            {% for loan in loans %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0">{{ loan.amount }} ج.م</h6>
+                                    <small class="text-muted">طلب في: {{ loan.request_date|date:"Y-m-d" }}</small>
+                                </div>
+                                <div>
+                                    {% if loan.status == 'pending' %}
+                                    <span class="badge bg-warning text-dark">قيد الانتظار</span>
+                                    {% elif loan.status == 'approved' %}
+                                    <span class="badge bg-success">موافق عليها</span>
+                                    {% elif loan.status == 'paid' %}
+                                    <span class="badge bg-info text-dark">مسددة</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">مرفوضة</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="alert alert-light text-center py-4 text-muted">لا توجد سلف مالية مسجلة لهذا الموظف.</div>
                         {% endif %}
                     </div>
                     

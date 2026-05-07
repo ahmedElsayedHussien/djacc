@@ -3,6 +3,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 from .models import Item, Warehouse, StockMovement, ItemLedger, LoadingOrder, LoadingOrderLine
+from apps.core.services import AuditService
 
 class InventoryService:
     @staticmethod
@@ -40,8 +41,15 @@ class InventoryService:
             defaults={'quantity_on_hand': 0, 'total_value': 0}
         )
         
+        # ✅ Fix #4: إذا لم يتم تمرير تكلفة (في حالة الصرف)، نستخدم التكلفة الحالية من الـ ledger بعد القفل
+        if unit_cost is None:
+            unit_cost = ledger.average_cost
+            
+        total_cost = quantity * unit_cost
+        
         # Update ledger
         new_quantity = ledger.quantity_on_hand + quantity
+
         
         if new_quantity < 0:
             from django.conf import settings
@@ -80,54 +88,81 @@ class InventoryService:
 
     @staticmethod
     @transaction.atomic
-    def reduce_stock(invoice) -> None:
+    def recalculate_item_ledger(item, warehouse):
+        """
+        ✅ Fix #3: إعادة حساب أرصدة الـ Ledger وكافة الـ Running Balances في جدول الحركات 
+        في حالة إضافة حركات تاريخية أو حدوث خلل في الأرقام.
+        """
+        movements = StockMovement.objects.filter(
+            item=item, 
+            warehouse=warehouse
+        ).order_by('date', 'id').select_for_update()
+        
+        current_qty = Decimal('0')
+        current_val = Decimal('0')
+        
+        for mov in movements:
+            current_qty += mov.quantity
+            current_val += mov.total_cost
+            
+            # تحديث الحركة نفسها
+            mov.running_quantity = current_qty
+            mov.running_value = current_val
+            mov.save(update_fields=['running_quantity', 'running_value'])
+            
+        # تحديث سجل الأستاذ المساعد (Ledger)
+        ledger, _ = ItemLedger.objects.select_for_update().get_or_create(item=item, warehouse=warehouse)
+        ledger.quantity_on_hand = current_qty
+        ledger.total_value = current_val
+        
+        # تصفير القيمة إذا كان المخزون صفر
+        if ledger.quantity_on_hand <= 0:
+            ledger.total_value = Decimal('0')
+            
+        ledger.save()
+        return current_qty
+
+
+    @staticmethod
+    @transaction.atomic
+    def reduce_stock(invoice) -> dict:
         """
         Reduces stock based on sales invoice lines.
+        ✅ Fix #4 & #2: يتم جلب التكلفة داخل record_movement ويرجع القاموس بالنتائج لتوحيدها مع القيد.
         """
+        line_costs = {}
         for line in invoice.lines.all():
-            # Get current cost for COGS
-            cost = InventoryService.get_item_cost(line.item, line.warehouse)
-            
             # Convert quantity to base unit if unit is specified
             base_qty = line.quantity
             if hasattr(line, 'unit') and line.unit:
                 base_qty = line.item.convert_to_base(line.quantity, line.unit)
 
-            InventoryService.record_movement(
+            movement = InventoryService.record_movement(
                 date_val=invoice.date,
                 item=line.item,
                 warehouse=line.warehouse,
                 movement_type=StockMovement.MovementType.SALES_ISSUE,
                 quantity=-base_qty,  # Negative for reduction
-                unit_cost=cost,
+                unit_cost=None,      # سيتم حسابه تلقائياً بعد القفل لضمان الدقة
                 source=invoice,
                 reference=f'Invoice {invoice.number}'
             )
+            line_costs[line.id] = movement.unit_cost
+            
+            # تحديث التكلفة في السطر لضمان بقائها كمرجع
+            line.cost = movement.unit_cost
+            line.save(update_fields=['cost'])
+            
+        return line_costs
 
     @staticmethod
     @transaction.atomic
     def restore_stock(invoice) -> None:
         """
-        Restores stock by reversing the movements created by reduce_stock.
-        Used when an invoice is cancelled/reversed.
+        Restores stock when a sales invoice is reversed/cancelled.
+        ✅ Fix #1: إعادة الكميات للمخازن بناءً على الفاتورة المعكوسة.
         """
-        from django.contrib.contenttypes.models import ContentType
-        ct = ContentType.objects.get_for_model(invoice)
-        
         for line in invoice.lines.all():
-            # Try to find the exact cost used during reduction
-            try:
-                movement = StockMovement.objects.filter(
-                    content_type=ct,
-                    object_id=invoice.id,
-                    item=line.item,
-                    warehouse=line.warehouse,
-                    quantity__lt=0
-                ).latest('id')
-                cost = movement.unit_cost
-            except StockMovement.DoesNotExist:
-                cost = line.cost or Decimal('0')
-
             base_qty = line.quantity
             if hasattr(line, 'unit') and line.unit:
                 base_qty = line.item.convert_to_base(line.quantity, line.unit)
@@ -136,18 +171,20 @@ class InventoryService:
                 date_val=timezone.now().date(),
                 item=line.item,
                 warehouse=line.warehouse,
-                movement_type=StockMovement.MovementType.ADJUSTMENT_IN,
-                quantity=base_qty,  # Positive to restore
-                unit_cost=cost,
+                movement_type=StockMovement.MovementType.SALES_RETURN, # استخدام نوع حركة مرتجع/إعادة
+                quantity=base_qty,  # Positive for restoration
+                unit_cost=line.cost, # استخدام نفس التكلفة التي خصمت
                 source=invoice,
-                reference=f'Reverse {invoice.number}'
+                reference=f'Reversal of {invoice.number}'
             )
+
 
     @staticmethod
     @transaction.atomic
     def increase_stock(invoice) -> None:
         """
         Increases stock based on purchase invoice lines.
+        ✅ Fix #2 & #3: تحويل سعر الوحدة لوحدة الأساس (Piece) ليتناسب مع الكمية المحولة.
         """
         for line in invoice.lines.all():
             # Convert quantity to base unit if unit is specified
@@ -155,40 +192,56 @@ class InventoryService:
             if hasattr(line, 'unit') and line.unit:
                 base_qty = line.item.convert_to_base(line.quantity, line.unit)
 
+            # سعر وحدة الأساس = سعر وحدة الشراء / معامل التحويل
+            # نستخدم purchase_conversion_factor حصرياً للمشتريات
+            conversion = Decimal('1')
+            if hasattr(line, 'unit') and line.unit and line.unit == line.item.purchase_unit:
+                conversion = line.item.purchase_conversion_factor or Decimal('1')
+            
+            unit_cost_base = line.unit_cost / conversion
+
             InventoryService.record_movement(
                 date_val=invoice.date,
                 item=line.item,
                 warehouse=line.warehouse,
                 movement_type=StockMovement.MovementType.PURCHASE_RECEIPT,
                 quantity=base_qty,
-                unit_cost=line.unit_cost,
+                unit_cost=unit_cost_base,
                 source=invoice,
                 reference=f'Purchase {invoice.number}'
             )
 
     @staticmethod
     @transaction.atomic
-    def process_transfer(transfer) -> None:
+    def process_transfer(transfer, processed_by) -> None:
         """
         Records two stock movements:
         1. Out from source warehouse
         2. In to destination warehouse
+        ✅ Fix #5: التحقق من عدم التحويل لنفس المستودع
         """
-        # Get current cost from source warehouse
-        cost = InventoryService.get_item_cost(transfer.item, transfer.from_warehouse)
-        
-        # 1. Outgoing from source
-        InventoryService.record_movement(
+        if transfer.status == 'posted':
+            raise ValueError("هذا التحويل مرحّل بالفعل")
+
+        if transfer.from_warehouse == transfer.to_warehouse:
+            raise ValueError("لا يمكن التحويل لنفس المستودع. يرجى اختيار مستودعين مختلفين.")
+
+
+        # 1. Outgoing from source (يتكفل record_movement بحساب التكلفة بعد القفل)
+        out_movement = InventoryService.record_movement(
             date_val=transfer.date,
             item=transfer.item,
             warehouse=transfer.from_warehouse,
             movement_type=StockMovement.MovementType.TRANSFER_OUT,
             quantity=-transfer.quantity,
-            unit_cost=cost,
+            unit_cost=None, # auto-calculate cost
             source=transfer,
             reference=f'Transfer {transfer.number}'
         )
         
+        cost = out_movement.unit_cost
+        total_val = transfer.quantity * cost
+
         # 2. Incoming to destination
         InventoryService.record_movement(
             date_val=transfer.date,
@@ -200,9 +253,29 @@ class InventoryService:
             source=transfer,
             reference=f'Transfer {transfer.number}'
         )
+
+        # 3. GL Entry if accounts differ
+        acc_from = transfer.from_warehouse.gl_account or transfer.item.inventory_account
+        acc_to = transfer.to_warehouse.gl_account or transfer.item.inventory_account
+        
+        if acc_from != acc_to:
+            from apps.core.services import JournalService
+            from apps.core.models import JournalEntry
+            JournalService.create_entry(
+                date_val=transfer.date,
+                entry_type=JournalEntry.EntryType.INVENTORY,
+                description=f'تحويل مخزني رقم {transfer.number}',
+                lines=[
+                    {'account': acc_to, 'debit': total_val, 'credit': 0, 'description': f'تحويل وارد - {transfer.item.name}'},
+                    {'account': acc_from, 'debit': 0, 'credit': total_val, 'description': f'تحويل صادر - {transfer.item.name}'},
+                ],
+                created_by=processed_by
+            )
         
         transfer.status = 'posted'
         transfer.save()
+
+        AuditService.log(processed_by, 'Post', transfer, f'ترحيل تحويل مخزني رقم {transfer.number}')
 
 class LoadingService:
     @staticmethod
@@ -221,6 +294,8 @@ class LoadingService:
         order.approved_by = approved_by
         order.approved_at = timezone.now()
         order.save()
+        
+        AuditService.log(approved_by, 'Approve', order, f'اعتماد طلب تحميل رقم {order.number}')
         return order
 
     @staticmethod
@@ -230,11 +305,19 @@ class LoadingService:
         if order.status != LoadingOrder.Status.APPROVED:
             raise ValueError("يمكن فقط صرف الطلبات التي تم اعتمادها مسبقاً")
             
+        journal_lines = []
+        
         for line in order.lines.all():
-            qty = line.approved_qty or line.requested_qty
+            # ✅ Fix #3: التعامل الصحيح مع الصفر في الكمية المعتمدة
+            qty = line.approved_qty if line.approved_qty is not None else line.requested_qty
+            
+            if qty <= 0:
+                continue
+
             
             # الحصول على التكلفة الحالية من المخزن الرئيسي
             cost = InventoryService.get_item_cost(line.item, order.from_warehouse)
+            line_total_value = qty * cost
             
             # 1. صرف من المخزن الرئيسي
             InventoryService.record_movement(
@@ -260,12 +343,59 @@ class LoadingService:
                 source=order
             )
             
+            # 3. التحضير لقيد اليومية إذا كانت الحسابات مختلفة
+            acc_from = order.from_warehouse.gl_account or line.item.inventory_account
+            acc_to = order.to_warehouse.gl_account or line.item.inventory_account
+            
+            if acc_from != acc_to:
+                journal_lines.append({
+                    'account': acc_to, 'debit': line_total_value, 'credit': 0,
+                    'description': f'تحميل وارد - {line.item.name} ({order.number})'
+                })
+                journal_lines.append({
+                    'account': acc_from, 'debit': 0, 'credit': line_total_value,
+                    'description': f'تحميل صادر - {line.item.name} ({order.number})'
+                })
+
             line.issued_qty = qty
             line.save()
             
+        # إنشاء قيد اليومية إذا وجد اختلاف في الحسابات
+        if journal_lines:
+            from apps.core.services import JournalService
+            from apps.core.models import JournalEntry
+            entry = JournalService.create_entry(
+                date_val=order.date,
+                entry_type=JournalEntry.EntryType.INVENTORY,
+                description=f'تحميل بضاعة للمندوب رقم {order.number}',
+                lines=journal_lines,
+                created_by=issued_by
+            )
+            order.journal_entry = entry
+
         order.status = LoadingOrder.Status.ISSUED
         order.issued_at = timezone.now()
         order.save()
+        
+        AuditService.log(issued_by, 'Issue', order, f'صرف طلب تحميل رقم {order.number}')
+        return order
+
+    @staticmethod
+    @transaction.atomic
+    def cancel_loading(order, cancelled_by):
+        """
+        ✅ Fix #4: إلغاء طلب تحميل لم يصرف بعد
+        """
+        if order.status == LoadingOrder.Status.ISSUED:
+            raise ValueError("لا يمكن إلغاء طلب تم صرفه فعلياً. يجب عمل حركة عكسية بدلاً من ذلك.")
+        
+        if order.status == LoadingOrder.Status.CANCELLED:
+            return order
+
+        order.status = LoadingOrder.Status.CANCELLED
+        order.save()
+        
+        AuditService.log(cancelled_by, 'Cancel', order, f'إلغاء طلب تحميل رقم {order.number}')
         return order
 
 class StockVoucherService:
@@ -281,6 +411,10 @@ class StockVoucherService:
 
         if not voucher.lines.exists():
             raise ValueError("لا يمكن ترحيل إذن بدون أسطر")
+
+        # ✅ Fix #2: منع الترحيل بدون حساب مقابل لضمان توازن الحسابات المالية مع المخزون
+        if not voucher.offset_account:
+            raise ValueError("يجب تحديد الحساب المقابل لإتمام الترحيل لضمان دقة التقارير المالية.")
 
         journal_lines = []
         total_value = Decimal('0')
@@ -310,6 +444,10 @@ class StockVoucherService:
 
             else:
                 # Receipt: Positive quantity, cost is already in the line
+                # ✅ Fix #6: منع إضافة مخزون بتكلفة صفرية (إلا إذا كانت عينات مقصودة)
+                if line.unit_cost <= 0:
+                    raise ValueError(f'يجب إدخال تكلفة موجبة للصنف: {line.item.name} في إذن الإضافة.')
+
                 qty = line.quantity
                 cost = line.unit_cost
                 line.total_cost = line.quantity * cost
@@ -373,13 +511,21 @@ class StockVoucherService:
         
         # 1. Reverse Inventory Movements
         for line in voucher.lines.all():
-            # Simply record the opposite movement
+            # ✅ Fix #1: تصحيح نوع الحركة والكمية عند العكس
+            # عكس ISSUE (خروج) → إضافة (IN) | عكس RECEIPT (دخول) → سحب (OUT)
+            if voucher.voucher_type == StockVoucher.VoucherType.ISSUE:
+                mov_type = StockMovement.MovementType.ADJUSTMENT_IN
+                qty = line.quantity # نرجع اللي خرج (كان سالباً في الحركة الأصلية)
+            else:
+                mov_type = StockMovement.MovementType.ADJUSTMENT_OUT
+                qty = -line.quantity # نسحب اللي دخل
+
             InventoryService.record_movement(
                 date_val=timezone.now().date(),
                 item=line.item,
                 warehouse=voucher.warehouse,
-                movement_type='adjustment_in' if voucher.voucher_type == StockVoucher.VoucherType.ISSUE else 'adjustment_out',
-                quantity=-line.quantity if voucher.voucher_type == StockVoucher.VoucherType.ISSUE else -line.quantity,
+                movement_type=mov_type,
+                quantity=qty,
                 unit_cost=line.unit_cost,
                 reference=f"عكس {voucher.number}",
                 source=voucher
