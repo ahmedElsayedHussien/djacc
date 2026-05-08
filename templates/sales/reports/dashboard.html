@@ -5,109 +5,47 @@
 
 {% block extra_css %}
 <style>
-    :root {
-        --primary-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-        --success-gradient: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
-        --info-gradient: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
-        --warning-gradient: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
-    }
-
-    .stat-card {
-        border: none;
-        border-radius: 20px;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        overflow: hidden;
-        position: relative;
-    }
-
-    .stat-card:hover {
-        transform: translateY(-10px);
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    }
-
-    .stat-card .card-body {
-        padding: 1.5rem;
-        z-index: 1;
-        position: relative;
-    }
-
-    .stat-icon {
-        position: absolute;
-        top: -10px;
-        left: -10px;
-        font-size: 5rem;
-        opacity: 0.1;
-        transform: rotate(-15deg);
-        color: white;
-    }
-
-    .card-title-sm {
-        font-size: 0.875rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 0.5rem;
-        opacity: 0.9;
-    }
-
-    .stat-value {
-        font-size: 1.75rem;
-        font-weight: 800;
-        margin-bottom: 0;
-    }
-
     .modern-table {
-        border-radius: 15px;
+        border-radius: var(--border-radius-lg);
         overflow: hidden;
-        border: 1px solid #e2e8f0;
+        border: var(--border-width) solid var(--border-color);
     }
-
     .modern-table thead th {
-        background-color: #f8fafc;
-        border-bottom: 2px solid #e2e8f0;
-        color: #64748b;
-        font-weight: 700;
+        background-color: var(--bg-page);
+        border-bottom: 2px solid var(--border-color);
+        color: var(--text-secondary);
+        font-weight: var(--font-weight-bold);
         text-transform: uppercase;
-        font-size: 0.75rem;
-        padding: 1rem;
+        font-size: var(--font-size-xs);
+        padding: var(--space-4);
     }
-
     .modern-table tbody td {
-        padding: 1rem;
+        padding: var(--space-4);
         vertical-align: middle;
-        color: #1e293b;
-        font-weight: 500;
+        color: var(--text-primary);
+        font-weight: var(--font-weight-medium);
     }
-
     .report-link-card {
-        border-radius: 15px;
-        background: white;
-        transition: all 0.2s;
-        border: 1px solid #e2e8f0;
-        margin-bottom: 1rem;
+        border-radius: var(--border-radius-lg);
+        background: var(--bg-surface);
+        transition: all var(--transition-base);
+        border: var(--border-width) solid var(--border-color);
+        margin-bottom: var(--space-4);
     }
-
     .report-link-card:hover {
-        background: #f1f5f9;
-        border-color: #3b82f6;
+        background: var(--bg-page);
+        border-color: var(--color-primary);
         transform: scale(1.02);
     }
-
     .icon-box {
         width: 48px;
         height: 48px;
-        border-radius: 12px;
+        border-radius: var(--border-radius);
         display: flex;
         align-items: center;
         justify-content: center;
-        margin-left: 1rem;
-        font-size: 1.25rem;
-    }
-
-    .chart-container {
-        position: relative;
-        height: 300px;
-        width: 100%;
+        margin-left: var(--space-4);
+        font-size: var(--font-size-xl);
     }
 </style>
 {% endblock %}

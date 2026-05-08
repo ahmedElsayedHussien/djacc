@@ -5,9 +5,53 @@ from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 from django.db import transaction
 from django.views import View
-from .models import Supplier, PurchaseInvoice, PurchaseInvoiceLine, SupplierPayment, PurchaseReturn, PurchaseReturnLine
+from django.db import models as db_models
+from .models import Supplier, PurchaseInvoice, PurchaseInvoiceLine, SupplierPayment, PurchaseReturn, PurchaseReturnLine, PurchaseOrder
 from .forms import SupplierForm, PurchaseInvoiceForm, PurchaseInvoiceLineFormSet, SupplierPaymentForm, PurchaseReturnForm, PurchaseReturnLineFormSet
 from .services import SupplierService, PurchaseService
+from django.db.models import Sum, Count, Q, F
+from django.utils import timezone
+
+class PurchaseDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    model = PurchaseInvoice
+    template_name = 'purchases/dashboard.html'
+    permission_required = 'purchases.view_purchaseinvoice'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        now = timezone.now()
+        month_start = now.replace(day=1)
+        
+        # 1. Monthly Summary
+        monthly_stats = PurchaseInvoice.objects.filter(
+            date__gte=month_start, 
+            status=PurchaseInvoice.Status.POSTED
+        ).aggregate(
+            total_amount=Sum('total'),
+            count=Count('id')
+        )
+        ctx['monthly_total'] = monthly_stats['total_amount'] or 0
+        ctx['monthly_count'] = monthly_stats['count'] or 0
+
+        # 2. Supplier Distribution (Current Month)
+        ctx['supplier_stats'] = Supplier.objects.annotate(
+            total=Sum('purchaseinvoice__total', filter=Q(purchaseinvoice__date__gte=month_start, purchaseinvoice__status=PurchaseInvoice.Status.POSTED))
+        ).filter(total__gt=0).order_by('-total')[:5]
+
+        # 3. Pending Tasks
+        ctx['pending_orders'] = PurchaseOrder.objects.filter(status=PurchaseOrder.Status.APPROVED).count()
+        ctx['draft_invoices'] = PurchaseInvoice.objects.filter(status=PurchaseInvoice.Status.DRAFT).count()
+        
+        # 4. Debts Summary (Total Unpaid)
+        unpaid = PurchaseInvoice.objects.filter(status=PurchaseInvoice.Status.POSTED).annotate(
+            balance=F('total') - F('paid_amount')
+        ).filter(balance__gt=0).aggregate(total_due=Sum('balance'))
+        ctx['total_unpaid'] = unpaid['total_due'] or 0
+
+        # 5. Recent Activity
+        ctx['recent_invoices'] = PurchaseInvoice.objects.select_related('supplier').order_by('-date', '-id')[:10]
+
+        return ctx
 
 class PurchaseReturnListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = PurchaseReturn
@@ -227,7 +271,7 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
             
             if lines.is_valid():
                 lines.instance = self.object
-                lines.save()
+                instances = lines.save(commit=False)
                 
                 # Calculate totals (Egyptian Tax Compliance)
                 gross_total = 0
@@ -235,14 +279,15 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                 tax_total_added = 0      # VAT, Table, Customs, Stamp
                 tax_total_deducted = 0   # WHT, Salary, Insurance
                 
-                for line in self.object.lines.all():
-                    line_subtotal = line.quantity * line.unit_cost
-                    line_discount = line_subtotal * (line.discount_percent / 100)
+                for instance in instances:
+                    instance.save()
+                    line_subtotal = instance.quantity * instance.unit_cost
+                    line_discount = line_subtotal * (instance.discount_percent / 100)
                     net_line = line_subtotal - line_discount
                     
                     # Tax 1
-                    tax1 = net_line * (line.tax_percent / 100)
-                    if line.tax_type and line.tax_type.category in ['wht', 'salary', 'insurance']:
+                    tax1 = net_line * (instance.tax_percent / 100)
+                    if instance.tax_type and instance.tax_type.category in ['wht', 'salary', 'insurance']:
                         tax_total_deducted += tax1
                         tax1_signed = -tax1
                     else:
@@ -250,21 +295,21 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                         tax1_signed = tax1
 
                     # Tax 2
-                    tax2 = net_line * (line.tax_percent2 / 100)
-                    if line.tax_type2 and line.tax_type2.category in ['wht', 'salary', 'insurance']:
+                    tax2 = net_line * (instance.tax_percent2 / 100)
+                    if instance.tax_type2 and instance.tax_type2.category in ['wht', 'salary', 'insurance']:
                         tax_total_deducted += tax2
                         tax2_signed = -tax2
                     else:
                         tax_total_added += tax2
                         tax2_signed = tax2
                     
-                    line.total = net_line + tax1_signed + tax2_signed
+                    instance.total = net_line + tax1_signed + tax2_signed
                     # Calculate base quantity
-                    if line.unit:
-                        line.base_quantity = line.item.convert_to_base(line.quantity, line.unit)
+                    if instance.unit:
+                        instance.base_quantity = instance.item.convert_to_base(instance.quantity, instance.unit)
                     else:
-                        line.base_quantity = line.quantity
-                    line.save()
+                        instance.base_quantity = instance.quantity
+                    instance.save()
                     
                     gross_total += line_subtotal
                     discount_total += line_discount

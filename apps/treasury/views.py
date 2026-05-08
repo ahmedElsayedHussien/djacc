@@ -8,7 +8,57 @@ from django.views import View
 from .models import CashBox, BankAccount, CashTransfer, BankReconciliation
 from .forms import CashBoxForm, BankAccountForm, CashTransferForm
 from .services import TreasuryService
+from django.db.models import Sum, Count, Q
+from django.utils import timezone
+from apps.core.utils import get_account_balance
 from datetime import date
+
+class TreasuryDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    model = CashBox
+    template_name = 'treasury/dashboard.html'
+    permission_required = 'treasury.view_cashbox'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        today = date.today()
+        
+        # 1. Cash Boxes Stats
+        cashboxes = CashBox.objects.filter(is_active=True).select_related('account')
+        total_cash = 0
+        boxes_data = []
+        for cb in cashboxes:
+            bal = get_account_balance(cb.account, as_of_date=today)
+            total_cash += bal
+            boxes_data.append({'obj': cb, 'balance': bal})
+        
+        ctx['total_cash'] = total_cash
+        ctx['boxes_data'] = boxes_data
+
+        # 2. Bank Accounts Stats
+        banks = BankAccount.objects.filter(is_active=True).select_related('account')
+        total_bank = 0
+        banks_data = []
+        for b in banks:
+            bal = get_account_balance(b.account, as_of_date=today)
+            total_bank += bal
+            banks_data.append({'obj': b, 'balance': bal})
+            
+        ctx['total_bank'] = total_bank
+        ctx['banks_data'] = banks_data
+        ctx['total_liquidity'] = total_cash + total_bank
+
+        # 3. Pending Transfers
+        ctx['pending_transfers_count'] = CashTransfer.objects.filter(
+            status__in=[CashTransfer.Status.DRAFT, CashTransfer.Status.PENDING]
+        ).count()
+        
+        # 4. Bank Reconciliation Stats
+        ctx['pending_reconciliations'] = BankReconciliation.objects.filter(is_reconciled=False).count()
+
+        # 5. Recent Transfers
+        ctx['recent_transfers'] = CashTransfer.objects.order_by('-date', '-id')[:10]
+
+        return ctx
 
 class CashBoxListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = CashBox

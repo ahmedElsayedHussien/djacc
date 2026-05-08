@@ -1,0 +1,543 @@
+/* =========================================================
+   DJACC Pro - Components
+   أنماط عناصر واجهة المستخدم الموحدة
+   ========================================================= */
+
+/* ── الأسس ──────────────────────────────────────────────── */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    color: var(--text-primary);
+    background-color: var(--bg-page);
+    line-height: var(--line-height-normal);
+    margin: 0;
+}
+
+/* ── البطاقات (Cards) ───────────────────────────────────── */
+.card {
+    border: var(--border-width) solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-card);
+    background: var(--bg-surface);
+    transition: box-shadow var(--transition-base);
+}
+
+.card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.card-header {
+    background: var(--bg-surface);
+    border-bottom: var(--border-width) solid var(--border-color);
+    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0 !important;
+}
+
+.card-body {
+    padding: var(--space-6);
+}
+
+.card-footer {
+    background: var(--bg-surface);
+    border-top: var(--border-width) solid var(--border-color);
+    border-radius: 0 0 var(--border-radius-lg) var(--border-radius-lg) !important;
+}
+
+/* بطاقات الإحصائيات (Dashboard Stats) */
+.stat-card {
+    border: none;
+    border-radius: var(--border-radius-xl);
+    transition: all var(--transition-slow) cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    position: relative;
+}
+
+.stat-card:hover {
+    transform: translateY(-6px);
+    box-shadow: var(--shadow-xl);
+}
+
+.stat-card .card-body {
+    padding: var(--space-6);
+    z-index: 1;
+    position: relative;
+}
+
+.stat-icon {
+    position: absolute;
+    top: -10px;
+    left: -10px;
+    font-size: 5rem;
+    opacity: 0.1;
+    transform: rotate(-15deg);
+    color: var(--text-white);
+}
+
+.stat-value {
+    font-size: var(--font-size-hero);
+    font-weight: var(--font-weight-extrabold);
+    margin-bottom: 0;
+    line-height: var(--line-height-tight);
+}
+
+.stat-value-lg {
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-bold);
+}
+
+.card-title-sm {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-2);
+    opacity: 0.9;
+}
+
+/* ── الجداول (Tables) ───────────────────────────────────── */
+.modern-table {
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+    border: var(--border-width) solid var(--border-color);
+    background: var(--bg-surface);
+}
+
+.modern-table thead th {
+    background-color: var(--bg-page);
+    border-bottom: 2px solid var(--border-color);
+    color: var(--text-secondary);
+    font-weight: var(--font-weight-bold);
+    text-transform: uppercase;
+    font-size: var(--font-size-xs);
+    letter-spacing: 0.05em;
+    padding: var(--space-4) var(--space-5);
+    white-space: nowrap;
+}
+
+.modern-table tbody td {
+    padding: var(--space-4) var(--space-5);
+    vertical-align: middle;
+    color: var(--text-primary);
+    font-weight: var(--font-weight-medium);
+    border-color: var(--border-color);
+}
+
+.modern-table tbody tr {
+    transition: background-color var(--transition-fast);
+}
+
+.modern-table tbody tr:hover {
+    background-color: var(--primary-soft);
+}
+
+/* ── الأزرار (Buttons) ──────────────────────────────────── */
+.btn {
+    font-weight: var(--font-weight-semibold);
+    border-radius: var(--border-radius);
+    padding: var(--space-2) var(--space-5);
+    font-size: var(--font-size-base);
+    transition: all var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    border: var(--border-width) solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+    line-height: var(--line-height-normal);
+}
+
+.btn:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-input-focus);
+}
+
+.btn-sm {
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--font-size-sm);
+    border-radius: var(--border-radius-sm);
+}
+
+.btn-lg {
+    padding: var(--space-3) var(--space-6);
+    font-size: var(--font-size-lg);
+    border-radius: var(--border-radius-lg);
+}
+
+.btn-primary {
+    background-color: var(--color-primary);
+    color: var(--text-white);
+}
+
+.btn-primary:hover {
+    background-color: var(--color-primary-hover);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-success {
+    background-color: var(--color-success);
+    color: var(--text-white);
+}
+
+.btn-success:hover {
+    background-color: var(--color-success-hover);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-warning {
+    background-color: var(--color-warning);
+    color: var(--text-white);
+}
+
+.btn-warning:hover {
+    background-color: var(--color-warning-hover);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-danger {
+    background-color: var(--color-danger);
+    color: var(--text-white);
+}
+
+.btn-danger:hover {
+    background-color: var(--color-danger-hover);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-info {
+    background-color: var(--color-info);
+    color: var(--text-white);
+}
+
+.btn-info:hover {
+    background-color: var(--color-info-hover);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-outline-primary {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: transparent;
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--color-primary);
+    color: var(--text-white);
+}
+
+.btn-outline-danger {
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+    background: transparent;
+}
+
+.btn-outline-danger:hover {
+    background-color: var(--color-danger);
+    color: var(--text-white);
+}
+
+.btn-light {
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+.btn-light:hover {
+    background-color: var(--border-color);
+}
+
+/* ── النماذج (Forms) ────────────────────────────────────── */
+.form-control,
+.form-select {
+    border: var(--border-width) solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-base);
+    font-family: var(--font-family);
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    width: 100%;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--border-focus);
+    box-shadow: var(--shadow-input-focus);
+    outline: none;
+    background-color: var(--bg-input-focus);
+}
+
+.form-control::placeholder {
+    color: var(--text-muted);
+}
+
+.form-label {
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    margin-bottom: var(--space-1);
+}
+
+.form-text {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
+.invalid-feedback {
+    font-size: var(--font-size-xs);
+    color: var(--color-danger);
+    margin-top: var(--space-1);
+}
+
+/* ── الشارات (Badges) ───────────────────────────────────── */
+.badge {
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-xs);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--border-radius-full);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    line-height: 1;
+}
+
+.badge-soft-success {
+    background-color: var(--color-success-soft);
+    color: var(--color-success);
+}
+
+.badge-soft-warning {
+    background-color: var(--color-warning-soft);
+    color: var(--color-warning);
+}
+
+.badge-soft-danger {
+    background-color: var(--color-danger-soft);
+    color: var(--color-danger);
+}
+
+.badge-soft-info {
+    background-color: var(--color-info-soft);
+    color: var(--color-info);
+}
+
+.badge-soft-primary {
+    background-color: var(--color-primary-soft);
+    color: var(--color-primary);
+}
+
+.badge-soft-secondary {
+    background-color: var(--color-secondary-soft);
+    color: var(--color-secondary);
+}
+
+/* ── التنبيهات (Alerts) ─────────────────────────────────── */
+.alert {
+    border-radius: var(--border-radius);
+    border: var(--border-width) solid transparent;
+    padding: var(--space-4) var(--space-5);
+    font-size: var(--font-size-base);
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+}
+
+.alert-success {
+    background-color: var(--color-success-soft);
+    border-color: var(--color-success);
+    color: var(--color-success);
+}
+
+.alert-warning {
+    background-color: var(--color-warning-soft);
+    border-color: var(--color-warning);
+    color: var(--color-warning);
+}
+
+.alert-danger {
+    background-color: var(--color-danger-soft);
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+}
+
+.alert-info {
+    background-color: var(--color-info-soft);
+    border-color: var(--color-info);
+    color: var(--color-info);
+}
+
+/* ── الروابط (Links) ────────────────────────────────────── */
+a {
+    color: var(--text-link);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+a:hover {
+    color: var(--color-primary-hover);
+    text-decoration: none;
+}
+
+/* ── القوائم المنسدلة (Dropdowns) ───────────────────────── */
+.dropdown-menu {
+    border: var(--border-width) solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-dropdown);
+    padding: var(--space-2) 0;
+}
+
+.dropdown-item {
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--font-size-base);
+    transition: background-color var(--transition-fast);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.dropdown-item:hover {
+    background-color: var(--bg-page);
+}
+
+/* ── الخلفيات الناعمة (Soft Backgrounds) ────────────────── */
+.bg-soft-primary {
+    background-color: var(--color-primary-soft);
+    color: var(--color-primary);
+}
+
+.bg-soft-success {
+    background-color: var(--color-success-soft);
+    color: var(--color-success);
+}
+
+.bg-soft-warning {
+    background-color: var(--color-warning-soft);
+    color: var(--color-warning);
+}
+
+.bg-soft-danger {
+    background-color: var(--color-danger-soft);
+    color: var(--color-danger);
+}
+
+.bg-soft-info {
+    background-color: var(--color-info-soft);
+    color: var(--color-info);
+}
+
+.bg-soft-indigo {
+    background-color: var(--color-indigo-soft);
+    color: var(--color-indigo);
+}
+
+/* ── الصور الرمزية (Avatars) ─────────────────────────────── */
+.avatar-sm {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--border-radius-full);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-sm);
+    flex-shrink: 0;
+}
+
+.avatar-xs {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--border-radius-full);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-xs);
+    flex-shrink: 0;
+}
+
+/* ── صناديق الأيقونات (Icon Boxes) ───────────────────────── */
+.icon-box {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--border-radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-xl);
+    flex-shrink: 0;
+}
+
+/* ── بطاقات التقارير (Report Link Cards) ────────────────── */
+.report-link-card {
+    border-radius: var(--border-radius-lg);
+    background: var(--bg-surface);
+    transition: all var(--transition-base);
+    border: var(--border-width) solid var(--border-color);
+    margin-bottom: var(--space-3);
+    padding: var(--space-4);
+    display: flex;
+    align-items: center;
+}
+
+.report-link-card:hover {
+    background: var(--bg-page);
+    border-color: var(--color-primary);
+    transform: scale(1.01);
+    box-shadow: var(--shadow-md);
+}
+
+/* ── حاويات الرسوم البيانية (Chart Containers) ───────────── */
+.chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+}
+
+/* ── أرقام وقيم (Number Display) ────────────────────────── */
+.text-num {
+    font-weight: var(--font-weight-bold);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+}
+
+.text-num-lg {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-extrabold);
+}
+
+/* ── حالة فارغة (Empty State) ───────────────────────────── */
+.empty-state {
+    text-align: center;
+    padding: var(--space-12) var(--space-6);
+    color: var(--text-muted);
+}
+
+.empty-state i {
+    font-size: 3rem;
+    margin-bottom: var(--space-4);
+    opacity: 0.5;
+}
+
+.empty-state p {
+    font-size: var(--font-size-lg);
+    margin-bottom: var(--space-4);
+}
+
+/* ── أدوات الطباعة ──────────────────────────────────────── */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+
+    .card {
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+
+    body {
+        background: white;
+    }
+}

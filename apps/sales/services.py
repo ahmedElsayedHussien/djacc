@@ -206,7 +206,7 @@ class SalesService:
             
             # COGS entry (✅ Fix #1: استخدام الكمية الأساسية من السطر)
             cost = line_costs.get(line.id, line.cost)
-            base_qty = line.base_quantity
+            base_qty = getattr(line, 'base_quantity', line.quantity) or line.quantity
             
             lines.append({
                 'account': line.cost_of_goods_account, 
@@ -279,7 +279,6 @@ class SalesService:
                 payment_method='cash',
                 cash_box=invoice.cash_box,
                 reference=f"Settlement for {invoice.number}",
-                created_by=posted_by
             )
             # Create allocation
             ReceiptAllocation.objects.create(
@@ -356,8 +355,10 @@ class SalesService:
         })
 
         for line in sales_return.lines.all():
-            # In returns, line.total is assumed to be net (before tax) to match sales invoice logic
-            net = line.total
+            # Compute net amount before tax (price after discount, before tax)
+            gross = line.quantity * line.unit_price
+            discount = gross * (line.discount_percent / 100)
+            net = gross - discount
             
             # Debit: Sales Returns Account
             lines.append({

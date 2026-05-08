@@ -99,6 +99,7 @@ class PayrollService:
             'insurance': Decimal(0),
             'tax': Decimal(0),
             'net': Decimal(0), 'other_ded': Decimal(0),
+            'loans': Decimal(0),
         })
 
         for slip in payslips:
@@ -117,15 +118,8 @@ class PayrollService:
             if slip.employee.has_social_insurance and slip.social_insurance:
                 by_cc[cc]['insurance'] += slip.social_insurance
 
-            # السلف: سطر مستقل لكل موظف عنده خصم سلفة
             if slip.total_deductions and slip.total_deductions > 0:
-                lines.append({
-                    'account': loan_acc,
-                    'cost_center': cc,
-                    'debit': 0,
-                    'credit': slip.total_deductions,
-                    'description': f'استرداد سلفة - {slip.employee}',
-                })
+                by_cc[cc]['loans'] += slip.total_deductions
 
         # ── بناء سطور المدين والدائن لكل مركز تكلفة ─────────────────────
         for cc, totals in by_cc.items():
@@ -198,6 +192,16 @@ class PayrollService:
                     'debit': 0,
                     'credit': totals['net'],
                     'description': f'صافي رواتب مستحقة - {cc or "بدون مركز تكلفة"}',
+                })
+
+            # ✦ سلف الموظفين (استرداد)
+            if totals['loans'] > 0:
+                lines.append({
+                    'account': loan_acc,
+                    'cost_center': cc,
+                    'debit': 0,
+                    'credit': totals['loans'],
+                    'description': f'استرداد سلف - {cc or "بدون مركز تكلفة"}',
                 })
 
         # ── إنشاء القيد ───────────────────────────────────────────────────

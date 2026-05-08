@@ -6,9 +6,52 @@ from django.db.models import Sum
 from django.shortcuts import get_object_or_404, redirect
 from django.db import transaction
 from django.views import View
-from .models import Item, ItemCategory, Warehouse, UnitOfMeasure, ItemLedger, WarehouseTransfer, LoadingOrder, LoadingOrderLine
+from .models import Item, ItemCategory, Warehouse, UnitOfMeasure, ItemLedger, WarehouseTransfer, LoadingOrder, LoadingOrderLine, StockMovement, StockVoucher
 from .forms import ItemForm, ItemCategoryForm, WarehouseForm, WarehouseTransferForm, LoadingOrderForm, LoadingOrderLineFormSet
 from .services import InventoryService, LoadingService
+from django.db.models import F, ExpressionWrapper, DecimalField
+
+class InventoryDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    model = StockMovement
+    template_name = 'inventory/dashboard.html'
+    permission_required = 'inventory.view_stockmovement'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        
+        # 1. Basic Stats
+        ctx['total_items'] = Item.objects.filter(is_active=True).count()
+        ctx['total_warehouses'] = Warehouse.objects.filter(is_active=True).count()
+        
+        inventory_totals = ItemLedger.objects.aggregate(
+            total_qty=Sum('quantity_on_hand'),
+            total_value=Sum('total_value')
+        )
+        ctx['total_inventory_qty'] = inventory_totals['total_qty'] or 0
+        ctx['total_inventory_value'] = inventory_totals['total_value'] or 0
+        
+        # 2. Low Stock Alerts (Stock <= Min Stock)
+        # We need to join Item with its total stock
+        low_stock_items = Item.objects.annotate(
+            current_stock=Sum('itemledger__quantity_on_hand')
+        ).filter(current_stock__lte=F('minimum_stock'), is_active=True).order_by('current_stock')
+        ctx['low_stock_items'] = low_stock_items[:10]
+        ctx['low_stock_count'] = low_stock_items.count()
+
+        # 3. Recent Movements
+        ctx['recent_movements'] = StockMovement.objects.select_related('item', 'warehouse').order_by('-date', '-id')[:10]
+
+        # 4. Warehouse Distribution
+        ctx['warehouse_stats'] = Warehouse.objects.annotate(
+            total_qty=Sum('itemledger__quantity_on_hand'),
+            total_val=Sum('itemledger__total_value')
+        ).filter(is_active=True)
+
+        # 5. Pending Tasks
+        ctx['pending_loadings'] = LoadingOrder.objects.filter(status=LoadingOrder.Status.PENDING).count()
+        ctx['draft_vouchers'] = StockVoucher.objects.filter(status=StockVoucher.Status.DRAFT).count()
+
+        return ctx
 
 class ItemListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = Item

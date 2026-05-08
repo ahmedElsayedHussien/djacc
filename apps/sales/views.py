@@ -9,7 +9,7 @@ from django.views import View
 from .models import (
     Customer, CustomerSector, SalesInvoice, SalesInvoiceLine, 
     CustomerReceipt, SalesRepresentative, SalesReturn, Quotation, 
-    QuotationLine, PriceList, PriceListItem
+    QuotationLine, PriceList, PriceListItem, RepDailySettlement, RepSettlementInvoice
 )
 from .forms import (
     CustomerForm, SalesInvoiceForm, SalesInvoiceLineFormSet, 
@@ -99,11 +99,6 @@ class QuotationCancelView(LoginRequiredMixin, PermissionRequiredMixin, View):
         quotation.save()
         messages.success(request, f"تم إلغاء عرض السعر {quotation.name}")
         return redirect('sales:quotation-list')
-
-    def delete(self, request, *args, **kwargs):
-        obj = self.get_object()
-        messages.success(self.request, f"تم حذف العرض {obj.name} بنجاح")
-        return super().delete(request, *args, **kwargs)
 
 class QuotationDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
     model = Quotation
@@ -694,14 +689,12 @@ from django.shortcuts import render
 from apps.treasury.models import CashBox
 
 class RepDailySettlementListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
-    from .models import RepDailySettlement
     model = RepDailySettlement
     template_name = 'sales/settlements/list.html'
     permission_required = 'sales.view_repdailysettlement'
     paginate_by = 25
 
     def get_queryset(self):
-        from .models import RepDailySettlement
         qs = RepDailySettlement.objects.select_related(
             'sales_rep', 'to_cash_box', 'to_bank'
         ).order_by('-date', '-created_at')
@@ -787,7 +780,6 @@ class RepDailySettlementCreateView(LoginRequiredMixin, PermissionRequiredMixin, 
             return redirect('sales:settlement-create')
 
 class RepDailySettlementDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
-    from .models import RepDailySettlement
     model = RepDailySettlement
     template_name = 'sales/settlements/detail.html'
     context_object_name = 'settlement'

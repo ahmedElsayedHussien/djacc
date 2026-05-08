@@ -2,11 +2,10 @@ from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from apps.sales.models import SalesInvoice, Customer
 from apps.purchases.models import PurchaseInvoice
-from apps.inventory.models import Item
-from apps.core.models import JournalEntry, AuditLog, Account
-from apps.inventory.models import ItemLedger
+from apps.inventory.models import Item, ItemLedger
+from apps.core.models import JournalEntry, AuditLog, Account, JournalLine
 from django.utils import timezone
-from django.db.models import Sum
+from django.db.models import Sum, Q, F
 from decimal import Decimal
 from django.conf import settings
 
@@ -20,12 +19,10 @@ def dashboard(request):
     ).aggregate(total=Sum('total'))['total'] or Decimal('0')
     
     # 2. Total Cash (Sum of balances of all CashBox accounts)
-    from django.db.models import Q, F
     cash_parent = getattr(settings, 'CASH_PARENT_ACCOUNT', '1111')
     cash_accounts = Account.objects.filter(parent__code=cash_parent, is_leaf=True)
     
     # Identify which of these cash accounts already have an opening journal entry
-    from apps.core.models import JournalLine, JournalEntry
     accounts_with_opening = set(JournalLine.objects.filter(
         account__in=cash_accounts,
         entry__entry_type=JournalEntry.EntryType.OPENING,

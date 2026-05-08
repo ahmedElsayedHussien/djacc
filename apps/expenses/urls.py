@@ -12,7 +12,8 @@ urlpatterns = [
     path('custody/<int:pk>/', views.CustodyDetailView.as_view(), name='custody-detail'),
     path('custody/<int:custody_pk>/settle/', views.CustodySettlementCreateView.as_view(), name='custody-settle'),
 
-    path('', views.ExpenseListView.as_view(), name='expense-list'),
+    path('', views.ExpenseDashboardView.as_view(), name='dashboard'),
+    path('list/', views.ExpenseListView.as_view(), name='expense-list'),
     path('create/', views.ExpenseCreateView.as_view(), name='expense-create'),
     path('<int:pk>/', views.ExpenseDetailView.as_view(), name='expense-detail'),
     path('<int:pk>/post/', views.ExpensePostView.as_view(), name='expense-post'),

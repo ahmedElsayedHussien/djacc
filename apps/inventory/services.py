@@ -32,8 +32,6 @@ class InventoryService:
         """
         Central method to record stock movements and update ledger.
         """
-        total_cost = quantity * unit_cost
-        
         # Get or create ledger with lock
         ledger, created = ItemLedger.objects.select_for_update().get_or_create(
             item=item, 
@@ -189,8 +187,10 @@ class InventoryService:
         for line in invoice.lines.all():
             # Convert quantity to base unit if unit is specified
             base_qty = getattr(line, 'base_quantity', line.quantity)
-            if not hasattr(line, 'base_quantity') and hasattr(line, 'unit') and line.unit:
+            if not base_qty and hasattr(line, 'unit') and line.unit:
                 base_qty = line.item.convert_to_base(line.quantity, line.unit)
+            elif not hasattr(line, 'base_quantity'):
+                base_qty = line.quantity
 
             # سعر وحدة الأساس = سعر وحدة الشراء / معامل التحويل
             # نستخدم purchase_conversion_factor حصرياً للمشتريات

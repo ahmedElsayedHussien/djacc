@@ -9,351 +9,307 @@
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Cairo', sans-serif; background-color: #f4f7f6; }
-        :root { --sidebar-width: 260px; }
-        .sidebar { 
-            width: var(--sidebar-width); 
-            min-height: 100vh; 
-            background-color: #1e293b; 
-            color: #f8fafc; 
-            transition: all 0.3s;
-            box-shadow: 4px 0 10px rgba(0,0,0,0.1);
-        }
-        .sidebar .nav-link { 
-            font-size: 0.95rem; 
-            padding: 0.75rem 1.25rem;
-            color: #94a3b8 !important;
-            transition: all 0.2s;
-            border-radius: 8px;
-            margin: 2px 12px;
-            display: flex;
-            align-items: center;
-        }
-        .sidebar .nav-link i { font-size: 1.1rem; margin-left: 12px; width: 20px; text-align: center; }
-        .sidebar .nav-link:hover { background-color: #334155; color: #f8fafc !important; }
-        .sidebar .nav-link.active { background-color: #3b82f6; color: white !important; }
-        
-        .sidebar-heading { 
-            font-weight: 700; 
-            padding: 1.5rem 1.5rem 0.5rem;
-            color: #64748b !important;
-            font-size: 0.75rem;
-            text-uppercase: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .submenu { background-color: #0f172a; margin: 0 12px; border-radius: 8px; list-style: none; padding: 5px 0; }
-        .submenu .nav-link { margin: 1px 8px; font-size: 0.85rem; padding: 0.5rem 1rem; }
-        
-        .nav-group-title {
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .nav-group-title[aria-expanded="true"] { color: #f8fafc !important; }
-        .nav-group-title[aria-expanded="true"] .chevron { transform: rotate(90deg); }
-        .chevron { transition: transform 0.2s; font-size: 0.8rem; }
-
-        .brand-area { padding: 1.5rem; border-bottom: 1px solid #334155; margin-bottom: 1rem; }
-        .brand-logo { font-size: 1.25rem; font-weight: 800; color: #3b82f6; text-decoration: none; }
-        
-        main { background-color: #f4f7f6; }
-        .card { border: none; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); border-radius: 12px; }
-        .no-print { @media print { display: none; } }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- DJACC Pro Design System -->
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+    <link rel="stylesheet" href="{% static 'css/components.css' %}">
+    <link rel="stylesheet" href="{% static 'css/layout.css' %}">
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <div class="container-fluid p-0">
-        <div class="d-flex">
-            <!-- Sidebar -->
-            <nav id="sidebar" class="sidebar d-md-block collapse">
-                <div class="position-sticky">
-                    <div class="brand-area text-center">
-                        <a href="{% url 'core:dashboard' %}" class="brand-logo">
-                            <i class="bi bi-rocket-takeoff me-2"></i> DJACC Pro
+    <div class="layout-wrapper">
+        <!-- Sidebar -->
+        <nav id="sidebar" class="sidebar d-md-block collapse">
+            <div class="position-sticky">
+                <div class="brand-area text-center">
+                    <a href="{% url 'core:dashboard' %}" class="brand-logo">
+                        <i class="bi bi-rocket-takeoff"></i> DJACC Pro
+                    </a>
+                </div>
+                
+                <ul class="nav flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'core:dashboard' %}">
+                            <i class="bi bi-grid-1x2"></i> لوحة التحكم
                         </a>
-                    </div>
+                    </li>
+
+                    <!-- Employee Portal (ESS) -->
+                    {% if user.employee or perms.hr.view_employee %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-group-title text-success" data-bs-toggle="collapse" href="#essMenu" role="button" aria-expanded="false">
+                            <span><i class="bi bi-person-badge"></i> بوابة الموظف (ESS)</span>
+                            <i class="bi bi-chevron-left chevron"></i>
+                        </a>
+                        <div class="collapse" id="essMenu">
+                            <ul class="submenu">
+                                <li><a class="nav-link" href="{% url 'hr:ess-dashboard' %}">صفحتي الشخصية</a></li>
+                                <li><a class="nav-link" href="{% url 'hr:ess-payslips' %}">استعراض الرواتب</a></li>
+                                <li><a class="nav-link" href="{% url 'hr:ess-request-leave' %}">تقديم طلب إجازة</a></li>
+                                <li><a class="nav-link" href="{% url 'hr:ess-request-loan' %}">طلب سلفة مالية</a></li>
+                            </ul>
+                        </div>
+                    </li>
+                    {% endif %}
+
+                    <!-- Accounting -->
+                    {% if perms.core.view_account or perms.core.view_journalentry %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#accMenu" role="button" aria-expanded="false">
+                            <span><i class="bi bi-bank"></i> المحاسبة العامة</span>
+                            <i class="bi bi-chevron-left chevron"></i>
+                        </a>
+                        <div class="collapse" id="accMenu">
+                            <ul class="submenu">
+                                {% if perms.core.view_account %}<li><a class="nav-link" href="{% url 'core:account-list' %}">دليل الحسابات</a></li>{% endif %}
+                                {% if perms.core.view_fiscalyear %}<li><a class="nav-link" href="{% url 'core:fiscalyear-list' %}">السنوات المالية</a></li>{% endif %}
+                                {% if perms.core.view_costcenter %}<li><a class="nav-link" href="{% url 'core:costcenter-list' %}">مراكز التكلفة</a></li>{% endif %}
+                                {% if perms.core.view_journalentry %}<li><a class="nav-link" href="{% url 'core:journal-list' %}">القيود المحاسبية</a></li>{% endif %}
+                                <li><hr class="dropdown-divider bg-secondary mx-2"></li>
+                                {% if perms.core.view_taxtype %}<li><a class="nav-link" href="{% url 'core:taxtype-list' %}">إعدادات الضرائب</a></li>{% endif %}
+                            </ul>
+                        </div>
+                    </li>
+                    {% endif %}
+
+                    <!-- Fixed Assets -->
+                    {% if perms.assets.view_asset %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#assetMenu" role="button" aria-expanded="false">
+                            <span><i class="bi bi-building-gear"></i> الأصول الثابتة</span>
+                            <i class="bi bi-chevron-left chevron"></i>
+                        </a>
+                        <div class="collapse" id="assetMenu">
+                            <ul class="submenu">
+                                <li><a class="nav-link text-primary fw-bold" href="{% url 'assets:dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تحكم الأصول</a></li>
+                                <li><a class="nav-link" href="{% url 'assets:asset-list' %}">سجل الأصول</a></li>
+                                <li><a class="nav-link" href="{% url 'assets:category-list' %}">تصنيفات الأصول</a></li>
+                            </ul>
+                        </div>
+                    </li>
+                    {% endif %}
+
+                    <!-- Sales -->
+                    {% if perms.sales.view_salesinvoice or perms.sales.view_customer or perms.sales.view_salesrepresentative %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#salesMenu" role="button" aria-expanded="false">
+                            <span><i class="bi bi-cart-check"></i> المبيعات</span>
+                            <i class="bi bi-chevron-left chevron"></i>
+                        </a>
+                        <div class="collapse" id="salesMenu">
+                            <ul class="submenu">
+                                <li><a class="nav-link text-primary fw-bold" href="{% url 'sales:dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تحكم المبيعات</a></li>
+                                {% if user.salesrepresentative %}
+                                <li><a class="nav-link text-info fw-bold" href="{% url 'sales:rep-stock' %}"><i class="bi bi-box-seam me-1"></i> بضاعتي الحالية</a></li>
+                                <li><hr class="dropdown-divider bg-secondary mx-2"></li>
+                                {% endif %}
+                                {% if perms.sales.view_salesinvoice %}<li><a class="nav-link" href="{% url 'sales:invoice-list' %}">الفواتير</a></li>{% endif %}
+                                {% if perms.sales.view_customerreceipt %}<li><a class="nav-link" href="{% url 'sales:receipt-list' %}">سندات القبض</a></li>{% endif %}
+                                {% if perms.sales.view_repdailysettlement %}<li><a class="nav-link" href="{% url 'sales:settlement-list' %}">تسوية المناديب</a></li>{% endif %}
+                                {% if perms.sales.view_salesreturn %}<li><a class="nav-link" href="{% url 'sales:return-list' %}">مرتجع المبيعات</a></li>{% endif %}
+                                <li><hr class="dropdown-divider bg-secondary mx-2"></li>
+                                {% if perms.sales.view_customer %}<li><a class="nav-link" href="{% url 'sales:customer-list' %}">العملاء</a></li>{% endif %}
+                                {% if perms.sales.view_customersector %}<li><a class="nav-link" href="{% url 'sales:sector-list' %}">قطاعات العملاء</a></li>{% endif %}
+                                {% if perms.sales.view_salesrepresentative %}<li><a class="nav-link" href="{% url 'sales:rep-list' %}">المناديب</a></li>{% endif %}
+                                {% if perms.sales.view_pricelist %}<li><a class="nav-link" href="{% url 'sales:pricelist-list' %}">قوائم الأسعار</a></li>{% endif %}
+                                {% if perms.sales.view_quotation %}<li><a class="nav-link" href="{% url 'sales:quotation-list' %}">عروض الأسعار والخصومات</a></li>{% endif %}
+                            </ul>
+                        </div>
+                    </li>
+                    {% endif %}
+
+                    <!-- Purchases -->
+                    {% if perms.purchases.view_purchaseinvoice or perms.purchases.view_supplier %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#purMenu" role="button" aria-expanded="false">
+                            <span><i class="bi bi-bag-check"></i> المشتريات</span>
+                            <i class="bi bi-chevron-left chevron"></i>
+                        </a>
+                        <div class="collapse" id="purMenu">
+                            <ul class="submenu">
+                                <li><a class="nav-link text-primary fw-bold" href="{% url 'purchases:dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تحكم المشتريات</a></li>
+                                {% if perms.purchases.view_purchaseinvoice %}<li><a class="nav-link" href="{% url 'purchases:invoice-list' %}">فاتورة مشتريات</a></li>{% endif %}
+                                {% if perms.purchases.view_supplierpayment %}<li><a class="nav-link" href="{% url 'purchases:payment-list' %}">سندات الصرف</a></li>{% endif %}
+                                {% if perms.purchases.view_purchasereturn %}<li><a class="nav-link" href="{% url 'purchases:return-list' %}">مرتجع مشتريات</a></li>{% endif %}
+                                <li><hr class="dropdown-divider bg-secondary mx-2"></li>
+                                {% if perms.purchases.view_supplier %}<li><a class="nav-link" href="{% url 'purchases:supplier-list' %}">الموردين</a></li>{% endif %}
+                            </ul>
+                        </div>
+                    </li>
+                    {% endif %}
+
+                    <!-- Inventory -->
+                    {% if perms.inventory.view_item or perms.inventory.view_warehouse %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#invMenu" role="button" aria-expanded="false">
+                            <span><i class="bi bi-box-seam"></i> المخزون</span>
+                            <i class="bi bi-chevron-left chevron"></i>
+                        </a>
+                        <div class="collapse" id="invMenu">
+                            <ul class="submenu">
+                                <li><a class="nav-link text-primary fw-bold" href="{% url 'inventory:dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تحكم المخازن</a></li>
+                                {% if perms.inventory.view_item %}<li><a class="nav-link" href="{% url 'inventory:item-list' %}">الأصناف</a></li>{% endif %}
+                                {% if perms.inventory.view_itemcategory %}<li><a class="nav-link" href="{% url 'inventory:category-list' %}">فئات الأصناف</a></li>{% endif %}
+                                {% if perms.inventory.view_unitofmeasure %}<li><a class="nav-link" href="{% url 'inventory:unit-list' %}">وحدات القياس</a></li>{% endif %}
+                                {% if perms.inventory.view_warehouse %}<li><a class="nav-link" href="{% url 'inventory:warehouse-list' %}">المستودعات</a></li>{% endif %}
+                                {% if perms.inventory.view_stockvoucher %}<li><a class="nav-link" href="{% url 'inventory:voucher-list' %}">أذون الصرف/الإضافة</a></li>{% endif %}
+                                {% if perms.inventory.view_warehousetransfer %}<li><a class="nav-link" href="{% url 'inventory:transfer-list' %}">التحويلات</a></li>{% endif %}
+                                {% if perms.inventory.view_loadingorder %}<li><a class="nav-link" href="{% url 'inventory:loading-list' %}">طلبات التحميل</a></li>{% endif %}
+                            </ul>
+                        </div>
+                    </li>
+                    {% endif %}
+
+                    <!-- Treasury -->
+                    {% if perms.treasury.view_cashbox or perms.treasury.view_bankaccount %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#treaMenu" role="button" aria-expanded="false">
+                            <span><i class="bi bi-wallet2"></i> الخزينة والبنوك</span>
+                            <i class="bi bi-chevron-left chevron"></i>
+                        </a>
+                        <div class="collapse" id="treaMenu">
+                            <ul class="submenu">
+                                <li><a class="nav-link text-primary fw-bold" href="{% url 'treasury:dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تحكم الخزينة</a></li>
+                                {% if perms.treasury.view_cashbox %}<li><a class="nav-link" href="{% url 'treasury:cashbox-list' %}">الخزن النقدية</a></li>{% endif %}
+                                {% if perms.treasury.view_bankaccount %}<li><a class="nav-link" href="{% url 'treasury:bank-list' %}">الحسابات البنكية</a></li>{% endif %}
+                                {% if perms.treasury.view_cashtransfer %}<li><a class="nav-link" href="{% url 'treasury:transfer-list' %}">تحويلات مالية</a></li>{% endif %}
+                            </ul>
+                        </div>
+                    </li>
+                    {% endif %}
+
+                    <!-- Expenses & Custody -->
+                    {% if perms.expenses.view_expense or perms.expenses.view_custody %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#expMenu" role="button" aria-expanded="false">
+                            <span><i class="bi bi-receipt-cutoff"></i> المصروفات والعهد</span>
+                            <i class="bi bi-chevron-left chevron"></i>
+                        </a>
+                        <div class="collapse" id="expMenu">
+                            <ul class="submenu">
+                                <li><a class="nav-link text-primary fw-bold" href="{% url 'expenses:dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تحكم المصروفات</a></li>
+                                {% if perms.expenses.view_expense %}<li><a class="nav-link" href="{% url 'expenses:expense-list' %}">سجل المصروفات</a></li>{% endif %}
+                                {% if perms.expenses.view_expensecategory %}<li><a class="nav-link" href="{% url 'expenses:category-list' %}">بنود المصروفات (Categories)</a></li>{% endif %}
+                                {% if perms.expenses.view_custody %}<li><a class="nav-link" href="{% url 'expenses:custody-list' %}">العهد المالية</a></li>{% endif %}
+                            </ul>
+                        </div>
+                    </li>
+                    {% endif %}
+
+                    <!-- HR & Payroll -->
+                    {% if perms.hr.view_employee %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#hrMenu" role="button" aria-expanded="false">
+                            <span><i class="bi bi-people"></i> شئون العاملين والرواتب</span>
+                            <i class="bi bi-chevron-left chevron"></i>
+                        </a>
+                        <div class="collapse" id="hrMenu">
+                            <ul class="submenu">
+                                <li><a class="nav-link" href="{% url 'hr:dashboard' %}">لوحة تحكم الـ HR</a></li>
+                                {% if perms.hr.add_attendancerecord %}<li><a class="nav-link" href="{% url 'hr:attendance-daily' %}">سجل الحضور اليومي</a></li>{% endif %}
+                                <li><a class="nav-link" href="{% url 'hr:employee-list' %}">سجل الموظفين</a></li>
+                                {% if perms.hr.view_payrollperiod %}<li><a class="nav-link" href="{% url 'hr:payroll-list' %}">مسيرات الرواتب</a></li>{% endif %}
+                                {% if perms.hr.view_leaverequest %}<li><a class="nav-link" href="{% url 'hr:leave-list' %}">إدارة الإجازات</a></li>{% endif %}
+                                {% if perms.hr.view_loan %}<li><a class="nav-link" href="{% url 'hr:loan-list' %}">إدارة السلف</a></li>{% endif %}
+                            </ul>
+                        </div>
+                    </li>
+                    {% endif %}
+
+                    <!-- Reports -->
+                    {% if perms.core.view_account or perms.sales.view_customer or perms.inventory.view_item %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#repMenu" role="button" aria-expanded="false">
+                            <span><i class="bi bi-bar-chart-line"></i> التقارير المالية</span>
+                            <i class="bi bi-chevron-left chevron"></i>
+                        </a>
+                        <div class="collapse" id="repMenu">
+                            <ul class="submenu">
+                                {% if perms.sales.view_salesinvoice %}<li><a class="nav-link text-primary fw-bold" href="{% url 'sales:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير المبيعات</a></li>{% endif %}
+                                {% if perms.core.view_account %}<li><a class="nav-link" href="{% url 'reports:trial_balance' %}">ميزان المراجعة</a></li>{% endif %}
+                                {% if perms.core.view_account %}<li><a class="nav-link" href="{% url 'reports:account_statement' %}">دفتر الأستاذ (كشف حساب)</a></li>{% endif %}
+                                {% if perms.core.view_account %}<li><a class="nav-link" href="{% url 'reports:income_statement' %}">قائمة الدخل</a></li>{% endif %}
+                                {% if perms.core.view_account %}<li><a class="nav-link" href="{% url 'reports:balance_sheet' %}">المركز المالي</a></li>{% endif %}
+                                {% if perms.inventory.view_item %}<li><a class="nav-link" href="{% url 'reports:stock_status' %}">حالة المخزون</a></li>{% endif %}
+                            </ul>
+                        </div>
+                    </li>
+                    {% endif %}
+
+                    <hr class="mx-3 border-secondary">
                     
-                    <ul class="nav flex-column">
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'core:dashboard' %}">
-                                <i class="bi bi-grid-1x2"></i> لوحة التحكم
-                            </a>
-                        </li>
+                    <!-- Users & Roles -->
+                    {% if user.is_superuser or perms.auth.view_group %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#usersMenu" role="button" aria-expanded="false">
+                            <span><i class="bi bi-shield-lock"></i> الصلاحيات والمستخدمين</span>
+                            <i class="bi bi-chevron-left chevron"></i>
+                        </a>
+                        <div class="collapse" id="usersMenu">
+                            <ul class="submenu">
+                                <li><a class="nav-link" href="{% url 'users:user-list' %}">مستخدمي النظام</a></li>
+                                <li><a class="nav-link" href="{% url 'users:role-list' %}">إدارة الأدوار</a></li>
+                            </ul>
+                        </div>
+                    </li>
+                    {% endif %}
 
-                        <!-- Employee Portal (ESS) -->
-                        {% if user.employee or perms.hr.view_employee %}
-                        <li class="nav-item">
-                            <a class="nav-link nav-group-title text-success" data-bs-toggle="collapse" href="#essMenu" role="button" aria-expanded="false">
-                                <span><i class="bi bi-person-badge"></i> بوابة الموظف (ESS)</span>
-                                <i class="bi bi-chevron-left chevron"></i>
-                            </a>
-                            <div class="collapse" id="essMenu">
-                                <ul class="submenu">
-                                    <li><a class="nav-link" href="{% url 'hr:ess-dashboard' %}">صفحتي الشخصية</a></li>
-                                    <li><a class="nav-link" href="{% url 'hr:ess-payslips' %}">استعراض الرواتب</a></li>
-                                    <li><a class="nav-link" href="{% url 'hr:ess-request-leave' %}">تقديم طلب إجازة</a></li>
-                                    <li><a class="nav-link" href="{% url 'hr:ess-request-loan' %}">طلب سلفة مالية</a></li>
-                                </ul>
+                    {% if user.is_superuser %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/admin/">
+                            <i class="bi bi-shield-lock"></i> الإدارة والتدقيق
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    <li class="nav-item mt-auto">
+                        <form method="post" action="{% url 'account_logout' %}" class="px-3 py-3">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-danger w-100 btn-sm">
+                                <i class="bi bi-box-arrow-right me-2"></i> خروج
+                            </button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Navbar -->
+            <nav class="top-navbar no-print">
+                <div class="d-flex align-items-center">
+                    <button class="btn-menu-toggle d-md-none ms-3" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar">
+                        <i class="bi bi-list"></i>
+                    </button>
+                    <h1 class="page-title">{% block header %}{% endblock %}</h1>
+                </div>
+                
+                <div class="d-flex align-items-center">
+                    <div class="dropdown">
+                        <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle text-dark" id="userDropdown" data-bs-toggle="dropdown">
+                            <div class="avatar-sm bg-primary text-white">
+                                {{ user.username|first|upper }}
                             </div>
-                        </li>
-                        {% endif %}
-
-                        <!-- Accounting -->
-                        {% if perms.core.view_account or perms.core.view_journalentry %}
-                        <li class="nav-item">
-                            <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#accMenu" role="button" aria-expanded="false">
-                                <span><i class="bi bi-bank"></i> المحاسبة العامة</span>
-                                <i class="bi bi-chevron-left chevron"></i>
-                            </a>
-                            <div class="collapse" id="accMenu">
-                                <ul class="submenu">
-                                    {% if perms.core.view_account %}<li><a class="nav-link" href="{% url 'core:account-list' %}">دليل الحسابات</a></li>{% endif %}
-                                    {% if perms.core.view_fiscalyear %}<li><a class="nav-link" href="{% url 'core:fiscalyear-list' %}">السنوات المالية</a></li>{% endif %}
-                                    {% if perms.core.view_costcenter %}<li><a class="nav-link" href="{% url 'core:costcenter-list' %}">مراكز التكلفة</a></li>{% endif %}
-                                    {% if perms.core.view_journalentry %}<li><a class="nav-link" href="{% url 'core:journal-list' %}">القيود المحاسبية</a></li>{% endif %}
-                                    <li><hr class="dropdown-divider bg-secondary mx-2"></li>
-                                    {% if perms.core.view_taxtype %}<li><a class="nav-link" href="{% url 'core:taxtype-list' %}">إعدادات الضرائب</a></li>{% endif %}
-                                </ul>
-                            </div>
-                        </li>
-                        {% endif %}
-
-                        <!-- Fixed Assets -->
-                        {% if perms.assets.view_asset %}
-                        <li class="nav-item">
-                            <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#assetMenu" role="button" aria-expanded="false">
-                                <span><i class="bi bi-building-gear"></i> الأصول الثابتة</span>
-                                <i class="bi bi-chevron-left chevron"></i>
-                            </a>
-                            <div class="collapse" id="assetMenu">
-                                <ul class="submenu">
-                                    <li><a class="nav-link" href="{% url 'assets:asset-list' %}">سجل الأصول</a></li>
-                                    <li><a class="nav-link" href="{% url 'assets:category-list' %}">تصنيفات الأصول</a></li>
-                                </ul>
-                            </div>
-                        </li>
-                        {% endif %}
-
-                        <!-- Sales -->
-                        {% if perms.sales.view_salesinvoice or perms.sales.view_customer or perms.sales.view_salesrepresentative %}
-                        <li class="nav-item">
-                            <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#salesMenu" role="button" aria-expanded="false">
-                                <span><i class="bi bi-cart-check"></i> المبيعات</span>
-                                <i class="bi bi-chevron-left chevron"></i>
-                            </a>
-                            <div class="collapse" id="salesMenu">
-                                <ul class="submenu">
-                                    {% if user.salesrepresentative %}
-                                    <li><a class="nav-link text-info fw-bold" href="{% url 'sales:rep-stock' %}"><i class="bi bi-box-seam me-1"></i> بضاعتي الحالية</a></li>
-                                    <li><hr class="dropdown-divider bg-secondary mx-2"></li>
-                                    {% endif %}
-                                    {% if perms.sales.view_salesinvoice %}<li><a class="nav-link" href="{% url 'sales:invoice-list' %}">الفواتير</a></li>{% endif %}
-                                    {% if perms.sales.view_customerreceipt %}<li><a class="nav-link" href="{% url 'sales:receipt-list' %}">سندات القبض</a></li>{% endif %}
-                                    {% if perms.sales.view_repdailysettlement %}<li><a class="nav-link" href="{% url 'sales:settlement-list' %}">تسوية المناديب</a></li>{% endif %}
-                                    {% if perms.sales.view_salesreturn %}<li><a class="nav-link" href="{% url 'sales:return-list' %}">مرتجع المبيعات</a></li>{% endif %}
-                                    <li><hr class="dropdown-divider bg-secondary mx-2"></li>
-                                    {% if perms.sales.view_customer %}<li><a class="nav-link" href="{% url 'sales:customer-list' %}">العملاء</a></li>{% endif %}
-                                    {% if perms.sales.view_customersector %}<li><a class="nav-link" href="{% url 'sales:sector-list' %}">قطاعات العملاء</a></li>{% endif %}
-                                    {% if perms.sales.view_salesrepresentative %}<li><a class="nav-link" href="{% url 'sales:rep-list' %}">المناديب</a></li>{% endif %}
-                                    {% if perms.sales.view_pricelist %}<li><a class="nav-link" href="{% url 'sales:pricelist-list' %}">قوائم الأسعار</a></li>{% endif %}
-                                    {% if perms.sales.view_quotation %}<li><a class="nav-link" href="{% url 'sales:quotation-list' %}">عروض الأسعار والخصومات</a></li>{% endif %}
-                                </ul>
-                            </div>
-                        </li>
-                        {% endif %}
-
-                        <!-- Purchases -->
-                        {% if perms.purchases.view_purchaseinvoice or perms.purchases.view_supplier %}
-                        <li class="nav-item">
-                            <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#purMenu" role="button" aria-expanded="false">
-                                <span><i class="bi bi-bag-check"></i> المشتريات</span>
-                                <i class="bi bi-chevron-left chevron"></i>
-                            </a>
-                            <div class="collapse" id="purMenu">
-                                <ul class="submenu">
-                                    {% if perms.purchases.view_purchaseinvoice %}<li><a class="nav-link" href="{% url 'purchases:invoice-list' %}">فاتورة مشتريات</a></li>{% endif %}
-                                    {% if perms.purchases.view_supplierpayment %}<li><a class="nav-link" href="{% url 'purchases:payment-list' %}">سندات الصرف</a></li>{% endif %}
-                                    {% if perms.purchases.view_purchasereturn %}<li><a class="nav-link" href="{% url 'purchases:return-list' %}">مرتجع مشتريات</a></li>{% endif %}
-                                    <li><hr class="dropdown-divider bg-secondary mx-2"></li>
-                                    {% if perms.purchases.view_supplier %}<li><a class="nav-link" href="{% url 'purchases:supplier-list' %}">الموردين</a></li>{% endif %}
-                                </ul>
-                            </div>
-                        </li>
-                        {% endif %}
-
-                        <!-- Inventory -->
-                        {% if perms.inventory.view_item or perms.inventory.view_warehouse %}
-                        <li class="nav-item">
-                            <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#invMenu" role="button" aria-expanded="false">
-                                <span><i class="bi bi-box-seam"></i> المخزون</span>
-                                <i class="bi bi-chevron-left chevron"></i>
-                            </a>
-                            <div class="collapse" id="invMenu">
-                                <ul class="submenu">
-                                    {% if perms.inventory.view_item %}<li><a class="nav-link" href="{% url 'inventory:item-list' %}">الأصناف</a></li>{% endif %}
-                                    {% if perms.inventory.view_itemcategory %}<li><a class="nav-link" href="{% url 'inventory:category-list' %}">فئات الأصناف</a></li>{% endif %}
-                                    {% if perms.inventory.view_unitofmeasure %}<li><a class="nav-link" href="{% url 'inventory:unit-list' %}">وحدات القياس</a></li>{% endif %}
-                                    {% if perms.inventory.view_warehouse %}<li><a class="nav-link" href="{% url 'inventory:warehouse-list' %}">المستودعات</a></li>{% endif %}
-                                    {% if perms.inventory.view_stockvoucher %}<li><a class="nav-link" href="{% url 'inventory:voucher-list' %}">أذون الصرف/الإضافة</a></li>{% endif %}
-                                    {% if perms.inventory.view_warehousetransfer %}<li><a class="nav-link" href="{% url 'inventory:transfer-list' %}">التحويلات</a></li>{% endif %}
-                                    {% if perms.inventory.view_loadingorder %}<li><a class="nav-link" href="{% url 'inventory:loading-list' %}">طلبات التحميل</a></li>{% endif %}
-                                </ul>
-                            </div>
-                        </li>
-                        {% endif %}
-
-                        <!-- Treasury -->
-                        {% if perms.treasury.view_cashbox or perms.treasury.view_bankaccount %}
-                        <li class="nav-item">
-                            <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#treaMenu" role="button" aria-expanded="false">
-                                <span><i class="bi bi-wallet2"></i> الخزينة والبنوك</span>
-                                <i class="bi bi-chevron-left chevron"></i>
-                            </a>
-                            <div class="collapse" id="treaMenu">
-                                <ul class="submenu">
-                                    {% if perms.treasury.view_cashbox %}<li><a class="nav-link" href="{% url 'treasury:cashbox-list' %}">الخزن النقدية</a></li>{% endif %}
-                                    {% if perms.treasury.view_bankaccount %}<li><a class="nav-link" href="{% url 'treasury:bank-list' %}">الحسابات البنكية</a></li>{% endif %}
-                                    {% if perms.treasury.view_cashtransfer %}<li><a class="nav-link" href="{% url 'treasury:transfer-list' %}">تحويلات مالية</a></li>{% endif %}
-                                </ul>
-                            </div>
-                        </li>
-                        {% endif %}
-
-                        <!-- Expenses & Custody -->
-                        {% if perms.expenses.view_expense or perms.expenses.view_custody %}
-                        <li class="nav-item">
-                            <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#expMenu" role="button" aria-expanded="false">
-                                <span><i class="bi bi-receipt-cutoff"></i> المصروفات والعهد</span>
-                                <i class="bi bi-chevron-left chevron"></i>
-                            </a>
-                            <div class="collapse" id="expMenu">
-                                <ul class="submenu">
-                                    {% if perms.expenses.view_expense %}<li><a class="nav-link" href="{% url 'expenses:expense-list' %}">سجل المصروفات</a></li>{% endif %}
-                                    {% if perms.expenses.view_expensecategory %}<li><a class="nav-link" href="{% url 'expenses:category-list' %}">بنود المصروفات (Categories)</a></li>{% endif %}
-                                    {% if perms.expenses.view_custody %}<li><a class="nav-link" href="{% url 'expenses:custody-list' %}">العهد المالية</a></li>{% endif %}
-                                </ul>
-                            </div>
-                        </li>
-                        {% endif %}
-
-                        <!-- HR & Payroll -->
-                        {% if perms.hr.view_employee %}
-                        <li class="nav-item">
-                            <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#hrMenu" role="button" aria-expanded="false">
-                                <span><i class="bi bi-people"></i> شئون العاملين والرواتب</span>
-                                <i class="bi bi-chevron-left chevron"></i>
-                            </a>
-                            <div class="collapse" id="hrMenu">
-                                <ul class="submenu">
-                                    <li><a class="nav-link" href="{% url 'hr:dashboard' %}">لوحة تحكم الـ HR</a></li>
-                                    {% if perms.hr.add_attendancerecord %}<li><a class="nav-link" href="{% url 'hr:attendance-daily' %}">سجل الحضور اليومي</a></li>{% endif %}
-                                    <li><a class="nav-link" href="{% url 'hr:employee-list' %}">سجل الموظفين</a></li>
-                                    {% if perms.hr.view_payrollperiod %}<li><a class="nav-link" href="{% url 'hr:payroll-list' %}">مسيرات الرواتب</a></li>{% endif %}
-                                    {% if perms.hr.view_leaverequest %}<li><a class="nav-link" href="{% url 'hr:leave-list' %}">إدارة الإجازات</a></li>{% endif %}
-                                    {% if perms.hr.view_loan %}<li><a class="nav-link" href="{% url 'hr:loan-list' %}">إدارة السلف</a></li>{% endif %}
-                                </ul>
-                            </div>
-                        </li>
-                        {% endif %}
-
-                        <!-- Reports -->
-                        {% if perms.core.view_account or perms.sales.view_customer or perms.inventory.view_item %}
-                        <li class="nav-item">
-                            <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#repMenu" role="button" aria-expanded="false">
-                                <span><i class="bi bi-bar-chart-line"></i> التقارير المالية</span>
-                                <i class="bi bi-chevron-left chevron"></i>
-                            </a>
-                            <div class="collapse" id="repMenu">
-                                <ul class="submenu">
-                                    {% if perms.sales.view_salesinvoice %}<li><a class="nav-link text-primary fw-bold" href="{% url 'sales:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير المبيعات</a></li>{% endif %}
-                                    {% if perms.core.view_account %}<li><a class="nav-link" href="{% url 'reports:trial_balance' %}">ميزان المراجعة</a></li>{% endif %}
-                                    {% if perms.core.view_account %}<li><a class="nav-link" href="{% url 'reports:account_statement' %}">دفتر الأستاذ (كشف حساب)</a></li>{% endif %}
-                                    {% if perms.core.view_account %}<li><a class="nav-link" href="{% url 'reports:income_statement' %}">قائمة الدخل</a></li>{% endif %}
-                                    {% if perms.core.view_account %}<li><a class="nav-link" href="{% url 'reports:balance_sheet' %}">المركز المالي</a></li>{% endif %}
-                                    {% if perms.inventory.view_item %}<li><a class="nav-link" href="{% url 'reports:stock_status' %}">حالة المخزون</a></li>{% endif %}
-                                </ul>
-                            </div>
-                        </li>
-                        {% endif %}
-
-                        <hr class="mx-3 border-secondary">
-                        
-                        <!-- Users & Roles -->
-                        {% if user.is_superuser or perms.auth.view_group %}
-                        <li class="nav-item">
-                            <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#usersMenu" role="button" aria-expanded="false">
-                                <span><i class="bi bi-shield-lock"></i> الصلاحيات والمستخدمين</span>
-                                <i class="bi bi-chevron-left chevron"></i>
-                            </a>
-                            <div class="collapse" id="usersMenu">
-                                <ul class="submenu">
-                                    <li><a class="nav-link" href="{% url 'users:user-list' %}">مستخدمي النظام</a></li>
-                                    <li><a class="nav-link" href="{% url 'users:role-list' %}">إدارة الأدوار</a></li>
-                                </ul>
-                            </div>
-                        </li>
-                        {% endif %}
-
-                        {% if user.is_superuser %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="/admin/">
-                                <i class="bi bi-shield-lock"></i> الإدارة والتدقيق
-                            </a>
-                        </li>
-                        {% endif %}
-
-                        <li class="nav-item mt-auto">
-                            <form method="post" action="{% url 'account_logout' %}" class="px-3 py-3">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-outline-danger w-100 btn-sm">
-                                    <i class="bi bi-box-arrow-right me-2"></i> خروج
-                                </button>
-                            </form>
-                        </li>
-                    </ul>
+                            <span class="d-none d-sm-inline me-2">{{ user.username }}</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                            <li><a class="dropdown-item" href="{% url 'hr:ess-dashboard' %}"><i class="bi bi-person me-2"></i> الملف الشخصي</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form method="post" action="{% url 'account_logout' %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="dropdown-item text-danger"><i class="bi bi-box-arrow-right me-2"></i> خروج</button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </nav>
 
-            <!-- Main Content Area -->
-            <main class="flex-grow-1 p-0" style="overflow-y: auto; height: 100vh;">
-                <!-- Navbar -->
-                <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom sticky-top py-3 px-4 shadow-sm">
-                    <div class="container-fluid">
-                        <button class="btn btn-light d-md-none me-3" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar">
-                            <i class="bi bi-list"></i>
-                        </button>
-                        <h4 class="mb-0 fw-bold">{% block header %}{% endblock %}</h4>
-                        
-                        <div class="ms-auto d-flex align-items-center">
-                            <div class="dropdown">
-                                <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle text-dark" id="userDropdown" data-bs-toggle="dropdown">
-                                    <div class="avatar-sm bg-primary text-white rounded-circle p-1 me-2" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
-                                        {{ user.username|first|upper }}
-                                    </div>
-                                    <span class="d-none d-sm-inline">{{ user.username }}</span>
-                                </a>
-                                <ul class="dropdown-menu dropdown-menu-end shadow border-0">
-                                    <li><a class="dropdown-item" href="{% url 'hr:ess-dashboard' %}"><i class="bi bi-person me-2"></i> الملف الشخصي</a></li>
-                                    <li><hr class="dropdown-divider"></li>
-                                    <li>
-                                        <form method="post" action="{% url 'account_logout' %}">
-                                            {% csrf_token %}
-                                            <button type="submit" class="dropdown-item text-danger"><i class="bi bi-box-arrow-right me-2"></i> خروج</button>
-                                        </form>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </nav>
-
-                <div class="p-4">
-                    {% if messages %}
+            <div class="content-area">
+                {% if messages %}
                 <div class="messages-container no-print">
                     {% for message in messages %}
                     <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm border-0" role="alert">
@@ -368,9 +324,10 @@
                 {% endif %}
 
                 {% block content %}{% endblock %}
-            </main>
-        </div>
+            </div>
+        </main>
     </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     {% block extra_js %}{% endblock %}

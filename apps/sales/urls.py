@@ -4,6 +4,9 @@ from . import views, report_views
 app_name = 'sales'
 
 urlpatterns = [
+    # Dashboard
+    path('', report_views.SalesDashboardView.as_view(), name='dashboard'),
+
     # Customers
     path('customers/', views.CustomerListView.as_view(), name='customer-list'),
     path('customers/create/', views.CustomerCreateView.as_view(), name='customer-create'),

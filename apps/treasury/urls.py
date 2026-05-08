@@ -4,6 +4,7 @@ from . import views
 app_name = 'treasury'
 
 urlpatterns = [
+    path('', views.TreasuryDashboardView.as_view(), name='dashboard'),
     path('cashboxes/', views.CashBoxListView.as_view(), name='cashbox-list'),
     path('cashboxes/create/', views.CashBoxCreateView.as_view(), name='cashbox-create'),
     path('cashboxes/<int:pk>/', views.CashBoxDetailView.as_view(), name='cashbox-detail'),

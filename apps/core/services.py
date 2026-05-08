@@ -97,26 +97,25 @@ class JournalService:
         today_str = timezone.now().strftime('%Y%m%d')
         prefix = f"{entry_type.upper()}-{today_str}-"
         
-        with transaction.atomic():
-            # Use select_for_update on the latest matching entry to lock and prevent race conditions
-            last_entry = JournalEntry.objects.filter(
-                number__startswith=prefix
-            ).select_for_update().order_by('-number').first()
-            
-            if last_entry:
-                try:
-                    last_num = int(last_entry.number.split('-')[-1])
-                    next_num = last_num + 1
-                except (ValueError, IndexError):
-                    next_num = 1
-            else:
-                next_num = 1
+        try:
+            with transaction.atomic():
+                last_entry = JournalEntry.objects.filter(
+                    number__startswith=prefix
+                ).select_for_update(nowait=True).order_by('-number').first()
                 
-            return f"{prefix}{next_num:04d}"
-        
-        # Fallback with timestamp if retries fail
-        import time
-        return f"{entry_type.upper()}-{today_str}-{int(time.time()*1000)}"
+                if last_entry:
+                    try:
+                        last_num = int(last_entry.number.split('-')[-1])
+                        next_num = last_num + 1
+                    except (ValueError, IndexError):
+                        next_num = 1
+                else:
+                    next_num = 1
+                    
+                return f"{prefix}{next_num:04d}"
+        except Exception:
+            import time
+            return f"{prefix}{int(time.time()*1000)}"
 
     @staticmethod
     @transaction.atomic
@@ -455,9 +454,6 @@ class AccountService:
             ('5242', 'ضيافة وبوفيه', AccountType.EXPENSE, '524'),
             ('5243', 'نظافة وأدوات صحية', AccountType.EXPENSE, '524'),
             ('5244', 'مصاريف صيانة عمومية', AccountType.EXPENSE, '524'),
-            # ── إيرادات متنوعة ──
-            ('421', 'إيرادات أوراق مالية', AccountType.REVENUE, '42'),
-            ('422', 'أرباح بيع أصول ثابتة', AccountType.REVENUE, '42'),
         ]
         
         created_count = 0

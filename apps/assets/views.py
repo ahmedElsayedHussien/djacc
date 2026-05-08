@@ -6,9 +6,53 @@ from django.shortcuts import redirect, get_object_or_404
 from django.utils import timezone
 from django.db import transaction
 from apps.core.models import Account
+from django.db.models import Sum, Count, Q
 from .models import Asset, AssetCategory, DepreciationLog
 from .services import AssetService
 from .forms import AssetForm, AssetCategoryForm
+from decimal import Decimal
+
+class AssetDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    model = Asset
+    template_name = 'assets/dashboard.html'
+    permission_required = 'assets.view_asset'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        
+        # 1. Financial Stats
+        active_assets = Asset.objects.filter(status=Asset.Status.ACTIVE)
+        totals = Asset.objects.aggregate(
+            purchase_val=Sum('purchase_value'),
+            initial_dep=Sum('initial_accumulated_depreciation')
+        )
+        
+        total_purchase_val = totals['purchase_val'] or Decimal('0')
+        total_initial_dep = totals['initial_dep'] or Decimal('0')
+        total_system_dep = DepreciationLog.objects.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        
+        total_acc_dep = total_initial_dep + total_system_dep
+        ctx['total_cost'] = total_purchase_val
+        ctx['total_acc_dep'] = total_acc_dep
+        ctx['net_book_value'] = total_purchase_val - total_acc_dep
+        
+        # 2. Category Distribution
+        ctx['category_stats'] = AssetCategory.objects.annotate(
+            asset_count=Count('assets'),
+            total_cost=Sum('assets__purchase_value')
+        ).filter(asset_count__gt=0).order_by('-total_cost')
+
+        # 3. Status Distribution
+        ctx['status_counts'] = Asset.objects.values('status').annotate(count=Count('id'))
+        
+        # 4. Recent Depreciation
+        ctx['recent_depreciations'] = DepreciationLog.objects.select_related('asset').order_by('-date', '-id')[:10]
+        
+        # 5. Asset Count
+        ctx['active_count'] = Asset.objects.filter(status=Asset.Status.ACTIVE).count()
+        ctx['disposed_count'] = Asset.objects.filter(status=Asset.Status.DISPOSED).count()
+
+        return ctx
 
 class AssetListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = Asset

@@ -1,0 +1,259 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}لوحة تحكم الخزينة والبنوك | DJACC Pro{% endblock %}
+
+{% block header %}لوحة تحكم الخزينة وإدارة النقدية{% endblock %}
+
+{% block extra_css %}
+<style>
+    .table-custom thead th {
+        background-color: var(--bg-page);
+        text-transform: uppercase;
+        font-size: var(--font-size-xs);
+        letter-spacing: 0.05em;
+        color: var(--text-secondary);
+        border-top: none;
+    }
+    .account-row:hover { background-color: var(--bg-page); cursor: pointer; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Top Stats -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card stat-card h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon-box bg-soft-success me-3">
+                        <i class="bi bi-wallet2"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-muted mb-1">إجمالي السيولة (النقدية)</h6>
+                        <h3 class="mb-0 fw-bold">{{ total_liquidity|floatformat:0|intcomma }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon-box bg-soft-info me-3">
+                        <i class="bi bi-bank"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-muted mb-1">أرصدة البنوك</h6>
+                        <h3 class="mb-0 fw-bold">{{ total_bank|floatformat:0|intcomma }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon-box bg-soft-warning me-3">
+                        <i class="bi bi-arrow-left-right"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-muted mb-1">تحويلات قيد التنفيذ</h6>
+                        <h3 class="mb-0 fw-bold">{{ pending_transfers_count }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon-box bg-soft-primary me-3">
+                        <i class="bi bi-check-all"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-muted mb-1">تسويات بانتظار المطابقة</h6>
+                        <h3 class="mb-0 fw-bold">{{ pending_reconciliations }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <!-- Liquidity Distribution Chart -->
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0 fw-bold">توزيع السيولة</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="liquidityChart" style="max-height: 250px;"></canvas>
+                    <div class="mt-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span><i class="bi bi-circle-fill text-success me-2" style="font-size: 10px;"></i>النقدية (الخزن)</span>
+                            <span class="fw-bold">{{ total_cash|floatformat:0|intcomma }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-circle-fill text-info me-2" style="font-size: 10px;"></i>الحسابات البنكية</span>
+                            <span class="fw-bold">{{ total_bank|floatformat:0|intcomma }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cash Boxes & Banks List -->
+        <div class="col-lg-8">
+            <div class="card h-100">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold">الأرصدة الحالية للحسابات</h5>
+                    <div>
+                        <a href="{% url 'treasury:cashbox-list' %}" class="btn btn-sm btn-outline-success me-2">الخزن</a>
+                        <a href="{% url 'treasury:bank-list' %}" class="btn btn-sm btn-outline-info">البنوك</a>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-custom mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="px-4">الحساب</th>
+                                    <th>النوع</th>
+                                    <th>العملة</th>
+                                    <th class="text-end px-4">الرصيد</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in boxes_data %}
+                                <tr class="account-row" onclick="window.location='{% url 'treasury:cashbox-detail' item.obj.pk %}'">
+                                    <td class="px-4">
+                                        <div class="fw-bold text-success"><i class="bi bi-cash me-2"></i>{{ item.obj.name }}</div>
+                                        <small class="text-muted">المسؤول: {{ item.obj.responsible_user.get_full_name|default:item.obj.responsible_user.username }}</small>
+                                    </td>
+                                    <td>خزنة نقدية</td>
+                                    <td>{{ item.obj.currency }}</td>
+                                    <td class="text-end px-4 fw-bold">{{ item.balance|floatformat:2|intcomma }}</td>
+                                </tr>
+                                {% endfor %}
+                                {% for item in banks_data %}
+                                <tr class="account-row" onclick="window.location='{% url 'treasury:bank-detail' item.obj.pk %}'">
+                                    <td class="px-4">
+                                        <div class="fw-bold text-info"><i class="bi bi-bank2 me-2"></i>{{ item.obj.bank_name }} - {{ item.obj.name }}</div>
+                                        <small class="text-muted">{{ item.obj.account_number }}</small>
+                                    </td>
+                                    <td>حساب بنكي</td>
+                                    <td>{{ item.obj.currency }}</td>
+                                    <td class="text-end px-4 fw-bold">{{ item.balance|floatformat:2|intcomma }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Quick Actions -->
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0 fw-bold">إجراءات سريعة</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-3">
+                        <a href="{% url 'treasury:transfer-create' %}" class="btn btn-primary py-3">
+                            <i class="bi bi-send-plus me-2"></i>إنشاء أمر تحويل جديد
+                        </a>
+                        <a href="{% url 'treasury:bankreconciliation-create' %}" class="btn btn-outline-info py-3">
+                            <i class="bi bi-clipboard-check me-2"></i>بدء تسوية بنكية
+                        </a>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <a href="{% url 'treasury:cashbox-create' %}" class="btn btn-outline-success w-100">إضافة خزنة</a>
+                            </div>
+                            <div class="col-6">
+                                <a href="{% url 'treasury:bank-create' %}" class="btn btn-outline-info w-100">إضافة بنك</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Transfers -->
+        <div class="col-lg-8">
+            <div class="card h-100">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold">أحدث التحويلات المالية</h5>
+                    <a href="{% url 'treasury:transfer-list' %}" class="btn btn-sm btn-outline-secondary">عرض الكل</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-custom mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="px-4">المرجع</th>
+                                    <th>من</th>
+                                    <th>إلى</th>
+                                    <th>المبلغ</th>
+                                    <th>الحالة</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for x in recent_transfers %}
+                                <tr>
+                                    <td class="px-4">
+                                        <div class="fw-bold">{{ x.number }}</div>
+                                        <small class="text-muted">{{ x.date|date:"Y-m-d" }}</small>
+                                    </td>
+                                    <td>{{ x.from_cash_box.name|default:x.from_bank.name }}</td>
+                                    <td>{{ x.to_cash_box.name|default:x.to_bank.name }}</td>
+                                    <td class="fw-bold">{{ x.amount|floatformat:2|intcomma }}</td>
+                                    <td>
+                                        {% if x.status == 'completed' %}
+                                            <span class="badge bg-success">مكتمل</span>
+                                        {% elif x.status == 'pending' %}
+                                            <span class="badge bg-warning text-dark">بانتظار الاستلام</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ x.get_status_display }}</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="5" class="text-center py-4 text-muted">لا يوجد تحويلات مسجلة</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    new Chart(document.getElementById('liquidityChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['نقدية', 'بنوك'],
+            datasets: [{
+                data: [{{ total_cash }}, {{ total_bank }}],
+                backgroundColor: ['#22c55e', '#06b6d4'],
+                hoverOffset: 10,
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Cairo' } } }
+            },
+            cutout: '70%'
+        }
+    });
+</script>
+{% endblock %}

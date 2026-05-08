@@ -1,0 +1,254 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}لوحة تحكم المصروفات | DJACC Pro{% endblock %}
+
+{% block header %}لوحة تحكم إدارة المصروفات والعهد{% endblock %}
+
+{% block extra_css %}
+<style>
+    .table-custom thead th {
+        background-color: var(--bg-page);
+        text-transform: uppercase;
+        font-size: var(--font-size-xs);
+        letter-spacing: 0.05em;
+        color: var(--text-secondary);
+        border-top: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Top Stats -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card stat-card h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon-box bg-soft-primary me-3">
+                        <i class="bi bi-calendar-check"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-muted mb-1">مصروفات الشهر الحالي</h6>
+                        <h3 class="mb-0 fw-bold">{{ monthly_total|floatformat:0|intcomma }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon-box bg-soft-info me-3">
+                        <i class="bi bi-wallet2"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-muted mb-1">عهد مفتوحة</h6>
+                        <h3 class="mb-0 fw-bold">{{ total_open_custody_amount|floatformat:0|intcomma }}</h3>
+                        <small class="text-muted">{{ open_custodies_count }} موظف</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon-box bg-soft-warning me-3">
+                        <i class="bi bi-hourglass-split"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-muted mb-1">بانتظار الاعتماد</h6>
+                        <h3 class="mb-0 fw-bold">{{ pending_expenses }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon-box bg-soft-success me-3">
+                        <i class="bi bi-receipt"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-muted mb-1">عدد العمليات (شهرياً)</h6>
+                        <h3 class="mb-0 fw-bold">{{ monthly_count }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <!-- Category Distribution Chart -->
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold">توزيع المصروفات حسب البند</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="categoryChart" style="max-height: 300px;"></canvas>
+                    <div class="mt-4">
+                        {% for cat in category_stats|slice:":5" %}
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted"><i class="bi bi-circle-fill me-2" style="font-size: 8px; color: {% cycle '#6366f1' '#22c55e' '#f59e0b' '#ef4444' '#06b6d4' %};"></i>{{ cat.name }}</span>
+                            <span class="fw-bold">{{ cat.total|floatformat:0|intcomma }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Expenses Table -->
+        <div class="col-lg-7">
+            <div class="card h-100">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold">أحدث عمليات الصرف</h5>
+                    <a href="{% url 'expenses:expense-list' %}" class="btn btn-sm btn-outline-primary">عرض الكل</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-custom mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="px-4">التاريخ</th>
+                                    <th>البند</th>
+                                    <th>المبلغ</th>
+                                    <th>الحالة</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for exp in recent_expenses %}
+                                <tr>
+                                    <td class="px-4">
+                                        <div class="fw-bold">{{ exp.date|date:"Y-m-d" }}</div>
+                                        <small class="text-muted">{{ exp.number }}</small>
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold">{{ exp.category.name }}</div>
+                                        <small class="text-muted">{{ exp.get_payment_method_display }}</small>
+                                    </td>
+                                    <td><span class="fw-bold">{{ exp.amount|floatformat:2|intcomma }}</span></td>
+                                    <td>
+                                        {% if exp.status == 'posted' %}
+                                            <span class="status-badge bg-soft-success text-success">مرحّل</span>
+                                        {% elif exp.status == 'approved' %}
+                                            <span class="status-badge bg-soft-info text-info">معتمد</span>
+                                        {% else %}
+                                            <span class="status-badge bg-soft-warning text-warning">مسودة</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center py-4 text-muted">لا يوجد مصروفات مسجلة حالياً</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Quick Actions & Custody -->
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0 fw-bold">إجراءات سريعة</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-3">
+                        <a href="{% url 'expenses:expense-create' %}" class="btn btn-primary py-3">
+                            <i class="bi bi-plus-circle me-2"></i>تسجيل مصروف جديد
+                        </a>
+                        <a href="{% url 'expenses:custody-create' %}" class="btn btn-outline-info py-3">
+                            <i class="bi bi-person-plus me-2"></i>صرف عهدة لموظف
+                        </a>
+                    </div>
+                    <hr class="my-4">
+                    <h6 class="fw-bold mb-3">ملخص العهد</h6>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            إجمالي العهد المفتوحة
+                            <span class="fw-bold text-danger">{{ total_open_custody_amount|intcomma }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            عدد الموظفين بعهدة
+                            <span class="fw-bold">{{ open_custodies_count }}</span>
+                        </li>
+                    </ul>
+                    <a href="{% url 'expenses:custody-list' %}" class="btn btn-link btn-sm p-0 mt-2">إدارة العهد المفتوحة...</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Expense Category Breakdown (Small Bar Chart) -->
+        <div class="col-lg-8">
+            <div class="card h-100">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0 fw-bold">تحليل المصروفات حسب البنود (الشهر الحالي)</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="categoryBarChart" style="max-height: 250px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const categoryLabels = [{% for cat in category_stats %}'{{ cat.name }}',{% endfor %}];
+    const categoryData = [{% for cat in category_stats %}{{ cat.total|default:0 }},{% endfor %}];
+
+    // Doughnut Chart
+    new Chart(document.getElementById('categoryChart'), {
+        type: 'doughnut',
+        data: {
+            labels: categoryLabels.slice(0, 5),
+            datasets: [{
+                data: categoryData.slice(0, 5),
+                backgroundColor: ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            cutout: '75%'
+        }
+    });
+
+    // Bar Chart
+    new Chart(document.getElementById('categoryBarChart'), {
+        type: 'bar',
+        data: {
+            labels: categoryLabels,
+            datasets: [{
+                label: 'المبلغ',
+                data: categoryData,
+                backgroundColor: '#6366f1',
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true, rtl: true },
+                x: { rtl: true }
+            }
+        }
+    });
+</script>
+{% endblock %}

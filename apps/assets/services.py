@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 from apps.core.services import JournalService, AuditService
-from apps.core.models import JournalEntry, Account
+from apps.core.models import JournalEntry, Account, AccountType
 
 def _get_or_create_account(code, name, parent_code, account_type):
     """مساعد لجلب أو إنشاء حساب محاسبي للأرصدة الافتتاحية"""
@@ -71,7 +71,7 @@ class AssetService:
             from django.conf import settings
             # استخدام حساب الأرصدة الافتتاحية (ح/35 أو ح/34 أرباح مرحلة)
             opening_acc_code = getattr(settings, 'OPENING_BALANCES_ACCOUNT', '35')
-            opening_acc = _get_or_create_account(opening_acc_code, 'أرصدة افتتاحية / أرباح مرحلة', '3', 'equity')
+            opening_acc = _get_or_create_account(opening_acc_code, 'أرصدة افتتاحية / أرباح مرحلة', '3', AccountType.EQUITY)
 
 
             JournalService.create_entry(
@@ -148,7 +148,7 @@ class AssetService:
         # 4. معالجة الأرباح أو الخسائر
         if gain_loss < 0:
             # خسارة (مدين)
-            loss_acc = _get_or_create_account('5261', 'خسائر استبعاد أصول ثابتة', '526', 'expense')
+            loss_acc = _get_or_create_account('5261', 'خسائر استبعاد أصول ثابتة', '526', AccountType.EXPENSE)
             lines.append({
                 'account': loss_acc,
                 'debit': abs(gain_loss),
@@ -157,7 +157,7 @@ class AssetService:
             })
         elif gain_loss > 0:
             # ربح (دائن)
-            gain_acc = _get_or_create_account('4210', 'أرباح رأسمالية (بيع أصول)', '421', 'revenue')
+            gain_acc = _get_or_create_account('4210', 'أرباح رأسمالية (بيع أصول)', '421', AccountType.REVENUE)
             lines.append({
                 'account': gain_acc,
                 'debit': 0,

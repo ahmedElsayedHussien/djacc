@@ -22,7 +22,6 @@ class AccountingLogicTest(TransactionTestCase):
             name="2026_TEST", 
             start_date=timezone.now().date().replace(month=1, day=1),
             end_date=timezone.now().date().replace(month=12, day=31),
-            is_active=True
         )
         
         # 3. Accounts
@@ -54,10 +53,12 @@ class AccountingLogicTest(TransactionTestCase):
         """Test Case: Purchase -> Stock Increase -> Correct Ledger Entries"""
         invoice = PurchaseInvoice.objects.create(
             number='PUR-T001', supplier=self.supplier, date=timezone.now().date(),
-            due_date=timezone.now().date(), created_by=self.user
+            due_date=timezone.now().date(), created_by=self.user,
+            subtotal=Decimal('1000'), total=Decimal('1140'), tax_amount=Decimal('140'),
+            supplier_invoice_number='SUP-INV-001'
         )
         line = PurchaseInvoiceLine.objects.create(
-            invoice=invoice, item=self.item, warehouse=self.warehouse,
+            invoice=invoice, item=self.item, warehouse=self.warehouse, unit=self.unit,
             quantity=Decimal('10'), unit_cost=Decimal('100'), 
             tax_type=self.vat_tax, tax_percent=Decimal('14.00'), total=Decimal('1140')
         )
@@ -81,15 +82,16 @@ class AccountingLogicTest(TransactionTestCase):
         InventoryService.record_movement(
             date_val=timezone.now().date(), item=self.item, warehouse=self.warehouse,
             movement_type='opening', quantity=Decimal('10'), unit_cost=Decimal('100'),
-            created_by=self.user
         )
         
         invoice = SalesInvoice.objects.create(
             number='INV-T001', customer=self.customer, date=timezone.now().date(),
-            payment_type='credit', created_by=self.user
+            payment_type='credit', created_by=self.user,
+            subtotal=Decimal('400'), total=Decimal('456'), tax_amount=Decimal('56'),
+            due_date=timezone.now().date()
         )
         line = SalesInvoiceLine.objects.create(
-            invoice=invoice, item=self.item, warehouse=self.warehouse,
+            invoice=invoice, item=self.item, warehouse=self.warehouse, unit=self.unit,
             quantity=Decimal('2'), unit_price=Decimal('200'),
             tax_type=self.vat_tax, tax_percent=Decimal('14.00'), total=Decimal('456'),
             revenue_account=self.sales_acc, cost_of_goods_account=self.cogs_acc
@@ -111,13 +113,11 @@ class AccountingLogicTest(TransactionTestCase):
         InventoryService.record_movement(
             date_val=timezone.now().date(), item=self.item, warehouse=self.warehouse,
             movement_type='opening', quantity=Decimal('1'), unit_cost=Decimal('150.75'),
-            created_by=self.user
         )
         
         InventoryService.record_movement(
             date_val=timezone.now().date(), item=self.item, warehouse=self.warehouse,
             movement_type='sales_out', quantity=Decimal('-1'), unit_cost=Decimal('150.75'),
-            created_by=self.user
         )
         
         from apps.inventory.models import ItemLedger

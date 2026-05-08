@@ -4,9 +4,56 @@ from django.urls import reverse_lazy
 from django.contrib import messages
 from django.shortcuts import redirect
 from django.views import View
-from .models import Expense, ExpenseCategory, Custody
+from .models import Expense, ExpenseCategory, Custody, CustodySettlement
 from .forms import ExpenseForm, ExpenseCategoryForm, CustodyForm
-from .services import ExpenseService # Assuming it exists based on dir listing
+from .services import ExpenseService
+from django.db.models import Sum, Count, Q
+from django.utils import timezone
+from datetime import timedelta
+
+class ExpenseDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    model = Expense
+    template_name = 'expenses/dashboard.html'
+    permission_required = 'expenses.view_expense'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        now = timezone.now()
+        month_start = now.replace(day=1)
+        
+        # 1. Monthly Summary
+        monthly_stats = Expense.objects.filter(
+            date__gte=month_start, 
+            status=Expense.Status.POSTED
+        ).aggregate(
+            total_amount=Sum('amount'),
+            count=Count('id')
+        )
+        ctx['monthly_total'] = monthly_stats['total_amount'] or 0
+        ctx['monthly_count'] = monthly_stats['count'] or 0
+
+        # 2. Category Distribution (Current Month)
+        ctx['category_stats'] = ExpenseCategory.objects.annotate(
+            total=Sum('expense__amount', filter=Q(expense__date__gte=month_start, expense__status=Expense.Status.POSTED))
+        ).filter(total__gt=0).order_by('-total')
+
+        # 3. Pending Approvals
+        ctx['pending_expenses'] = Expense.objects.filter(status=Expense.Status.DRAFT).count()
+        
+        # 4. Custody Summary
+        custody_stats = Custody.objects.aggregate(
+            open_count=Count('id', filter=Q(status=Custody.Status.OPEN)),
+            total_open_amount=Sum('amount', filter=Q(status=Custody.Status.OPEN))
+        )
+        ctx['open_custodies_count'] = custody_stats['open_count'] or 0
+        ctx['total_open_custody_amount'] = custody_stats['total_open_amount'] or 0
+
+        # 5. Recent Expenses
+        ctx['recent_expenses'] = Expense.objects.select_related('category', 'cost_center').order_by('-date', '-id')[:10]
+
+        # 6. Trends (Last 6 Months)
+        # For simplicity in this view, we'll just pass raw data for the chart if needed
+        return ctx
 
 class ExpenseListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = Expense
@@ -158,7 +205,6 @@ class CustodyDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView)
     context_object_name = 'custody'
     permission_required = 'expenses.view_custody'
 
-from .models import CustodySettlement
 from .forms import CustodySettlementForm
 
 class CustodySettlementCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):

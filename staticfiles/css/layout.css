@@ -1,0 +1,246 @@
+/* =========================================================
+   DJACC Pro - Layout
+   تخطيط الصفحات - الشريط الجانبي، الرأس، المحتوى
+   ========================================================= */
+
+/* ── التخطيط العام ─────────────────────────────────────── */
+body {
+    min-height: 100vh;
+}
+
+.layout-wrapper {
+    display: flex;
+    min-height: 100vh;
+}
+
+/* ── الشريط الجانبي (Sidebar) ───────────────────────────── */
+.sidebar {
+    width: var(--sidebar-width);
+    min-height: 100vh;
+    background-color: var(--bg-sidebar);
+    color: var(--text-sidebar-active);
+    transition: all var(--transition-slow);
+    box-shadow: var(--shadow-sidebar);
+    flex-shrink: 0;
+    position: relative;
+}
+
+.sidebar .position-sticky {
+    position: sticky;
+    top: 0;
+}
+
+/* منطقة العلامة التجارية */
+.brand-area {
+    padding: var(--space-6);
+    border-bottom: var(--border-width) solid var(--bg-sidebar-hover);
+    margin-bottom: var(--space-4);
+}
+
+.brand-logo {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-extrabold);
+    color: var(--color-primary);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.brand-logo:hover {
+    color: var(--color-primary-light);
+}
+
+/* عناصر التنقل */
+.sidebar .nav-link {
+    font-size: var(--font-size-base);
+    padding: var(--space-3) var(--space-5);
+    color: var(--text-sidebar) !important;
+    transition: all var(--transition-base);
+    border-radius: var(--border-radius);
+    margin: 2px var(--space-3);
+    display: flex;
+    align-items: center;
+    font-weight: var(--font-weight-medium);
+    text-decoration: none;
+}
+
+.sidebar .nav-link i {
+    font-size: var(--font-size-lg);
+    margin-left: var(--space-4);
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.sidebar .nav-link:hover {
+    background-color: var(--bg-sidebar-hover);
+    color: var(--text-sidebar-active) !important;
+}
+
+.sidebar .nav-link.active {
+    background-color: var(--color-primary);
+    color: var(--text-white) !important;
+    font-weight: var(--font-weight-semibold);
+}
+
+/* عناوين الأقسام */
+.sidebar-heading {
+    font-weight: var(--font-weight-bold);
+    padding: var(--space-6) var(--space-6) var(--space-2);
+    color: var(--text-muted) !important;
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+/* القوائم الفرعية */
+.submenu {
+    background-color: var(--bg-sidebar-sub);
+    margin: 0 var(--space-3);
+    border-radius: var(--border-radius);
+    list-style: none;
+    padding: var(--space-2) 0;
+}
+
+.submenu .nav-link {
+    margin: 1px var(--space-2);
+    font-size: var(--font-size-sm);
+    padding: var(--space-2) var(--space-4);
+}
+
+/* عناوين المجموعات القابلة للتوسيع */
+.nav-group-title {
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.nav-group-title[aria-expanded="true"] {
+    color: var(--text-sidebar-active) !important;
+}
+
+.nav-group-title[aria-expanded="true"] .chevron {
+    transform: rotate(90deg);
+}
+
+.chevron {
+    transition: transform var(--transition-base);
+    font-size: var(--font-size-sm);
+    flex-shrink: 0;
+}
+
+/* ── المحتوى الرئيسي (Main Content) ─────────────────────── */
+.main-content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    height: 100vh;
+    background-color: var(--bg-page);
+}
+
+/* ── شريط التنقل العلوي (Navbar) ─────────────────────────── */
+.top-navbar {
+    background-color: var(--bg-surface);
+    border-bottom: var(--border-width) solid var(--border-color);
+    padding: var(--space-3) var(--space-6);
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: var(--navbar-height);
+}
+
+.top-navbar .page-title {
+    margin: 0;
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-xl);
+    color: var(--text-primary);
+}
+
+.top-navbar .btn-menu-toggle {
+    background: var(--bg-page);
+    border: var(--border-width) solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: var(--space-2) var(--space-3);
+    color: var(--text-primary);
+    display: none;
+}
+
+/* ── منطقة المحتوى (Content Area) ────────────────────────── */
+.content-area {
+    padding: var(--space-6);
+    flex-grow: 1;
+    max-width: var(--content-max);
+    width: 100%;
+    margin: 0 auto;
+}
+
+/* ── حاوية الرسائل (Messages Container) ─────────────────── */
+.messages-container {
+    margin-bottom: var(--space-6);
+}
+
+/* ── التجاوب مع الشاشات الصغيرة (Responsive) ────────────── */
+@media (max-width: 767.98px) {
+    .sidebar {
+        position: fixed;
+        top: 0;
+        right: 0;
+        height: 100vh;
+        z-index: var(--z-fixed);
+        transform: translateX(100%);
+    }
+
+    .sidebar.show {
+        transform: translateX(0);
+    }
+
+    .main-content {
+        width: 100%;
+    }
+
+    .top-navbar .btn-menu-toggle {
+        display: inline-flex;
+    }
+
+    .content-area {
+        padding: var(--space-4);
+    }
+
+    .stat-value {
+        font-size: var(--font-size-2xl);
+    }
+}
+
+@media (min-width: 768px) {
+    .sidebar {
+        position: relative;
+        transform: none !important;
+    }
+}
+
+/* ── التجاوب مع الشاشات المتوسطة ─────────────────────────── */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .sidebar {
+        width: 220px;
+    }
+
+    .sidebar .nav-link {
+        font-size: var(--font-size-sm);
+        padding: var(--space-2) var(--space-4);
+    }
+}
+
+/* ── التخطيط للشاشات الكبيرة ─────────────────────────────── */
+@media (min-width: 1200px) {
+    .content-area {
+        padding: var(--space-8);
+    }
+}
