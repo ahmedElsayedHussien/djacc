@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.db import transaction
 from django.conf import settings
 from apps.core.models import JournalEntry, Account
@@ -12,6 +13,30 @@ class CustomerService:
     CUSTOMERS_PARENT_CODE = getattr(settings, 'CUSTOMERS_PARENT_ACCOUNT', '1121')
 
     @staticmethod
+    def generate_customer_code():
+        from .models import Customer
+        last_customer = Customer.objects.filter(code__startswith='cus-').order_by('-code').first()
+        if last_customer:
+            try:
+                # Extract number from 'cus-XXXXX'
+                parts = last_customer.code.split('-')
+                if len(parts) > 1:
+                    last_num = int(parts[1])
+                    next_num = last_num + 1
+                else:
+                    next_num = Customer.objects.count() + 1
+            except (IndexError, ValueError):
+                next_num = Customer.objects.count() + 1
+        else:
+            next_num = Customer.objects.count() + 1
+        
+        code = f"cus-{next_num:05d}"
+        while Customer.objects.filter(code=code).exists():
+            next_num += 1
+            code = f"cus-{next_num:05d}"
+        return code
+
+    @staticmethod
     @transaction.atomic
     def create_customer(validated_data: dict) -> Customer:
         """
@@ -20,8 +45,16 @@ class CustomerService:
         """
         parent = Account.objects.select_for_update().get(code=CustomerService.CUSTOMERS_PARENT_CODE)
 
-        # Generate account code: parent_code + sequential number
-        next_seq = Account.objects.filter(parent=parent).count() + 1
+        # Generate account code: parent_code + sequential number (Safe Max+1 logic)
+        from django.db.models import Max
+        last_code = Account.objects.filter(parent=parent).aggregate(Max('code'))['code__max']
+        if last_code:
+            try:
+                next_seq = int(last_code[len(parent.code):]) + 1
+            except (ValueError, TypeError):
+                next_seq = Account.objects.filter(parent=parent).count() + 1
+        else:
+            next_seq = 1
         account_code = f'{parent.code}{next_seq:03d}'
 
         # Create the accounting account
@@ -38,9 +71,14 @@ class CustomerService:
 
         # Create the customer linked to that account
         customer_data = {k: v for k, v in validated_data.items() if k not in ('code', 'account', 'initial_balance', 'initial_balance_type')}
+        
+        customer_code = validated_data.get('code')
+        if not customer_code:
+            customer_code = CustomerService.generate_customer_code()
+
         customer = Customer.objects.create(
             account=account,
-            code=validated_data.get('code'), # Use the code from validated_data
+            code=customer_code,
             **customer_data,
         )
         return customer
@@ -48,6 +86,10 @@ class CustomerService:
     @staticmethod
     @transaction.atomic
     def update_customer(customer: Customer, validated_data: dict) -> Customer:
+        # Lock the customer and their linked account record
+        customer = Customer.objects.select_for_update().get(pk=customer.pk)
+        customer.account = Account.objects.select_for_update().get(pk=customer.account.pk)
+        
         # Update account fields
         update_account = False
         if 'name' in validated_data and validated_data['name'] != customer.name:
@@ -75,6 +117,29 @@ class SalesRepresentativeService:
     REP_INVENTORY_PARENT = getattr(settings, 'SALES_REP_INVENTORY_PARENT', '1134')
 
     @staticmethod
+    def generate_rep_code():
+        from .models import SalesRepresentative
+        last_rep = SalesRepresentative.objects.filter(code__startswith='sr-').order_by('-code').first()
+        if last_rep:
+            try:
+                parts = last_rep.code.split('-')
+                if len(parts) > 1:
+                    last_num = int(parts[1])
+                    next_num = last_num + 1
+                else:
+                    next_num = SalesRepresentative.objects.count() + 1
+            except (IndexError, ValueError):
+                next_num = SalesRepresentative.objects.count() + 1
+        else:
+            next_num = SalesRepresentative.objects.count() + 1
+        
+        code = f"sr-{next_num:05d}"
+        while SalesRepresentative.objects.filter(code=code).exists():
+            next_num += 1
+            code = f"sr-{next_num:05d}"
+        return code
+
+    @staticmethod
     @transaction.atomic
     def create_rep(validated_data: dict) -> SalesRepresentative:
         """
@@ -89,6 +154,11 @@ class SalesRepresentativeService:
         if employee:
             rep_name = f"{employee.first_name} {employee.last_name}"
             rep_user = employee.user
+
+        # Generate rep code if not provided
+        rep_code = validated_data.get('code')
+        if not rep_code:
+            rep_code = SalesRepresentativeService.generate_rep_code()
 
         # 1. Create Warehouse Account
         parent_inv = Account.objects.get_or_create(
@@ -107,14 +177,14 @@ class SalesRepresentativeService:
 
         # 2. Create Warehouse
         warehouse = Warehouse.objects.create(
-            code=f"W-{validated_data['code']}",
+            code=f"W-{rep_code}",
             name=f"مخزن مندوب - {rep_name}",
             gl_account=warehouse_account
         )
 
         # 3. Create CashBox using TreasuryService
         cash_box_data = {
-            'code': f"CB-{validated_data['code']}",
+            'code': f"CB-{rep_code}",
             'name': f"خزنة مندوب - {rep_name}",
             'responsible_user': rep_user,
             'currency': 'EGP'
@@ -123,8 +193,9 @@ class SalesRepresentativeService:
 
         # 4. Create Rep (بدون account أولاً)
         rep_data = {k: v for k, v in validated_data.items()
-                    if k not in ('warehouse', 'cash_box', 'account')}
+                    if k not in ('warehouse', 'cash_box', 'account', 'code')}
         rep = SalesRepresentative.objects.create(
+            code=rep_code,
             warehouse=warehouse,
             cash_box=cash_box,
             **rep_data
@@ -150,6 +221,9 @@ class SalesService:
         DR  Cost of Goods Sold              → item.cost * quantity
         CR  Inventory                       → item.cost * quantity
         """
+        # Lock the invoice record to prevent concurrent posting/editing
+        invoice = SalesInvoice.objects.select_for_update().get(pk=invoice.pk)
+
         if invoice.status == SalesInvoice.Status.POSTED:
             raise ValueError("هذه الفاتورة مرحلة بالفعل")
 
@@ -175,11 +249,6 @@ class SalesService:
 
         # Credit revenue and Debit discount per line
         for line in invoice.lines.all():
-            # Source of truth for tax rate
-            tax_rate = line.tax_percent
-            if line.tax_type:
-                tax_rate = line.tax_type.rate
-            
             # Gross Revenue = quantity * unit_price (before discount)
             gross_revenue = line.quantity * line.unit_price
 
@@ -193,9 +262,9 @@ class SalesService:
             })
 
             # DR Sales Discount (if any)
-            discount_total = (line.quantity * line.unit_price) * (line.discount_percent / 100)
+            discount_total = (line.quantity * line.unit_price) * (line.discount_percent / Decimal('100'))
             if discount_total > 0:
-                discount_account = Account.objects.get(code=getattr(settings, 'SALES_DISCOUNT_ACCOUNT', '413'))
+                discount_account = Account.objects.get(code=getattr(settings, 'SALES_DISCOUNT_ACCOUNT', '414'))
                 lines.append({
                     'account': discount_account,
                     'debit': discount_total,
@@ -224,28 +293,52 @@ class SalesService:
             })
 
         # Group taxes by account (using net before tax after discount)
-        tax_lines = {}
+        # Group taxes by account (Professional logic: VAT on Net + Table Tax)
+        tax_account_totals = {}
         for line in invoice.lines.all():
-            # Compute net amount before tax (after discount)
-            net_before_tax = line.quantity * line.unit_price * (1 - (line.discount_percent / 100))
-            # Determine applicable tax rate
-            tax_rate = line.tax_percent if line.tax_percent else (line.tax_type.rate if line.tax_type else 0)
-            tax_val = net_before_tax * (tax_rate / 100)
-            acc = line.tax_type.account if line.tax_type else None
-            if acc and acc.id not in tax_lines:
-                tax_lines[acc.id] = {'account': acc, 'amount': 0, 'category': line.tax_type.category if line.tax_type else ''}
-            if acc:
-                tax_lines[acc.id]['amount'] += tax_val
+            net_before_tax = line.quantity * line.unit_price * (Decimal('1') - (line.discount_percent / Decimal('100')))
+            
+            # 1. Identify Table Tax first (as it might affect VAT)
+            table_tax_val = Decimal('0')
+            taxes_to_process = []
+            if line.tax_type: taxes_to_process.append({'type': line.tax_type, 'rate': line.tax_percent})
+            if line.tax_type2: taxes_to_process.append({'type': line.tax_type2, 'rate': line.tax_percent2})
+            
+            for tx_info in taxes_to_process:
+                tx = tx_info['type']
+                if tx.category == 'table':
+                    rate = tx_info['rate'] if tx_info['rate'] is not None else tx.rate
+                    table_tax_val += net_before_tax * (rate / Decimal('100'))
+            
+            # 2. Calculate all taxes
+            for tx_info in taxes_to_process:
+                tx = tx_info['type']
+                rate = tx_info['rate'] if tx_info['rate'] is not None else tx.rate
+                
+                if tx.category == 'vat':
+                    # VAT is on (Net + Table Tax)
+                    tx_val = (net_before_tax + table_tax_val) * (rate / Decimal('100'))
+                else:
+                    # Others are on Net
+                    tx_val = net_before_tax * (rate / Decimal('100'))
+                
+                if tx_val == 0: continue
+                
+                acc = tx.account
+                if acc:
+                    if acc.id not in tax_account_totals:
+                        tax_account_totals[acc.id] = {'account': acc, 'amount': Decimal('0'), 'category': tx.category}
+                    tax_account_totals[acc.id]['amount'] += tx_val
 
-        for tax_info in tax_lines.values():
+        for tax_info in tax_account_totals.values():
             if tax_info['amount'] > 0:
-                # In Sales: WHT, Salary tax, and Insurance are usually debits (deducted by customer or from payroll)
+                # In Sales: WHT, Salary tax, and Insurance are usually debits (deductions from the receivable)
                 is_debit = (tax_info['category'] in ['wht', 'salary', 'insurance'])
                 lines.append({
                     'account': tax_info['account'],
                     'debit': tax_info['amount'] if is_debit else 0,
                     'credit': 0 if is_debit else tax_info['amount'],
-                    'description': f"ضريبة {tax_info['account'].name}",
+                    'description': f"ضريبة {tax_info['account'].name} - فاتورة {invoice.number}",
                     'cost_center': invoice.cost_center
                 })
 
@@ -427,14 +520,14 @@ class SalesService:
         from apps.inventory.services import InventoryService
         from apps.inventory.models import StockMovement
         for line in sales_return.lines.all():
-            base_qty = line.item.convert_to_base(line.quantity, line.unit) if line.unit else line.quantity
+            base_qty = line.base_quantity or line.quantity
             InventoryService.record_movement(
                 date_val=sales_return.date,
                 item=line.item,
                 warehouse=line.warehouse,
-                movement_type=StockMovement.MovementType.SALES_RETURN, # ✅ Fix #3: استخدام Enum
-                quantity=base_qty, # ✅ Fix #2: استخدام الكمية الأساسية
-                unit_cost=line.cost, # Use stored cost
+                movement_type=StockMovement.MovementType.SALES_RETURN,
+                quantity=base_qty,
+                unit_cost=line.cost,
                 source=sales_return,
                 reference=sales_return.number,
             )

@@ -27,24 +27,49 @@
                 <tbody>
                     {% for tr in transfers %}
                     <tr>
-                        <td>{{ tr.number }}</td>
+                        <td><a href="{% url 'inventory:transfer-detail' tr.pk %}" class="fw-bold">{{ tr.number }}</a></td>
                         <td>{{ tr.date }}</td>
-                        <td>{{ tr.item.name }}</td>
+                        <td>
+                            {% with line_count=tr.lines.count %}
+                                {% if line_count == 1 %}
+                                    {{ tr.lines.first.item.name }}
+                                {% elif line_count > 1 %}
+                                    <span class="text-muted">({{ line_count }}) أصناف</span>
+                                {% else %}
+                                    <span class="text-danger">بدون أصناف</span>
+                                {% endif %}
+                            {% endwith %}
+                        </td>
                         <td>{{ tr.from_warehouse.name }}</td>
                         <td>{{ tr.to_warehouse.name }}</td>
-                        <td>{{ tr.quantity }}</td>
                         <td>
-                            <span class="badge {% if tr.status == 'posted' %}bg-success{% else %}bg-warning{% endif %}">
+                            {% if tr.lines.count == 1 %}
+                                {{ tr.lines.first.quantity|floatformat:0 }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            <span class="badge {% if tr.status == 'posted' %}bg-success{% elif tr.status == 'cancelled' %}bg-danger{% else %}bg-warning{% endif %}">
                                 {{ tr.get_status_display }}
                             </span>
                         </td>
                         <td>
-                            {% if tr.status == 'draft' %}
-                            <form method="post" action="{% url 'inventory:transfer-post' tr.pk %}" style="display:inline;">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-sm btn-success">ترحيل وتحديث المخزون</button>
-                            </form>
-                            {% endif %}
+                            <div class="btn-group">
+                                <a href="{% url 'inventory:transfer-detail' tr.pk %}" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-eye"></i> عرض
+                                </a>
+                                {% if tr.status == 'draft' %}
+                                <a href="{% url 'inventory:transfer-edit' tr.pk %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form method="post" action="{% url 'inventory:transfer-post' tr.pk %}" style="display:inline;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-success">ترحيل</button>
+                                </form>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% empty %}
@@ -53,6 +78,7 @@
                     </tr>
                     {% endfor %}
                 </tbody>
+
             </table>
         </div>
     </div>

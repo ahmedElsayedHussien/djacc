@@ -1,0 +1,169 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}تفاصيل الأصل: {{ asset.name }}{% endblock %}
+{% block header %}تفاصيل الأصل الثابت{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Asset Info Card -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-primary text-white py-3">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-info-square me-2"></i>معلومات الأساسية</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    <div class="display-6 fw-bold text-primary">{{ asset.code }}</div>
+                    <div class="h5 mb-0">{{ asset.name }}</div>
+                    <span class="badge {% if asset.status == 'active' %}bg-success{% else %}bg-secondary{% endif %} mt-2">
+                        {{ asset.get_status_display }}
+                    </span>
+                </div>
+                <hr>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span class="text-muted">التصنيف:</span>
+                        <span class="fw-bold">{{ asset.category.name }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span class="text-muted">تاريخ الشراء:</span>
+                        <span class="fw-bold">{{ asset.purchase_date }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span class="text-muted">الإدارة:</span>
+                        <span class="fw-bold">{{ asset.department|default:"---" }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span class="text-muted">الموقع:</span>
+                        <span class="fw-bold">{{ asset.location|default:"---" }}</span>
+                    </li>
+                </ul>
+                <div class="mt-4">
+                    <h6 class="fw-bold text-muted mb-2">ملاحظات:</h6>
+                    <p class="small bg-light p-2 rounded">{{ asset.notes|default:"لا يوجد ملاحظات." }}</p>
+                </div>
+                <div class="d-grid gap-2 mt-4">
+                    <a href="{% url 'assets:asset-update' asset.pk %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-pencil me-1"></i> تعديل البيانات
+                    </a>
+                    {% if asset.status == 'active' %}
+                    <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#disposeModal">
+                        <i class="bi bi-trash me-1"></i> استبعاد الأصل
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Financial Stats & Depreciation Logs -->
+    <div class="col-lg-8">
+        <div class="row g-4 mb-4">
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm bg-soft-primary h-100">
+                    <div class="card-body">
+                        <h6 class="text-muted mb-1">قيمة الشراء</h6>
+                        <h4 class="mb-0 fw-bold">{{ asset.purchase_value|floatformat:2|intcomma }}</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm bg-soft-danger h-100">
+                    <div class="card-body">
+                        <h6 class="text-muted mb-1">الإهلاك المتراكم</h6>
+                        <h4 class="mb-0 fw-bold">{{ asset.total_depreciation|floatformat:2|intcomma }}</h4>
+                        <small class="text-danger">{{ asset.depreciation_rate }}% سنوياً</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm bg-soft-success h-100">
+                    <div class="card-body">
+                        <h6 class="text-muted mb-1">القيمة الدفترية</h6>
+                        <h4 class="mb-0 fw-bold">{{ asset.book_value|floatformat:2|intcomma }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-clock-history me-2"></i>سجل عمليات الإهلاك</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="px-4">التاريخ</th>
+                                <th>المبلغ</th>
+                                <th>رقم القيد</th>
+                                <th>تاريخ التسجيل</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs %}
+                            <tr>
+                                <td class="px-4 fw-bold">{{ log.date }}</td>
+                                <td class="text-danger fw-bold">{{ log.amount|floatformat:2|intcomma }}</td>
+                                <td>
+                                    {% if log.journal_entry %}
+                                    <a href="{% url 'core:journal-detail' log.journal_entry.pk %}">{{ log.journal_entry.number }}</a>
+                                    {% else %}
+                                    ---
+                                    {% endif %}
+                                </td>
+                                <td>{{ log.created_at|date:"Y-m-d H:i" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">لا توجد سجلات إهلاك مسجلة حالياً.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Dispose Modal (Placeholder) -->
+<div class="modal fade" id="disposeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form class="modal-content" method="post" action="{% url 'assets:asset-dispose' asset.pk %}">
+            {% csrf_token %}
+            <div class="modal-header">
+                <h5 class="modal-title">استبعاد الأصل: {{ asset.name }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-danger">تحذير: سيتم إغلاق حساب الأصل وحساب مجمع الإهلاك وإنشاء قيد مالي بالاستبعاد.</p>
+                <div class="mb-3">
+                    <label class="form-label">تاريخ الاستبعاد</label>
+                    <input type="date" name="disposal_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">قيمة البيع (إن وجد)</label>
+                    <input type="number" name="disposal_value" class="form-control" value="0" step="0.01">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">حساب التحصيل (المقابل)</label>
+                    <select name="offset_account_id" class="form-select" required>
+                        <option value="">--- اختر الحساب ---</option>
+                        {% for acc in offset_accounts %}
+                        <option value="{{ acc.pk }}">{{ acc.code }} — {{ acc.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-modal="dismiss">إلغاء</button>
+                <button type="submit" class="btn btn-danger">تأكيد الاستبعاد</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

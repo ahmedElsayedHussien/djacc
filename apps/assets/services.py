@@ -4,16 +4,17 @@ from django.db import transaction
 from django.utils import timezone
 from apps.core.services import JournalService, AuditService
 from apps.core.models import JournalEntry, Account, AccountType
+from .models import Asset, AssetCategory, DepreciationLog
 
 def _get_or_create_account(code, name, parent_code, account_type):
     """مساعد لجلب أو إنشاء حساب محاسبي للأرصدة الافتتاحية"""
+    # ✅ Fix: Use select_for_update() to prevent race conditions during account creation
     acc = Account.objects.filter(code=code).first()
     if acc:
         return acc
     
     # إذا لم يوجد، ننشئه تحت الأب المحدد
-    from apps.core.models import AccountType
-    parent = Account.objects.filter(code=parent_code).first()
+    parent = Account.objects.select_for_update().get(code=parent_code)
     return Account.objects.create(
         code=code,
         name=name,

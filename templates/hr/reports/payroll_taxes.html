@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}الاستقطاعات الحكومية{% endblock %}
+{% block header %}كشف الاستقطاعات الضريبية والتأمينية{% endblock %}
+
+{% block content %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-8">
+                <label class="form-label fw-bold">اختر فترة الرواتب</label>
+                <select name="period" class="form-select select2">
+                    <option value="">اختر من القائمة...</option>
+                    {% for p in periods %}
+                    <option value="{{ p.id }}" {% if selected_period == p.id %}selected{% endif %}>{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-dark w-100"><i class="bi bi-bank me-2"></i>عرض الاستقطاعات</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if report %}
+<div class="row g-4">
+    <div class="col-md-6">
+        <div class="card shadow-sm border-0 bg-soft-info h-100">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-shield-check fs-1 text-info mb-3"></i>
+                <h6 class="text-muted mb-2">إجمالي التأمينات الاجتماعية (حصة الموظفين)</h6>
+                <h2 class="fw-bold text-dark">{{ report.total_social_insurance|default:0|floatformat:2|intcomma }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card shadow-sm border-0 bg-soft-danger h-100">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-percent fs-1 text-danger mb-3"></i>
+                <h6 class="text-muted mb-2">إجمالي ضريبة كسب العمل (Income Tax)</h6>
+                <h2 class="fw-bold text-dark">{{ report.total_income_tax|default:0|floatformat:2|intcomma }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-4 p-4 bg-light rounded-3 border">
+    <h5 class="fw-bold mb-3"><i class="bi bi-info-circle me-2"></i>ملاحظات التوريد</h5>
+    <p class="text-muted mb-0">هذه المبالغ تمثل إجمالي الاستقطاعات من قسائم الرواتب لهذه الفترة. يجب توريد هذه المبالغ للجهات المختصة خلال المواعيد القانونية لتجنب غرامات التأخير.</p>
+</div>
+{% endif %}
+{% endblock %}

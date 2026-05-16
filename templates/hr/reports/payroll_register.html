@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}كشف مسير الرواتب{% endblock %}
+{% block header %}كشف مسير الرواتب الشهري{% endblock %}
+
+{% block content %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-8">
+                <label class="form-label fw-bold">اختر فترة الرواتب</label>
+                <select name="period" class="form-select select2">
+                    <option value="">اختر من القائمة...</option>
+                    {% for p in periods %}
+                    <option value="{{ p.id }}" {% if selected_period == p.id %}selected{% endif %}>{{ p.name }} ({{ p.start_date }} - {{ p.end_date }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-file-earmark-spreadsheet me-2"></i>عرض المسير</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if report %}
+<div class="card shadow-sm border-0" style="border-radius: 15px;">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle text-nowrap">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">الموظف / الإدارة</th>
+                        <th class="text-end">الأساسي</th>
+                        <th class="text-end">البدلات</th>
+                        <th class="text-end">الإضافات</th>
+                        <th class="text-end text-danger">التأمينات</th>
+                        <th class="text-end text-danger">الضرائب</th>
+                        <th class="text-end text-danger">خصم السلف</th>
+                        <th class="text-end pe-4 bg-soft-success">صافي الراتب</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for slip in report %}
+                    <tr>
+                        <td class="ps-4">
+                            <span class="fw-bold text-dark">{{ slip.employee.first_name }} {{ slip.employee.last_name }}</span><br>
+                            <small class="text-muted">{{ slip.employee.job_title.name }} - {{ slip.employee.department.name }}</small>
+                        </td>
+                        <td class="text-end">{{ slip.basic_salary|floatformat:2|intcomma }}</td>
+                        <td class="text-end">{{ slip.total_allowances|floatformat:2|intcomma }}</td>
+                        <td class="text-end">{{ slip.other_additions|floatformat:2|intcomma }}</td>
+                        <td class="text-end text-danger">{{ slip.social_insurance|floatformat:2|intcomma }}</td>
+                        <td class="text-end text-danger">{{ slip.income_tax|floatformat:2|intcomma }}</td>
+                        <td class="text-end text-danger">{{ slip.total_deductions|floatformat:2|intcomma }}</td>
+                        <td class="text-end pe-4 fw-bold fs-6 bg-soft-success text-success">{{ slip.net_salary|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -10,6 +10,7 @@ from django.contrib import messages
 from .models import Employee, LeaveRequest, PayrollPeriod, EmployeeDocument, Loan, LeaveBalance, JobTitle, Department
 from .forms import EmployeeForm, PayrollPeriodForm, LeaveRequestForm, LoanForm, UserForm, JobTitleForm, DepartmentForm
 from django.contrib.auth.models import User
+from django.contrib.auth.decorators import login_required
 
 class DepartmentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = Department
@@ -44,6 +45,7 @@ class UserCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
         messages.success(self.request, "تم إنشاء المستخدم بنجاح")
         return super().form_valid(form)
 
+@login_required
 def get_user_info(request):
     user_id = request.GET.get('user_id')
     if user_id:
@@ -196,8 +198,18 @@ class PayrollPeriodDetailView(LoginRequiredMixin, PermissionRequiredMixin, Detai
         context['payslips'] = self.object.payslips.select_related('employee', 'employee__job_title')
         
         from apps.treasury.models import BankAccount, CashBox
+        from apps.sales.models import SalesRepresentative
+        
+        rep_cashboxes = SalesRepresentative.objects.values_list('cash_box_id', flat=True)
+        
         context['bank_accounts'] = BankAccount.objects.all()
-        context['cash_boxes'] = CashBox.objects.all()
+        context['cash_boxes'] = CashBox.objects.exclude(id__in=rep_cashboxes)
+
+        # حساب المبالغ المقترحة للتوريد
+        from django.db.models import Sum
+        context['suggested_ins'] = self.object.payslips.aggregate(total=Sum('social_insurance'))['total'] or 0
+        context['suggested_tax'] = self.object.payslips.aggregate(total=Sum('income_tax'))['total'] or 0
+        
         return context
 
 class GeneratePayslipsView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -263,19 +275,55 @@ class PostPaymentView(LoginRequiredMixin, PermissionRequiredMixin, View):
         from apps.treasury.models import BankAccount, CashBox
         
         # Determine source of payment (Bank or Cash)
-        source_id = request.POST.get('source_id')
         source_type = request.POST.get('source_type')
         
         try:
             if source_type == 'bank':
+                source_id = request.POST.get('source_id_bank')
                 acc = get_object_or_404(BankAccount, pk=source_id).account
             else:
+                source_id = request.POST.get('source_id_cash')
                 acc = get_object_or_404(CashBox, pk=source_id).account
                 
             PayrollService.post_payment_entry(period, acc, request.user)
             messages.success(request, 'تم إثبات صرف الرواتب بنجاح.')
         except Exception as e:
             messages.error(request, f'فشل إثبات الصرف: {e}')
+        return redirect('hr:payroll-detail', pk=pk)
+
+class PostGovPaymentView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'hr.change_payrollperiod'
+    
+    def post(self, request, pk):
+        period = get_object_or_404(PayrollPeriod, pk=pk)
+        from apps.treasury.models import BankAccount, CashBox
+        
+        source_type = request.POST.get('source_type')
+        
+        # Safe Decimal Conversion
+        def safe_decimal(val):
+            if not val or str(val).strip() == '':
+                return Decimal('0')
+            try:
+                return Decimal(str(val).replace(',', ''))
+            except:
+                return Decimal('0')
+
+        ins_amount = safe_decimal(request.POST.get('ins_amount'))
+        tax_amount = safe_decimal(request.POST.get('tax_amount'))
+        
+        try:
+            if source_type == 'bank':
+                source_id = request.POST.get('source_id_bank')
+                acc = get_object_or_404(BankAccount, pk=source_id).account
+            else:
+                source_id = request.POST.get('source_id_cash')
+                acc = get_object_or_404(CashBox, pk=source_id).account
+                
+            PayrollService.post_government_payment(period, acc, ins_amount, tax_amount, request.user)
+            messages.success(request, 'تم إثبات توريد الاستقطاعات بنجاح.')
+        except Exception as e:
+            messages.error(request, f'فشل توريد الاستقطاعات: {e}')
         return redirect('hr:payroll-detail', pk=pk)
 
 # ==========================================

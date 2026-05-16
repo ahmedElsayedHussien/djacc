@@ -79,41 +79,63 @@
         }
     }
     
-    function calculateNet() {
+    async function calculateNet() {
         var subtotal = parseFloat(document.getElementById('id_subtotal').value) || 0;
+        var tax1_id = document.getElementById('id_tax_type').value;
+        var tax2_id = document.getElementById('id_tax_type2').value;
         var tax1_rate = parseFloat(document.getElementById('id_tax_percent').value) || 0;
         var tax2_rate = parseFloat(document.getElementById('id_tax_percent2').value) || 0;
         
-        // We'll get the categories from the server if possible, but for simplicity
-        // let's assume we can check the selected option text or use a simple logic.
-        // For a more robust solution, we'd use data attributes on the select options.
-        
-        // Let's implement a robust way by checking the selected tax category
-        // We'll need to fetch the tax info. Since it's a small app, we can embed it.
-        var net = subtotal;
-        
-        // This is a simplified calculation for the UI display
-        // The real calculation happens on the server during save.
-        // We'll treat WHT/Salary/Insurance as deductions (negative)
-        function getTaxValue(taxId, rate, base) {
-            if (!taxId) return 0;
-            var taxValue = base * (rate / 100);
-            // In a real app, we'd fetch the category via AJAX or data-attrs
-            // For now, let's assume common Egyptian WHT naming
-            var taxText = document.querySelector(`#id_tax_type option[value="${taxId}"]`)?.text || "";
-            var taxText2 = document.querySelector(`#id_tax_type2 option[value="${taxId}"]`)?.text || "";
-            var fullText = taxText + taxText2;
-            
-            if (fullText.includes("خصم") || fullText.includes("أ.ت.ص") || fullText.includes("كسب") || fullText.includes("تأمينات")) {
-                return -taxValue;
-            }
-            return taxValue;
+        // Use a cache for tax info
+        if (!window.taxCache) window.taxCache = {};
+
+        async function getTaxInfo(taxId) {
+            if (!taxId) return null;
+            if (window.taxCache[taxId]) return window.taxCache[taxId];
+            try {
+                const response = await fetch(`/api/taxes/${taxId}/`);
+                if (response.ok) {
+                    const data = await response.json();
+                    window.taxCache[taxId] = data;
+                    return data;
+                }
+            } catch (e) { console.error("Tax fetch error", e); }
+            return null;
         }
 
-        var t1 = getTaxValue(document.getElementById('id_tax_type').value, tax1_rate, subtotal);
-        var t2 = getTaxValue(document.getElementById('id_tax_type2').value, tax2_rate, subtotal);
-        
-        var finalNet = subtotal + t1 + t2;
+        const info1 = await getTaxInfo(tax1_id);
+        const info2 = await getTaxInfo(tax2_id);
+
+        // 1. Find Table Tax first
+        let tableTaxAmount = 0;
+        if (info1?.category === 'table') tableTaxAmount += subtotal * (tax1_rate / 100);
+        if (info2?.category === 'table') tableTaxAmount += subtotal * (tax2_rate / 100);
+
+        // 2. Calculate Final Net (Subtotal + Additions - Deductions)
+        let additions = 0;
+        let deductions = 0;
+
+        [
+            {info: info1, rate: tax1_rate},
+            {info: info2, rate: tax2_rate}
+        ].forEach(tx => {
+            if (!tx.info || tx.rate === 0) return;
+            
+            let val = 0;
+            if (tx.info.category === 'vat') {
+                val = (subtotal + tableTaxAmount) * (tx.rate / 100);
+            } else {
+                val = subtotal * (tx.rate / 100);
+            }
+
+            if (['wht', 'salary', 'insurance'].includes(tx.info.category)) {
+                deductions += val;
+            } else {
+                additions += val;
+            }
+        });
+
+        var finalNet = subtotal + additions - deductions;
         document.getElementById('net_payment_display').value = finalNet.toLocaleString('en-US', {minimumFractionDigits: 2});
     }
 

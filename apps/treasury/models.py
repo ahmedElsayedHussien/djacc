@@ -2,32 +2,45 @@ from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from decimal import Decimal
+from apps.core.models import ConcurrencyModel
 
-class CashBox(models.Model):
-    code = models.CharField(max_length=20, unique=True)
-    name = models.CharField(max_length=200)
-    account = models.OneToOneField('core.Account', on_delete=models.PROTECT)
-    currency = models.CharField(max_length=3, default='EGP')
-    is_active = models.BooleanField(default=True)
-    responsible_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+class CashBox(ConcurrencyModel):
+    code = models.CharField(max_length=20, unique=True, verbose_name="كود الخزينة")
+    name = models.CharField(max_length=200, verbose_name="اسم الخزينة")
+    account = models.OneToOneField('core.Account', on_delete=models.PROTECT, verbose_name="الحساب المحاسبي")
+    currency = models.CharField(max_length=3, default='EGP', verbose_name="العملة")
+    is_active = models.BooleanField(default=True, verbose_name="نشط")
+    responsible_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name="المسؤول عنها")
+    
+    @property
+    def current_balance(self):
+        from apps.core.utils import get_account_balance
+        from datetime import date
+        return get_account_balance(self.account, as_of_date=date.today())
 
     def __str__(self):
         return self.name
 
-class BankAccount(models.Model):
-    code = models.CharField(max_length=20, unique=True)
-    name = models.CharField(max_length=200)
-    account = models.OneToOneField('core.Account', on_delete=models.PROTECT)
-    bank_name = models.CharField(max_length=200)
-    account_number = models.CharField(max_length=50)
-    iban = models.CharField(max_length=50, blank=True)
-    currency = models.CharField(max_length=3, default='EGP')
-    is_active = models.BooleanField(default=True)
+class BankAccount(ConcurrencyModel):
+    code = models.CharField(max_length=20, unique=True, verbose_name="كود الحساب")
+    name = models.CharField(max_length=200, verbose_name="اسم الحساب (داخلي)")
+    account = models.OneToOneField('core.Account', on_delete=models.PROTECT, verbose_name="الحساب المحاسبي")
+    bank_name = models.CharField(max_length=200, verbose_name="اسم البنك")
+    account_number = models.CharField(max_length=50, verbose_name="رقم الحساب البنكي")
+    iban = models.CharField(max_length=50, blank=True, verbose_name="IBAN")
+    currency = models.CharField(max_length=3, default='EGP', verbose_name="العملة")
+    is_active = models.BooleanField(default=True, verbose_name="نشط")
+
+    @property
+    def current_balance(self):
+        from apps.core.utils import get_account_balance
+        from datetime import date
+        return get_account_balance(self.account, as_of_date=date.today())
 
     def __str__(self):
         return f"{self.bank_name} - {self.name}"
 
-class BankTransaction(models.Model):
+class BankTransaction(ConcurrencyModel):
     class TransactionType(models.TextChoices):
         DEPOSIT = 'deposit', 'إيداع'
         WITHDRAWAL = 'withdrawal', 'سحب'
@@ -36,32 +49,42 @@ class BankTransaction(models.Model):
         BANK_CHARGE = 'charge', 'عمولة بنكية'
         INTEREST = 'interest', 'فائدة'
 
-    number = models.CharField(max_length=50, unique=True)
-    date = models.DateField()
-    bank_account = models.ForeignKey(BankAccount, on_delete=models.PROTECT)
-    transaction_type = models.CharField(max_length=20, choices=TransactionType.choices)
-    amount = models.DecimalField(max_digits=18, decimal_places=2)
-    description = models.TextField()
-    reference = models.CharField(max_length=100, blank=True)
-    is_reconciled = models.BooleanField(default=False)
-    reconciled_at = models.DateTimeField(null=True, blank=True)
-    journal_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL)
+    number = models.CharField(max_length=50, unique=True, verbose_name="رقم العملية")
+    date = models.DateField(verbose_name="تاريخ العملية")
+    bank_account = models.ForeignKey(BankAccount, on_delete=models.PROTECT, verbose_name="الحساب البنكي")
+    transaction_type = models.CharField(max_length=20, choices=TransactionType.choices, verbose_name="نوع العملية")
+    amount = models.DecimalField(max_digits=18, decimal_places=2, verbose_name="المبلغ")
+    description = models.TextField(verbose_name="الوصف/البيان")
+    reference = models.CharField(max_length=100, blank=True, verbose_name="المرجع (رقم الحركة)")
+    is_reconciled = models.BooleanField(default=False, verbose_name="تمت التسوية")
+    reconciled_at = models.DateTimeField(null=True, blank=True, verbose_name="تاريخ التسوية")
+    journal_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, verbose_name="قيد اليومية")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, verbose_name="أنشئ بواسطة")
 
     def __str__(self):
         return self.number
 
-class BankReconciliation(models.Model):
+class BankReconciliation(ConcurrencyModel):
     """تسوية بنكية"""
-    bank_account = models.ForeignKey(BankAccount, on_delete=models.PROTECT)
-    statement_date = models.DateField()
-    statement_balance = models.DecimalField(max_digits=18, decimal_places=2)
-    book_balance = models.DecimalField(max_digits=18, decimal_places=2)
-    difference = models.DecimalField(max_digits=18, decimal_places=2)
-    is_reconciled = models.BooleanField(default=False)
-    notes = models.TextField(blank=True)
-    transactions = models.ManyToManyField(BankTransaction, blank=True)
+    class Status(models.TextChoices):
+        DRAFT = 'draft', 'مسودة'
+        COMPLETED = 'completed', 'مكتملة (مطابقة)'
 
-class CashTransfer(models.Model):
+    bank_account = models.ForeignKey(BankAccount, on_delete=models.PROTECT, verbose_name="الحساب البنكي")
+    statement_date = models.DateField(verbose_name="تاريخ كشف الحساب")
+    statement_balance = models.DecimalField(max_digits=18, decimal_places=2, verbose_name="الرصيد في الكشف")
+    book_balance = models.DecimalField(max_digits=18, decimal_places=2, verbose_name="الرصيد في الدفاتر")
+    difference = models.DecimalField(max_digits=18, decimal_places=2, verbose_name="الفارق")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT, verbose_name="الحالة")
+    notes = models.TextField(blank=True, verbose_name="ملاحظات")
+    transactions = models.ManyToManyField(BankTransaction, blank=True, verbose_name="العمليات المتضمنة")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, verbose_name="أنشئ بواسطة")
+
+    @property
+    def is_reconciled(self):
+        return self.status == self.Status.COMPLETED
+
+class CashTransfer(ConcurrencyModel):
     """تحويل بين خزن أو بين حسابات"""
     class Status(models.TextChoices):
         DRAFT = 'draft', 'مسودة'
@@ -69,24 +92,25 @@ class CashTransfer(models.Model):
         COMPLETED = 'completed', 'مكتمل (مستلم)'
         CANCELLED = 'cancelled', 'ملغي'
 
-    number = models.CharField(max_length=50, unique=True)
-    date = models.DateField()
-    from_cash_box = models.ForeignKey(CashBox, null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_out')
-    from_bank = models.ForeignKey(BankAccount, null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_out')
-    to_cash_box = models.ForeignKey(CashBox, null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_in')
-    to_bank = models.ForeignKey(BankAccount, null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_in')
+    number = models.CharField(max_length=50, unique=True, verbose_name="رقم التحويل")
+    date = models.DateField(verbose_name="تاريخ التحويل")
+    from_cash_box = models.ForeignKey(CashBox, null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_out', verbose_name="من خزينة")
+    from_bank = models.ForeignKey(BankAccount, null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_out', verbose_name="من بنك")
+    to_cash_box = models.ForeignKey(CashBox, null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_in', verbose_name="إلى خزينة")
+    to_bank = models.ForeignKey(BankAccount, null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_in', verbose_name="إلى بنك")
     amount = models.DecimalField(
         max_digits=18, 
         decimal_places=2,
-        validators=[MinValueValidator(Decimal('0.01'))]
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name="المبلغ"
     )
-    description = models.TextField()
+    description = models.TextField(verbose_name="الوصف")
     
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT, verbose_name="الحالة")
     
     # القيود المحاسبية
-    issue_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, related_name='transfer_issue')
-    receive_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, related_name='transfer_receive')
+    issue_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, related_name='transfer_issue', verbose_name="قيد الصرف")
+    receive_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, related_name='transfer_receive', verbose_name="قيد الاستلام")
     
     # بيانات الاستلام
     received_at = models.DateTimeField(null=True, blank=True)

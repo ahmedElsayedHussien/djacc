@@ -32,12 +32,15 @@
                             <thead>
                                 <tr>
                                     <th>الصنف</th>
+                                    <th>الوحدة</th>
                                     <th>المستودع</th>
                                     <th>الكمية</th>
                                     <th>السعر</th>
+                                    <th>خصم %</th>
+                                    <th>الضريبة 1 %</th>
+                                    <th>الضريبة 2 %</th>
                                     <th>الإجمالي</th>
                                     <th>حساب المردودات</th>
-                                    <th>حساب التكلفة</th>
                                     <th>حذف</th>
                                 </tr>
                             </thead>
@@ -45,12 +48,21 @@
                                 {% for l_form in lines %}
                                 <tr class="line-form">
                                     <td>{{ l_form.id }}{{ l_form.item|as_crispy_field }}</td>
+                                    <td>{{ l_form.unit|as_crispy_field }}</td>
                                     <td>{{ l_form.warehouse|as_crispy_field }}</td>
                                     <td>{{ l_form.quantity|as_crispy_field }}</td>
                                     <td>{{ l_form.unit_price|as_crispy_field }}</td>
+                                    <td>{{ l_form.discount_percent|as_crispy_field }}</td>
+                                    <td>
+                                        {{ l_form.tax_type|as_crispy_field }}
+                                        {{ l_form.tax_percent|as_crispy_field }}
+                                    </td>
+                                    <td>
+                                        {{ l_form.tax_type2|as_crispy_field }}
+                                        {{ l_form.tax_percent2|as_crispy_field }}
+                                    </td>
                                     <td>{{ l_form.total|as_crispy_field }}</td>
                                     <td>{{ l_form.return_account|as_crispy_field }}</td>
-                                    <td>{{ l_form.cogs_account|as_crispy_field }}</td>
                                     <td>{{ l_form.DELETE|as_crispy_field }}</td>
                                 </tr>
                                 {% endfor %}

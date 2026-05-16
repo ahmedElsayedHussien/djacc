@@ -13,6 +13,17 @@
                     <tr><th>رقم فاتورة المورد:</th><td>{{ invoice.supplier_invoice_number|default:"-" }}</td></tr>
                     <tr><th>التاريخ:</th><td>{{ invoice.date|date:'Y-m-d' }}</td></tr>
                     <tr><th>تاريخ الاستحقاق:</th><td>{{ invoice.due_date|date:'Y-m-d' }}</td></tr>
+                    <tr><th>نوع الدفع:</th><td>{{ invoice.get_payment_type_display }}</td></tr>
+                    {% if invoice.payment_type == 'cash' %}
+                    <tr><th>طريقة الدفع:</th><td>{{ invoice.get_payment_method_display }}</td></tr>
+                    <tr><th>المصدر:</th>
+                        <td>
+                            {% if invoice.cash_box %}{{ invoice.cash_box.name }}
+                            {% elif invoice.bank_account %}{{ invoice.bank_account.name }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
                     <tr><th>المورد:</th>
                         <td><a href="{% url 'purchases:supplier-detail' invoice.supplier.pk %}">{{ invoice.supplier.name }}</a></td>
                     </tr>
@@ -30,7 +41,7 @@
                     <tr><th>القيد المحاسبي:</th>
                         <td>
                             {% if invoice.journal_entry %}
-                            <a href="/admin/core/journalentry/{{ invoice.journal_entry.pk }}/change/">{{ invoice.journal_entry.number }}</a>
+                            <a href="{% url 'core:journal-detail' invoice.journal_entry.pk %}">{{ invoice.journal_entry.number }}</a>
                             {% else %}
                             -
                             {% endif %}
@@ -47,6 +58,18 @@
                 </form>
                 {% endif %}
             </div>
+            {% if invoice.payment_type == 'cash' and invoice.status == 'posted' %}
+            <div class="alert alert-success mt-3 d-flex justify-content-between align-items-center">
+                <span>تم سداد هذه الفاتورة نقداً تلقائياً</span>
+                {% with payment=invoice.supplierpayment_set.first %}
+                {% if payment %}
+                <a href="{% url 'purchases:payment-detail' payment.pk %}" class="btn btn-sm btn-outline-success">
+                    عرض مستند السداد ({{ payment.number }})
+                </a>
+                {% endif %}
+                {% endwith %}
+            </div>
+            {% endif %}
         </div>
     </div>
 

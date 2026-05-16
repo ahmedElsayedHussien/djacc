@@ -3,13 +3,15 @@ from .views import (
     HRDashboardView, EmployeeListView, EmployeeCreateView,
     EmployeeUpdateView, EmployeeDetailView, UserCreateView, JobTitleCreateView, DepartmentCreateView, get_user_info,
     PayrollPeriodListView, PayrollPeriodCreateView, PayrollPeriodDetailView,
-    GeneratePayslipsView, PostPayrollView, PostInsuranceView, PostPaymentView, PayslipUpdateView,
+    GeneratePayslipsView, ApprovePayrollView, PostPayrollView, PostInsuranceView, PostPaymentView, PostGovPaymentView, PayslipUpdateView,
     LeaveRequestListView, ApproveLeaveView, RejectLeaveView,
     LoanListView, ApproveLoanView, RejectLoanView,
     ESSDashboardView, ESSPayslipListView, ESSLeaveCreateView, ESSLoanCreateView,
     DailyAttendanceView, LeaveBalanceCreateView, LeaveBalanceUpdateView,
     EOSListView, EOSCreateView, PostEOSView
 )
+from . import report_views
+
 
 app_name = 'hr'
 
@@ -34,9 +36,11 @@ urlpatterns = [
     path('payroll/add/', PayrollPeriodCreateView.as_view(), name='payroll-add'),
     path('payroll/<int:pk>/', PayrollPeriodDetailView.as_view(), name='payroll-detail'),
     path('payroll/<int:pk>/generate/', GeneratePayslipsView.as_view(), name='payroll-generate'),
+    path('payroll/<int:pk>/approve/', ApprovePayrollView.as_view(), name='payroll-approve'),
     path('payroll/<int:pk>/post/', PostPayrollView.as_view(), name='payroll-post'),
     path('payroll/<int:pk>/post-insurance/', PostInsuranceView.as_view(), name='payroll-post-insurance'),
     path('payroll/<int:pk>/post-payment/', PostPaymentView.as_view(), name='payroll-post-payment'),
+    path('payroll/<int:pk>/post-gov-payment/', PostGovPaymentView.as_view(), name='payroll-post-gov-payment'),
     path('payslips/<int:pk>/edit/', PayslipUpdateView.as_view(), name='payslip-edit'),
 
     # Leaves
@@ -63,4 +67,18 @@ urlpatterns = [
     path('eos/', EOSListView.as_view(), name='eos-list'),
     path('eos/add/', EOSCreateView.as_view(), name='eos-add'),
     path('eos/<int:pk>/post/', PostEOSView.as_view(), name='eos-post'),
+
+    # Reports
+    path('reports/dashboard/', report_views.HRReportDashboardView.as_view(), name='report-dashboard'),
+    path('reports/org-chart/', report_views.HROrgChartView.as_view(), name='report-org-chart'),
+    path('reports/document-expiry/', report_views.HRDocumentExpiryView.as_view(), name='report-document-expiry'),
+    path('reports/attendance-summary/', report_views.HRAttendanceSummaryView.as_view(), name='report-attendance-summary'),
+    path('reports/leave-balances/', report_views.HRLeaveBalancesView.as_view(), name='report-leave-balances'),
+    path('reports/payroll-register/', report_views.PayrollRegisterView.as_view(), name='report-payroll-register'),
+    path('reports/payroll-cost-center/', report_views.PayrollByCostCenterView.as_view(), name='report-payroll-cost-center'),
+    path('reports/payroll-taxes/', report_views.PayrollTaxInsuranceView.as_view(), name='report-payroll-taxes'),
+    path('reports/loans-balance/', report_views.HRLoansBalanceView.as_view(), name='report-loans-balance'),
+    path('reports/employee-assets/', report_views.HREmployeeAssetsView.as_view(), name='report-employee-assets'),
+    path('reports/eos-settlements/', report_views.HREOSSettlementsView.as_view(), name='report-eos-settlements'),
 ]
+

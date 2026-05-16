@@ -5,9 +5,14 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">سجل الفواتير</h5>
-        <a href="{% url 'sales:invoice-create' %}" class="btn btn-primary">
-            <i class="bi bi-plus-lg"></i> إنشاء فاتورة جديدة
-        </a>
+        <div class="btn-group">
+            <button type="button" id="bulkSubmitBtn" class="btn btn-info text-white" style="display: none;">
+                <i class="bi bi-cloud-upload"></i> إرسال المختار للضرائب
+            </button>
+            <a href="{% url 'sales:invoice-create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-lg"></i> إنشاء فاتورة جديدة
+            </a>
+        </div>
     </div>
     <div class="card-body">
         <form method="get" class="row g-2 mb-4">
@@ -31,17 +36,24 @@
             <table class="table table-hover">
                 <thead>
                     <tr>
+                        <th style="width: 40px;"><input type="checkbox" id="selectAll" class="form-check-input"></th>
                         <th>رقم الفاتورة</th>
                         <th>التاريخ</th>
                         <th>العميل</th>
                         <th>الإجمالي</th>
                         <th>الحالة</th>
+                        <th>الضرائب (ETA)</th>
                         <th>إجراءات</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for inv in invoices %}
                     <tr>
+                        <td>
+                            {% if inv.status == 'posted' and inv.einvoice_status != 'valid' and inv.einvoice_status != 'submitted' %}
+                            <input type="checkbox" name="invoice_ids" value="{{ inv.pk }}" class="form-check-input invoice-check">
+                            {% endif %}
+                        </td>
                         <td>{{ inv.number }}</td>
                         <td>{{ inv.date }}</td>
                         <td>{{ inv.customer.name }}</td>
@@ -50,6 +62,27 @@
                             <span class="badge {% if inv.status == 'posted' %}bg-success{% elif inv.status == 'draft' %}bg-warning{% else %}bg-info{% endif %}">
                                 {{ inv.get_status_display }}
                             </span>
+                        </td>
+                        <td>
+                            {% with status=inv.einvoice_status %}
+                                {% if status == 'valid' %}
+                                    <span class="badge bg-success" title="UUID: {{ inv.einvoice_uuid }}">
+                                        <i class="bi bi-check-circle-fill"></i> صحيحة
+                                    </span>
+                                {% elif status == 'invalid' %}
+                                    <a href="{% url 'e_invoice:log-detail' inv.einvoice_log.pk %}" class="badge bg-danger text-decoration-none">
+                                        <i class="bi bi-x-circle-fill"></i> خطأ (عرض)
+                                    </a>
+                                {% elif status == 'submitted' %}
+                                    <span class="badge bg-info">
+                                        <i class="bi bi-send-fill"></i> مرسلة
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-light text-dark border">
+                                        <i class="bi bi-cloud-slash"></i> غير مرسلة
+                                    </span>
+                                {% endif %}
+                            {% endwith %}
                         </td>
                         <td>
                             {% if inv.status == 'draft' %}
@@ -93,4 +126,65 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.invoice-check');
+    const bulkBtn = document.getElementById('bulkSubmitBtn');
+    
+    function updateBulkBtn() {
+        const checkedCount = document.querySelectorAll('.invoice-check:checked').length;
+        if (bulkBtn) {
+            bulkBtn.style.display = checkedCount > 0 ? 'inline-block' : 'none';
+            bulkBtn.innerHTML = `<i class="bi bi-cloud-upload"></i> إرسال (${checkedCount}) للضرائب`;
+        }
+    }
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function() {
+            checkboxes.forEach(cb => {
+                cb.checked = selectAll.checked;
+            });
+            updateBulkBtn();
+        });
+    }
+
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', updateBulkBtn);
+    });
+
+    if (bulkBtn) {
+        bulkBtn.addEventListener('click', function() {
+            const ids = Array.from(document.querySelectorAll('.invoice-check:checked')).map(cb => cb.value);
+            if (ids.length === 0) return;
+            
+            if (confirm(`هل أنت متأكد من إرسال ${ids.length} فاتورة لمصلحة الضرائب؟`)) {
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = "{% url 'e_invoice:bulk-submit' %}";
+                
+                const csrf = document.createElement('input');
+                csrf.type = 'hidden';
+                csrf.name = 'csrfmiddlewaretoken';
+                csrf.value = "{{ csrf_token }}";
+                form.appendChild(csrf);
+                
+                ids.forEach(id => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'invoice_ids';
+                    input.value = id;
+                    form.appendChild(input);
+                });
+                
+                document.body.appendChild(form);
+                form.submit();
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

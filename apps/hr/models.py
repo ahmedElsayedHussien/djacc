@@ -279,7 +279,24 @@ class PayrollPeriod(models.Model):
     start_date = models.DateField(verbose_name="تاريخ بداية الفترة")
     end_date = models.DateField(verbose_name="تاريخ نهاية الفترة")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT, verbose_name="الحالة")
-    journal_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, verbose_name="قيد الرواتب")
+    journal_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, related_name='payroll_accrual', verbose_name="قيد الاستحقاق")
+    insurance_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, related_name='payroll_insurance', verbose_name="قيد حصة المنشأة")
+    payment_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, related_name='payroll_payment', verbose_name="قيد صرف الرواتب")
+    gov_payment_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, related_name='payroll_gov_payment', verbose_name="قيد توريد الاستقطاعات")
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        # التحقق من عدم تداخل الفترات
+        overlapping = PayrollPeriod.objects.filter(
+            start_date__lte=self.end_date,
+            end_date__gte=self.start_date
+        )
+        if self.pk:
+            overlapping = overlapping.exclude(pk=self.pk)
+        
+        if overlapping.exists():
+            first = overlapping.first()
+            raise ValidationError(f'توجد فترة رواتب متداخلة بالفعل ({first.name}) من {first.start_date} إلى {first.end_date}.')
 
     class Meta:
         verbose_name = "فترة رواتب"

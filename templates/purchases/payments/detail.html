@@ -57,7 +57,7 @@
                         <div class="col-sm-6">
                             <strong>القيد المحاسبي:</strong> 
                             {% if payment.journal_entry %}
-                            <a href="/admin/core/journalentry/{{ payment.journal_entry.pk }}/change/">{{ payment.journal_entry.number }}</a>
+                            <a href="{% url 'core:journal-detail' payment.journal_entry.pk %}">{{ payment.journal_entry.number }}</a>
                             {% else %}
                             <span class="text-muted">لم يتم الترحيل بعد</span>
                             {% endif %}

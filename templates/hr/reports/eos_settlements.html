@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}تسويات نهاية الخدمة{% endblock %}
+{% block header %}تسويات ومخالصات نهاية الخدمة{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm border-0" style="border-radius: 15px;">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-person-x me-2 text-danger"></i>سجل المخالصات المالية النهائية</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">الموظف / التاريخ</th>
+                        <th>سبب الإنهاء</th>
+                        <th class="text-center">العهد والسلف</th>
+                        <th class="text-end pe-4">إجمالي المخالصة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report %}
+                    <tr>
+                        <td class="ps-4">
+                            <span class="fw-bold text-dark">{{ row.employee.first_name }} {{ row.employee.last_name }}</span><br>
+                            <small class="text-muted">{{ row.termination_date|date:'Y-m-d' }}</small>
+                        </td>
+                        <td>{{ row.reason }}</td>
+                        <td class="text-center">
+                            {% if row.assets_returned %}
+                                <span class="badge bg-soft-success text-success"><i class="bi bi-check-circle me-1"></i>العهد</span>
+                            {% else %}
+                                <span class="badge bg-soft-danger text-danger"><i class="bi bi-x-circle me-1"></i>العهد</span>
+                            {% endif %}
+                            
+                            {% if row.loans_settled %}
+                                <span class="badge bg-soft-success text-success ms-1"><i class="bi bi-check-circle me-1"></i>السلف</span>
+                            {% else %}
+                                <span class="badge bg-soft-danger text-danger ms-1"><i class="bi bi-x-circle me-1"></i>السلف</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-4 fw-bold text-dark fs-5">{{ row.total_settlement|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center py-4 text-muted">لا توجد تسويات نهاية خدمة مسجلة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

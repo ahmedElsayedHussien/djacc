@@ -1,5 +1,16 @@
 from django.contrib import admin
-from .models import ItemCategory, UnitOfMeasure, Item, Warehouse, StockMovement, ItemLedger
+from .models import ItemCategory, UnitOfMeasure, Item, Warehouse, StockMovement, ItemLedger, WarehouseTransfer, WarehouseTransferLine
+
+class WarehouseTransferLineInline(admin.TabularInline):
+    model = WarehouseTransferLine
+    extra = 1
+
+@admin.register(WarehouseTransfer)
+class WarehouseTransferAdmin(admin.ModelAdmin):
+    list_display = ('number', 'date', 'from_warehouse', 'to_warehouse', 'status')
+    list_filter = ('status', 'from_warehouse', 'to_warehouse', 'date')
+    inlines = [WarehouseTransferLineInline]
+
 
 @admin.register(ItemCategory)
 class ItemCategoryAdmin(admin.ModelAdmin):
@@ -11,7 +22,7 @@ class UnitOfMeasureAdmin(admin.ModelAdmin):
 
 @admin.register(Item)
 class ItemAdmin(admin.ModelAdmin):
-    list_display = ('code', 'name', 'category', 'base_unit', 'is_active')
+    list_display = ('code', 'name', 'category', 'base_unit', 'standard_price', 'is_active')
     list_filter = ('category', 'is_active')
     search_fields = ('code', 'name')
 

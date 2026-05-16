@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}ملخص المشتريات الفترية{% endblock %}
+{% block header %}تقرير ملخص المشتريات والضرائب{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">من تاريخ</label>
+                    <input type="date" name="from" class="form-control" value="{{ from_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">إلى تاريخ</label>
+                    <input type="date" name="to" class="form-control" value="{{ to_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-filter me-2"></i>عرض التقرير</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            <div class="card bg-primary text-white h-100 shadow-sm border-0">
+                <div class="card-body text-center py-4">
+                    <h6 class="text-white-50 mb-3">صافي المشتريات (Net Purchases)</h6>
+                    <h2 class="fw-bold mb-0">{{ report.net_purchases|floatformat:2|intcomma }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-info text-white h-100 shadow-sm border-0">
+                <div class="card-body text-center py-4">
+                    <h6 class="text-white-50 mb-3">ضريبة المدخلات (Input VAT)</h6>
+                    <h2 class="fw-bold mb-0">{{ report.input_tax|floatformat:2|intcomma }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0" style="border-radius: 15px;">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0 fw-bold">تفاصيل تحليل المشتريات</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">البند التحليلي</th>
+                            <th class="text-end pe-4">القيمة (EGP)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="ps-4">إجمالي المشتريات (Gross Purchases)</td>
+                            <td class="text-end pe-4 fw-bold text-dark">{{ report.gross_purchases|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr>
+                            <td class="ps-4 text-success">الخصومات المكتسبة (Total Discounts)</td>
+                            <td class="text-end pe-4 text-success">- {{ report.total_discounts|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr>
+                            <td class="ps-4 text-danger">إجمالي المرتجعات (Total Returns)</td>
+                            <td class="text-end pe-4 text-danger">- {{ report.total_returns|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr class="table-primary border-top">
+                            <td class="ps-4 fw-bold">صافي المشتريات الفعلي (Net Purchases)</td>
+                            <td class="text-end pe-4 fw-bold">{{ report.net_purchases|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr class="table-info">
+                            <td class="ps-4">ضريبة القيمة المضافة القابلة للخصم</td>
+                            <td class="text-end pe-4 fw-bold">{{ report.input_tax|floatformat:2|intcomma }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}تقرير حركات الخزنة | DJACC Pro{% endblock %}
+
+{% block header %}تقرير كشف حركات الخزن{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row g-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3">
+                    <div class="row g-3 align-items-center">
+                        <div class="col-md-3">
+                            <h5 class="mb-0 fw-bold text-primary"><i class="bi bi-list-columns-reverse me-2"></i>خيارات التقرير</h5>
+                        </div>
+                        <div class="col-md-9">
+                            <form class="row g-2 justify-content-md-end" method="GET">
+                                <div class="col-md-3">
+                                    <select name="cash_box" class="form-select">
+                                        <option value="">-- كل الخزن --</option>
+                                        {% for box in all_boxes %}
+                                        <option value="{{ box.id }}" {% if selected_box == box.id|stringformat:"s" %}selected{% endif %}>{{ box.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <input type="date" name="start_date" class="form-control" value="{{ start_date|default:'' }}" placeholder="من تاريخ">
+                                </div>
+                                <div class="col-md-3">
+                                    <input type="date" name="end_date" class="form-control" value="{{ end_date|default:'' }}" placeholder="إلى تاريخ">
+                                </div>
+                                <div class="col-auto">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-search me-1"></i> عرض
+                                    </button>
+                                    <a href="{% url 'treasury:movement-report' %}" class="btn btn-outline-secondary">
+                                        <i class="bi bi-arrow-counterclockwise"></i>
+                                    </a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="px-4 py-3">التاريخ</th>
+                                    <th class="py-3">الخزنة</th>
+                                    <th class="py-3">البيان / التفاصيل</th>
+                                    <th class="py-3 text-center">مدين (+)</th>
+                                    <th class="py-3 text-center">دائن (-)</th>
+                                    <th class="py-3 text-center">الرصيد التراكمي</th>
+                                    <th class="px-4 py-3 text-center">رقم القيد</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if selected_box and movements %}
+                                <tr class="table-info">
+                                    <td class="px-4">---</td>
+                                    <td>---</td>
+                                    <td class="fw-bold">رصيد أول المدة</td>
+                                    <td class="text-center">-</td>
+                                    <td class="text-center">-</td>
+                                    <td class="text-center fw-bold">{{ opening_balance|intcomma }}</td>
+                                    <td class="px-4 text-center">---</td>
+                                </tr>
+                                {% endif %}
+                                {% for mv in movements %}
+                                <tr>
+                                    <td class="px-4 text-muted">{{ mv.entry.date|date:"Y-m-d" }}</td>
+                                    <td>
+                                        <span class="badge bg-soft-success text-success px-2 py-1">
+                                            <i class="bi bi-wallet2 me-1"></i>{{ mv.account.name }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold">{{ mv.description|default:mv.entry.description }}</div>
+                                        <small class="text-muted">{{ mv.entry.get_entry_type_display }}</small>
+                                    </td>
+                                    <td class="text-center">
+                                        {% if mv.debit > 0 %}
+                                            <span class="text-success fw-bold">+{{ mv.debit|intcomma }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        {% if mv.credit > 0 %}
+                                            <span class="text-danger fw-bold">-{{ mv.credit|intcomma }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center fw-bold {% if mv.running_balance < 0 %}text-danger{% endif %}">
+                                        {{ mv.running_balance|intcomma }}
+                                    </td>
+                                    <td class="px-4 text-center">
+                                        <a href="{% url 'core:journal-detail' mv.entry.pk %}" class="btn btn-sm btn-light border">
+                                            {{ mv.entry.number }}
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-5">
+                                        <div class="text-muted">
+                                            <i class="bi bi-inbox display-4 d-block mb-3"></i>
+                                            لا توجد حركات مسجلة تطابق هذه الاختيارات.
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer bg-white py-3">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle me-1"></i> يتم عرض القيود المرحلة فقط في هذا التقرير.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

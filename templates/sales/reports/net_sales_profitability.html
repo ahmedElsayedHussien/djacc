@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}صافي المبيعات والربحية الفترية{% endblock %}
+{% block header %}تقرير صافي المبيعات والربحية{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">من تاريخ</label>
+                    <input type="date" name="from" class="form-control" value="{{ from_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">إلى تاريخ</label>
+                    <input type="date" name="to" class="form-control" value="{{ to_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-filter me-2"></i>عرض التقرير</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            <div class="card bg-primary text-white h-100 shadow-sm border-0">
+                <div class="card-body text-center py-4">
+                    <h6 class="text-white-50 mb-3">صافي المبيعات (Net Sales)</h6>
+                    <h2 class="fw-bold mb-0">{{ report.net_sales|floatformat:2|intcomma }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-success text-white h-100 shadow-sm border-0">
+                <div class="card-body text-center py-4">
+                    <h6 class="text-white-50 mb-3">مجمل الربح (Gross Profit)</h6>
+                    <h2 class="fw-bold mb-0">{{ report.gross_profit|floatformat:2|intcomma }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-info text-white h-100 shadow-sm border-0">
+                <div class="card-body text-center py-4">
+                    <h6 class="text-white-50 mb-3">هامش الربح (%)</h6>
+                    <h2 class="fw-bold mb-0">{{ report.profit_margin|floatformat:1 }}%</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Summary Table -->
+    <div class="card shadow-sm border-0" style="border-radius: 15px;">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0 fw-bold">تفاصيل التحليل المالي</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">البند التحليلي</th>
+                            <th class="text-end pe-4">القيمة (EGP)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="ps-4">إجمالي المبيعات (Gross Sales)</td>
+                            <td class="text-end pe-4 fw-bold text-dark">{{ report.gross_sales|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr>
+                            <td class="ps-4">إجمالي الخصومات (Total Discounts)</td>
+                            <td class="text-end pe-4 text-danger">- {{ report.total_discounts|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr>
+                            <td class="ps-4">إجمالي المرتجعات (Total Returns)</td>
+                            <td class="text-end pe-4 text-danger">- {{ report.total_returns|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr class="table-primary border-top">
+                            <td class="ps-4 fw-bold">صافي المبيعات (Net Sales)</td>
+                            <td class="text-end pe-4 fw-bold">{{ report.net_sales|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr>
+                            <td class="ps-4">تكلفة البضاعة المباعة (COGS)</td>
+                            <td class="text-end pe-4 text-warning">{{ report.cogs|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr class="table-success">
+                            <td class="ps-4 fw-bold">مجمل الربح (Gross Profit)</td>
+                            <td class="text-end pe-4 fw-bold">{{ report.gross_profit|floatformat:2|intcomma }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

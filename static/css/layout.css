@@ -187,8 +187,66 @@ body {
     margin-bottom: var(--space-6);
 }
 
+/* ── Sidebar Backdrop (Overlay) ──────────────────────────── */
+.sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1040;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.sidebar-backdrop.show {
+    display: block;
+    opacity: 1;
+}
+
+/* ── Sidebar Close Button (Mobile) ───────────────────────── */
+.sidebar-close-btn {
+    display: none;
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    background: transparent;
+    border: none;
+    color: var(--text-white);
+    font-size: 1.5rem;
+    cursor: pointer;
+    z-index: 1050;
+}
+
+@media (max-width: 767.98px) {
+    .sidebar-close-btn {
+        display: block;
+    }
+}
+
 /* ── التجاوب مع الشاشات الصغيرة (Responsive) ────────────── */
 @media (max-width: 767.98px) {
+    /* ── منع scroll أفقي على مستوى الصفحة ────────────────────── */
+    html, body {
+        overflow-x: hidden;
+        max-width: 100vw;
+    }
+    
+    .layout-wrapper {
+        overflow-x: hidden;
+        max-width: 100vw;
+    }
+    
+    .main-content {
+        overflow-x: hidden;
+        max-width: 100vw;
+    }
+    
+    .content-area {
+        overflow-x: hidden;
+        max-width: 100vw;
+    }
+    
+    /* ── Sidebar settings ───────────────────────────────────── */
     .sidebar {
         position: fixed;
         top: 0;
@@ -196,6 +254,7 @@ body {
         height: 100vh;
         z-index: var(--z-fixed);
         transform: translateX(100%);
+        box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
     }
 
     .sidebar.show {
@@ -214,8 +273,65 @@ body {
         padding: var(--space-4);
     }
 
+    /* تحسين Navbar على الموبايل */
+    .top-navbar {
+        padding: var(--space-3) var(--space-4);
+        min-height: 60px;
+    }
+
+    .top-navbar .page-title {
+        font-size: var(--font-size-lg);
+    }
+
+    /* تحسين User Menu على الموبايل */
+    .top-navbar .dropdown-toggle::after {
+        display: inline-block;
+        margin-right: 0.25rem;
+    }
+
+    .top-navbar .avatar-sm {
+        width: 32px;
+        height: 32px;
+        font-size: var(--font-size-sm);
+    }
+
+    /* تصغير النصوص على الموبايل */
+    .sidebar .nav-link {
+        font-size: var(--font-size-sm);
+        padding: var(--space-2) var(--space-4);
+    }
+
+    .sidebar-heading {
+        font-size: var(--font-size-xs);
+        padding: var(--space-4) var(--space-4) var(--space-1);
+    }
+    
+    /* تحسين الـ Brand Area */
+    .brand-area {
+        padding: var(--space-4);
+    }
+    
+    .brand-logo {
+        font-size: var(--font-size-lg);
+    }
+
+    /* تحسين stat cards على الموبايل */
     .stat-value {
         font-size: var(--font-size-2xl);
+    }
+
+    .stat-card .card-body {
+        padding: var(--space-4);
+    }
+
+    /* تحسين الـ submenu */
+    .submenu {
+        margin: 0 var(--space-2);
+    }
+
+    .submenu .nav-link {
+        font-size: var(--font-size-xs);
+        padding: var(--space-2) var(--space-3);
     }
 }
 

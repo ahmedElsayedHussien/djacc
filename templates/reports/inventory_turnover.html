@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}تقرير معدل دوران المخزون{% endblock %}
+{% block header %}تقرير تحليل معدل دوران المخزون{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm border-0 mb-4 no-print">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label fw-bold">من تاريخ</label>
+                <input type="date" name="from" class="form-control" value="{{ from_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">إلى تاريخ</label>
+                <input type="date" name="to" class="form-control" value="{{ to_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-dark w-100">عرض التحليل</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="alert alert-info border-0 shadow-sm mb-4">
+    <div class="d-flex">
+        <i class="bi bi-info-circle-fill me-3 fs-3"></i>
+        <div>
+            <strong>كيف يتم الحساب؟</strong><br>
+            معدل دوران المخزون = (إجمالي تكلفة المبيعات خلال الفترة / رصيد المخزون الحالي).<br>
+            <small>* في هذا التقرير، يتم استخدام رصيد المخزون اللحظي كتقريب لمتوسط المخزون.</small>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-graph-up-arrow me-2"></i>تحليل حركة الأصناف</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>الصنف</th>
+                        <th class="text-end">تكلفة المبيعات (COGS)</th>
+                        <th class="text-end">قيمة المخزون الحالي</th>
+                        <th class="text-center">معدل الدوران</th>
+                        <th class="text-center">الحالة التحليلية</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report %}
+                    <tr>
+                        <td><strong>{{ row.item.name }}</strong><br><small class="text-muted">{{ row.item.code }}</small></td>
+                        <td class="text-end text-success">{{ row.cogs|floatformat:2 }}</td>
+                        <td class="text-end">{{ row.avg_inventory|floatformat:2 }}</td>
+                        <td class="text-center">
+                            <span class="fs-5 fw-bold text-primary">{{ row.turnover_ratio|floatformat:2 }}</span>
+                        </td>
+                        <td class="text-center">
+                            {% if row.turnover_ratio > 4 %}
+                                <span class="badge bg-success">سريع الحركة</span>
+                            {% elif row.turnover_ratio > 1 %}
+                                <span class="badge bg-info">متوسط الحركة</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">بطيء الحركة</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5 text-muted">لا يوجد حركات مبيعات كافية لإجراء التحليل خلال هذه الفترة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if report.paginator.num_pages > 1 %}
+            {% include 'partials/pagination.html' with page_obj=report is_paginated=True %}
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}
+

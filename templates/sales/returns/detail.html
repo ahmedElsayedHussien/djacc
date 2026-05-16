@@ -28,7 +28,7 @@
                     <tr><th>القيد المحاسبي:</th>
                         <td>
                             {% if sales_return.journal_entry %}
-                            <a href="/admin/core/journalentry/{{ sales_return.journal_entry.pk }}/change/">{{ sales_return.journal_entry.number }}</a>
+                            <a href="{% url 'core:journal-detail' sales_return.journal_entry.pk %}">{{ sales_return.journal_entry.number }}</a>
                             {% else %}
                             -
                             {% endif %}

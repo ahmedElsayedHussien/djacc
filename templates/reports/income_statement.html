@@ -28,25 +28,137 @@
                 <h5 class="mb-0">قائمة الدخل عن الفترة من {{ from_date }} إلى {{ to_date }}</h5>
             </div>
             <div class="card-body">
-                <table class="table table-bordered">
-                    <tr class="table-light">
-                        <th class="py-3 fs-5">البيان</th>
-                        <th class="py-3 fs-5 text-end">القيمة</th>
-                    </tr>
-                    <tr>
-                        <td class="py-3 fs-5">إجمالي الإيرادات (+)</td>
-                        <td class="py-3 fs-5 text-end text-success fw-bold">{{ report.revenue }}</td>
-                    </tr>
-                    <tr>
-                        <td class="py-3 fs-5">إجمالي المصروفات (-)</td>
-                        <td class="py-3 fs-5 text-end text-danger fw-bold">{{ report.expenses }}</td>
-                    </tr>
-                    <tr class="table-dark">
-                        <td class="py-3 fs-4 fw-bold">صافي الدخل (الربح / الخسارة)</td>
-                        <td class="py-3 fs-4 text-end fw-bold {% if report.net_income >= 0 %}text-success{% else %}text-danger{% endif %}">
-                            {{ report.net_income }}
-                        </td>
-                    </tr>
+                <table class="table table-bordered table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="py-2 fs-5">البيان (الحسابات)</th>
+                            <th class="py-2 fs-5 text-end">فرعي (جزئي)</th>
+                            <th class="py-2 fs-5 text-end">كلي (إجمالي)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- 1. إيرادات المبيعات -->
+                        <tr class="table-primary fw-bold"><td colspan="3">1. إيرادات المبيعات (Sales Revenues):</td></tr>
+                        <tr>
+                            <td class="ps-4">إيرادات المبيعات (والخدمات)</td>
+                            <td class="text-end">{{ report.sales|floatformat:2 }}</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td class="ps-4 text-danger">(يُخصم): مردودات ومسموحات المبيعات</td>
+                            <td class="text-end text-danger">({{ report.sales_returns|floatformat:2 }})</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td class="ps-4 text-danger">(يُخصم): خصم مبيعات ممنوح</td>
+                            <td class="text-end text-danger">({{ report.sales_discount|floatformat:2 }})</td>
+                            <td></td>
+                        </tr>
+                        <tr class="table-light fw-bold">
+                            <td class="ps-4">صافي إيرادات المبيعات</td>
+                            <td></td>
+                            <td class="text-end text-primary">{{ report.net_sales|floatformat:2 }}</td>
+                        </tr>
+
+                        <!-- 2. تكلفة البضاعة المباعة -->
+                        <tr class="table-primary fw-bold"><td colspan="3">2. تكلفة البضاعة المباعة (COGS):</td></tr>
+                        {% for item in report.cogs_items %}
+                        <tr>
+                            <td class="ps-4 text-danger">{{ item.name }}</td>
+                            <td class="text-end text-danger">({{ item.balance|floatformat:2 }})</td>
+                            <td></td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td class="ps-4 text-danger">تكلفة المبيعات (أو تكلفة الخدمات المقدمة)</td>
+                            <td></td>
+                            <td class="text-end text-danger">(0.00)</td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="table-success fs-5 fw-bold">
+                            <td class="ps-4">مجمل الربح (Gross Profit)</td>
+                            <td></td>
+                            <td class="text-end">{{ report.gross_profit|floatformat:2 }}</td>
+                        </tr>
+
+                        <!-- 3. مصروفات التشغيل -->
+                        <tr class="table-primary fw-bold"><td colspan="3">3. مصروفات التشغيل (Operating Expenses):</td></tr>
+                        {% for item in report.op_expenses_items %}
+                        <tr>
+                            <td class="ps-4">{{ item.name }}</td>
+                            <td class="text-end">{{ item.balance|floatformat:2 }}</td>
+                            <td></td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" class="ps-4 text-muted">لا يوجد مصروفات تشغيل مسجلة.</td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="table-light fw-bold text-danger">
+                            <td class="ps-4">(يُخصم): إجمالي مصروفات التشغيل</td>
+                            <td></td>
+                            <td class="text-end">({{ report.total_op_expenses|floatformat:2 }})</td>
+                        </tr>
+                        <tr class="table-info fs-5 fw-bold">
+                            <td class="ps-4">الربح التشغيلي (Operating Profit)</td>
+                            <td></td>
+                            <td class="text-end">{{ report.operating_profit|floatformat:2 }}</td>
+                        </tr>
+
+                        <!-- 4. إيرادات ومصروفات أخرى -->
+                        <tr class="table-primary fw-bold"><td colspan="3">4. إيرادات ومصروفات أخرى:</td></tr>
+                        {% for item in report.other_rev_items %}
+                        <tr>
+                            <td class="ps-4 text-success">(يُضاف): {{ item.name }}</td>
+                            <td class="text-end text-success">{{ item.balance|floatformat:2 }}</td>
+                            <td></td>
+                        </tr>
+                        {% endfor %}
+                        
+                        {% for item in report.finance_exp_items %}
+                        <tr>
+                            <td class="ps-4 text-danger">(يُخصم): {{ item.name }}</td>
+                            <td class="text-end text-danger">({{ item.balance|floatformat:2 }})</td>
+                            <td></td>
+                        </tr>
+                        {% endfor %}
+
+                        {% for item in report.other_exp_items %}
+                        <tr>
+                            <td class="ps-4 text-danger">(يُخصم): {{ item.name }}</td>
+                            <td class="text-end text-danger">({{ item.balance|floatformat:2 }})</td>
+                            <td></td>
+                        </tr>
+                        {% endfor %}
+
+                        <tr class="table-light fw-bold">
+                            <td class="ps-4">صافي الإيرادات والمصروفات الأخرى</td>
+                            <td></td>
+                            <td class="text-end">{{ report.net_other|floatformat:2 }}</td>
+                        </tr>
+                        
+                        <tr class="table-secondary fs-5 fw-bold">
+                            <td class="ps-4">صافي الربح قبل الضرائب (Net Profit Before Tax)</td>
+                            <td></td>
+                            <td class="text-end">{{ report.net_profit_before_tax|floatformat:2 }}</td>
+                        </tr>
+                        
+                        <!-- 5. الضرائب -->
+                        <tr>
+                            <td class="ps-4 text-danger">(يُخصم): ضريبة الدخل المستحقة</td>
+                            <td></td>
+                            <td class="text-end text-danger">({{ report.tax_exp|floatformat:2 }})</td>
+                        </tr>
+
+                    </tbody>
+                    <tfoot class="table-dark">
+                        <tr>
+                            <td colspan="2" class="py-3 fs-4 fw-bold">صافي ربح / (خسارة) العام (Net Income)</td>
+                            <td class="py-3 fs-4 text-end fw-bold {% if report.net_income >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                {{ report.net_income|floatformat:2 }}
+                            </td>
+                        </tr>
+                    </tfoot>
                 </table>
                 
                 <div class="mt-4 alert {% if report.net_income >= 0 %}alert-success{% else %}alert-danger{% endif %} text-center">

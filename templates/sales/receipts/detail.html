@@ -64,7 +64,7 @@
                         <i class="bi bi-journal-check me-2"></i>
                         <strong>رقم القيد:</strong> 
                         {% if receipt.journal_entry %}
-                        <a href="/admin/core/journalentry/{{ receipt.journal_entry.pk }}/change/" class="alert-link">{{ receipt.journal_entry.number }}</a>
+                        <a href="{% url 'core:journal-detail' receipt.journal_entry.pk %}" class="alert-link">{{ receipt.journal_entry.number }}</a>
                         {% else %}
                         <span class="text-muted">قيد المراجعة</span>
                         {% endif %}

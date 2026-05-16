@@ -35,14 +35,28 @@
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         الحالة:
                         {% if reconciliation.is_reconciled %}
-                        <span class="badge bg-success">تمت المطابقة</span>
+                        <span class="badge bg-success">مكتملة (مطابقة)</span>
                         {% else %}
-                        <span class="badge bg-warning">قيد المراجعة</span>
+                        <span class="badge bg-warning text-dark">مسودة</span>
                         {% endif %}
                     </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center small text-muted">
+                        بواسطة:
+                        <span>{{ reconciliation.created_by.get_full_name|default:reconciliation.created_by.username }}</span>
+                    </li>
                 </ul>
-                <div class="mt-3 d-grid">
+                <div class="mt-3 d-grid gap-2">
+                    {% if not reconciliation.is_reconciled %}
+                    <form method="post" action="{% url 'treasury:bankreconciliation-match' reconciliation.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-success w-100 py-2" onclick="return confirm('تأكيد إتمام المطابقة البنكية؟ لا يمكن التعديل بعدها.');">
+                            <i class="bi bi-check-all me-1"></i> إتمام المطابقة النهائية
+                        </button>
+                    </form>
                     <a href="{% url 'treasury:bankreconciliation-update' reconciliation.pk %}" class="btn btn-outline-primary">تعديل البيانات</a>
+                    {% else %}
+                    <button class="btn btn-outline-success disabled"><i class="bi bi-shield-check me-1"></i> مغلق للمطابقة</button>
+                    {% endif %}
                 </div>
             </div>
         </div>

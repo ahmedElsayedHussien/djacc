@@ -45,7 +45,8 @@
                         <td><a href="{% url 'inventory:item-detail' item.pk %}">{{ item.name }}</a></td>
                         <td>{{ item.category.name }}</td>
                         <td>{{ item.base_unit.name }}</td>
-                        <td><strong>{{ item.current_stock|default:"0" }}</strong></td>
+                        <td><strong>{{ item.current_stock|default:"0"|floatformat:0 }}</strong></td>
+
                         <td>
                             <a href="{% url 'inventory:item-edit' item.pk %}" class="btn btn-sm btn-outline-primary">تعديل</a>
                         </td>

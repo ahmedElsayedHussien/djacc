@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}الحركات البنكية{% endblock %}
+{% block header %}الحركات البنكية (عمولات، فوائد، إلخ){% endblock %}
+
+{% block content %}
+<div class="mb-4 d-flex justify-content-between align-items-center">
+    <a href="{% url 'treasury:banktransaction-create' %}" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i> تسجيل حركة بنكية جديدة
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>الرقم</th>
+                        <th>التاريخ</th>
+                        <th>الحساب البنكي</th>
+                        <th>النوع</th>
+                        <th>المبلغ</th>
+                        <th>الحالة</th>
+                        <th>بواسطة</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for trans in transactions %}
+                    <tr>
+                        <td><a href="{% url 'treasury:banktransaction-detail' trans.pk %}" class="fw-bold">{{ trans.number }}</a></td>
+                        <td>{{ trans.date|date:'Y-m-d' }}</td>
+                        <td>{{ trans.bank_account.name }}</td>
+                        <td><span class="badge bg-secondary">{{ trans.get_transaction_type_display }}</span></td>
+                        <td class="fw-bold text-primary">{{ trans.amount }}</td>
+                        <td>
+                            {% if trans.journal_entry %}
+                            <span class="badge bg-success">مرحل</span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark">مسودة</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ trans.created_by.get_full_name|default:trans.created_by.username }}</td>
+                        <td>
+                            <a href="{% url 'treasury:banktransaction-detail' trans.pk %}" class="btn btn-sm btn-outline-info">
+                                <i class="bi bi-eye"></i> عرض
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-4 text-muted">لا توجد حركات بنكية مسجلة حالياً.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

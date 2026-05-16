@@ -12,6 +12,27 @@
 | **Font** | Cairo (Google Fonts) | 400, 500, 600, 700, 800 |
 | **Icons** | Bootstrap Icons | 1.11.3 |
 | **Forms** | Crispy Forms + crispy-bootstrap5 | - |
+| **E-Invoice** | cryptography, lxml, qrcode, requests | latest |
+
+## [SYSTEM_FLOW - E-INVOICE]
+
+```
+SalesInvoice Created
+        ↓
+Generate ETA XML (XMLGenerator)
+        ↓
+Sign with Digital Certificate (Signer)
+        ↓
+Submit to Tax Authority API (TaxAPIClient)
+        ↓
+Receive IRN + UUID + QR Code
+        ↓
+Save to EInvoiceLog
+        ↓
+Update SalesInvoice with E-Invoice Data
+        ↓
+Display QR on Invoice PDF
+```
 
 ## [ARCHITECTURE]
 
@@ -69,6 +90,45 @@ User Request → URL → View → Service Layer → Model → DB
 | `AccountType` strings in `assets/services.py` | ✅ Fixed | - |
 | HR loan deduction per-employee (not aggregated) | ✅ Fixed | - |
 | Visual identity system (tokens, components, layout) | ✅ Fixed | - |
+| `DocumentService.generate_number` uses ID (sensitive to deletions) | ✅ Fixed | - |
+| Income tax calculation using fixed percentage only | ✅ Fixed | - |
+| Trial Balance report missing | ✅ Fixed (already exists) | - |
+| **E-Invoice: Company Settings** | ✅ Done (M1) | - |
+| **E-Invoice: EInvoiceConfig** | ✅ Done (M1) | - |
+| **E-Invoice: Certificate Management** | ✅ Done (M1) | - |
+| **E-Invoice: EInvoiceLog** | ✅ Done (M1) | - |
+| **E-Invoice: XML Template (M2)** | ✅ Done | - |
+| **E-Invoice: Digital Signature (M3)** | ✅ Done | - |
+| **E-Invoice: API Client (M4)** | ✅ Done | - |
+| **E-Invoice: QR Code Generator (M5)** | ✅ Done | - |
+| **E-Invoice: Sales Integration (M6)** | 🔄 In Progress | 🔴 عالية |
+| **E-Invoice: Testing (M7)** | 🚫 Pending | 🟡 متوسطة |
+| **Mobile Responsive: Sidebar + Overlay (M1)** | ✅ Done | 🔴 عالية |
+| **Mobile Responsive: Tables (M2)** | ✅ Done | 🔴 عالية |
+| **Mobile Responsive: Forms (M3)** | ✅ Done | 🔴 عالية |
+| **Mobile Responsive: Buttons + Inputs (M4)** | ✅ Done | 🔴 عالية |
+| **Mobile Responsive: Cards + Stats (M5)** | ✅ Done | 🟡 متوسطة |
+| **Mobile Responsive: Navbar + Menu (M6)** | ✅ Done | 🟡 متوسطة |
+| **Mobile Responsive: Pagination (M7)** | ✅ Done | 🟡 متوسطة |
+| **Mobile Responsive: Testing (M8)** | ✅ Done | 🟡 متوسطة |
+| **Mobile: Table scroll internal only (no page scroll)** | ✅ Fixed | 🔴 عالية |
+| **Tax: VAT validation on Sales** | ✅ Verified | 🔴 عالية |
+| **Tax: VAT validation on Purchases** | ✅ Verified | 🔴 عالية |
+| **Tax: WHT validation on Sales** | ✅ Verified | 🔴 haute |
+| **Tax: WHT validation on Purchases** | ✅ Verified | 🔴 haute |
+| **Tax: VAT Report function** | ✅ Added | 🔴 haute |
+| **Tax: WHT Report function** | ✅ Added | 🔴 haute |
+| **Tax: Stamp Tax (2124) account** | ✅ Added | 🟡 متوسطة |
+| **Tax: VAT Report View + URL** | ✅ Added | 🔴 haute |
+| **Tax: WHT Report View + URL** | ✅ Added | 🔴 haute |
+| **Tax: VAT Report Template** | ✅ Added | 🔴 haute |
+| **Tax: WHT Report Template** | ✅ Added | 🔴 haute |
+| **Tax: VAT/WHT Menu Integration** | ✅ Added | 🟡 متوسطة |
+| **Pricing: Item standard_price field** | ✅ Added | 🔴 عالية |
+| **Pricing: extra_discount_percent in SalesInvoiceLine** | ✅ Added | 🔴 عالية |
+| **Pricing: sector offer discount auto-apply** | ✅ Added | 🔴 عالية |
+| **Pricing: price_list auto-fill with standard_price fallback** | ✅ Fixed | 🔴 عالية |
+| **Pricing: Quotation-to-Invoice extra_discount_percent** | ✅ Added | 🟡 متوسطة |
 
 ## [DESIGN SYSTEM REFERENCE]
 

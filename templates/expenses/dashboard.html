@@ -159,13 +159,29 @@
                     <h5 class="mb-0 fw-bold">إجراءات سريعة</h5>
                 </div>
                 <div class="card-body">
-                    <div class="d-grid gap-3">
-                        <a href="{% url 'expenses:expense-create' %}" class="btn btn-primary py-3">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'expenses:expense-create' %}" class="btn btn-primary py-2 text-start">
                             <i class="bi bi-plus-circle me-2"></i>تسجيل مصروف جديد
                         </a>
-                        <a href="{% url 'expenses:custody-create' %}" class="btn btn-outline-info py-3">
+                        <a href="{% url 'expenses:custody-create' %}" class="btn btn-outline-info py-2 text-start">
                             <i class="bi bi-person-plus me-2"></i>صرف عهدة لموظف
                         </a>
+                        <a href="{% url 'expenses:report-dashboard' %}" class="btn btn-dark py-2 text-start mt-2">
+                            <i class="bi bi-bar-chart-line me-2"></i>مركز تقارير المصروفات والعهد
+                        </a>
+                        
+                        <h6 class="fw-bold mt-4 mb-2">السجلات والقوائم</h6>
+                        <div class="list-group list-group-flush border rounded shadow-sm">
+                            <a href="{% url 'expenses:expense-list' %}" class="list-group-item list-group-item-action py-2">
+                                <i class="bi bi-receipt me-2 text-primary"></i>سجل المصروفات
+                            </a>
+                            <a href="{% url 'expenses:category-list' %}" class="list-group-item list-group-item-action py-2">
+                                <i class="bi bi-tags me-2 text-info"></i>بنود المصروفات (Categories)
+                            </a>
+                            <a href="{% url 'expenses:custody-list' %}" class="list-group-item list-group-item-action py-2">
+                                <i class="bi bi-wallet me-2 text-warning"></i>سجل العهد المالية
+                            </a>
+                        </div>
                     </div>
                     <hr class="my-4">
                     <h6 class="fw-bold mb-3">ملخص العهد</h6>

@@ -1,54 +1,35 @@
 {% extends 'base.html' %}
+{% load crispy_forms_tags %}
 {% block title %}{% if object %}تعديل تسوية{% else %}إضافة تسوية{% endif %}{% endblock %}
 {% block header %}{% if object %}تعديل تسوية بنكية{% else %}إضافة تسوية بنكية جديدة{% endif %}{% endblock %}
+
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-8">
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <form method="post">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <form method="post" novalidate>
                     {% csrf_token %}
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label">الحساب البنكي</label>
-                            <select name="bank_account" class="form-select" required>
-                                {% for bank in form.bank_account.field.queryset %}
-                                <option value="{{ bank.pk }}" {% if form.bank_account.value == bank.pk|stringformat:"s" %}selected{% endif %}>{{ bank }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">تاريخ كشف الحساب</label>
-                            <input type="date" name="statement_date" class="form-control" value="{{ form.statement_date.value|date:'Y-m-d'|default:'' }}" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">الرصيد حسب كشف الحساب (البنك)</label>
-                            <input type="number" step="0.01" name="statement_balance" class="form-control" value="{{ form.statement_balance.value|default:'0.00' }}" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">الرصيد حسب الدفاتر</label>
-                            <input type="number" step="0.01" name="book_balance" class="form-control" value="{{ form.book_balance.value|default:'0.00' }}" required>
-                        </div>
-                        {% if object %}
-                        <div class="col-md-12">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" name="is_reconciled" id="id_is_reconciled" {% if form.is_reconciled.value %}checked{% endif %}>
-                                <label class="form-check-label" for="id_is_reconciled">تمت المطابقة النهائية</label>
-                            </div>
-                        </div>
-                        <div class="col-md-12">
-                            <label class="form-label">ملاحظات</label>
-                            <textarea name="notes" class="form-control" rows="3">{{ form.notes.value|default:'' }}</textarea>
-                        </div>
-                        {% endif %}
+                    <div class="row">
+                        <div class="col-md-6">{{ form.bank_account|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.statement_date|as_crispy_field }}</div>
                     </div>
+                    <div class="row">
+                        <div class="col-md-6">{{ form.statement_balance|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.book_balance|as_crispy_field }}</div>
+                    </div>
+                    {{ form.notes|as_crispy_field }}
 
                     <div class="mt-4 d-flex gap-2">
-                        <button type="submit" class="btn btn-primary px-4">حفظ</button>
-                        <a href="{% url 'treasury:bankreconciliation-list' %}" class="btn btn-outline-secondary">إلغاء</a>
+                        <button type="submit" class="btn btn-primary btn-lg px-5">حفظ التسوية</button>
+                        <a href="{% url 'treasury:bankreconciliation-list' %}" class="btn btn-outline-secondary btn-lg px-5">إلغاء</a>
                     </div>
                 </form>
             </div>
+        </div>
+        <div class="alert alert-light border mt-4">
+            <h6><i class="bi bi-lightbulb me-2 text-warning"></i>توضيح:</h6>
+            <p class="small mb-0">بعد حفظ التسوية، ستحتاج للانتقال لصفحة التفاصيل لاختيار الحركات البنكية (transactions) التي تمت مطابقتها فعلياً وإتمام عملية التسوية النهائية.</p>
         </div>
     </div>
 </div>

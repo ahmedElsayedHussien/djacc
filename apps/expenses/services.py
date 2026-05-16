@@ -8,11 +8,9 @@ class ExpenseService:
     @staticmethod
     @transaction.atomic
     def post_expense(expense: Expense, posted_by) -> JournalEntry:
-        """
-        Expense Journal Entry:
-        DR  Expense Account (from category)    → expense.amount
-        CR  Cash/Bank/Custody Account           → expense.amount
-        """
+        # Lock the record to prevent concurrent posting
+        expense = Expense.objects.select_for_update().get(pk=expense.pk)
+        
         if expense.status == Expense.Status.POSTED:
             raise ValueError("هذا المصروف مرحل بالفعل")
         if expense.status != Expense.Status.APPROVED:
@@ -29,42 +27,50 @@ class ExpenseService:
         lines = []
         
         # Taxes processing
+        # Professional tax processing: VAT on (Subtotal + Table Tax)
         tax_entries = []
         capitalized_tax = 0  # Non-refundable (Table, Stamp, Customs)
-        separate_tax_debit = 0 # Refundable (VAT)
-        separate_tax_credit = 0 # Deducted (WHT)
         
-        def process_tax(t_type, t_percent):
-            nonlocal capitalized_tax, separate_tax_debit, separate_tax_credit
-            if not t_type: return
-            rate = t_percent if t_percent else t_type.rate
-            tax_val = expense.subtotal * (rate / 100)
+        taxes_to_process = []
+        if expense.tax_type: taxes_to_process.append({'type': expense.tax_type, 'rate': expense.tax_percent})
+        if expense.tax_type2: taxes_to_process.append({'type': expense.tax_type2, 'rate': expense.tax_percent2})
+        
+        # First pass: calculate Table Tax (Capitalized)
+        table_tax_val = 0
+        for tx_info in taxes_to_process:
+            tx = tx_info['type']
+            if tx.category == 'table':
+                rate = tx_info['rate'] if tx_info['rate'] is not None else tx.rate
+                table_tax_val += expense.subtotal * (rate / 100)
+        
+        # Second pass: calculate all taxes
+        for tx_info in taxes_to_process:
+            tx = tx_info['type']
+            rate = tx_info['rate'] if tx_info['rate'] is not None else tx.rate
             
-            if t_type.category in ['table', 'stamp', 'customs']:
-                # Rule 3: Non-refundable -> Capitalize on expense
-                capitalized_tax += tax_val
-            elif t_type.category in ['wht', 'salary', 'insurance']:
-                # Rule 1: Deducted -> Credit tax liability, Expense stays at Gross
-                tax_entries.append({
-                    'account': t_type.account,
-                    'debit': 0,
-                    'credit': tax_val,
-                    'description': f'استقطاع {t_type.name} - مصروف {expense.number}'
-                })
-            else: # VAT / Others (Refundable)
-                # Rule 2: Refundable -> Debit tax asset, Expense stays at Net
-                tax_acc = t_type.account
-                if not tax_acc: return
-                
-                tax_entries.append({
-                    'account': tax_acc,
-                    'debit': tax_val,
-                    'credit': 0,
-                    'description': f'ضريبة {t_type.name} - مصروف {expense.number}'
-                })
-
-        process_tax(expense.tax_type, expense.tax_percent)
-        process_tax(expense.tax_type2, expense.tax_percent2)
+            if tx.category == 'vat':
+                # VAT is on (Subtotal + Table Tax)
+                val = (expense.subtotal + table_tax_val) * (rate / 100)
+            elif tx.category in ['table', 'stamp', 'customs']:
+                # Capitalize
+                val = expense.subtotal * (rate / 100)
+                capitalized_tax += val
+                continue
+            else:
+                # Others (WHT, etc.) are on Subtotal
+                val = expense.subtotal * (rate / 100)
+            
+            if val == 0: continue
+            
+            # Routing: WHT/Salary/Insurance in expenses are Credits (Deductions from payee)
+            # VAT/Others are Debits (Refundable assets)
+            is_credit = (tx.category in ['wht', 'salary', 'insurance'])
+            tax_entries.append({
+                'account': tx.account,
+                'debit': 0 if is_credit else val,
+                'credit': val if is_credit else 0,
+                'description': f'ضريبة {tx.name} - مصروف {expense.number}'
+            })
 
         # 1. Main Expense Line (Base + Capitalized Taxes)
         lines.append({
@@ -162,15 +168,13 @@ class CustodyService:
     @staticmethod
     @transaction.atomic
     def settle_custody(settlement: CustodySettlement, created_by) -> JournalEntry:
-        """
-        Journal Entry for Custody Settlement:
-        DR  Expense Accounts (for each expense)   → expense.amount
-        DR  Cash Box (if refund)                  → settlement.returned_amount
-        """
+        # Lock the settlement and custody to prevent concurrency issues
+        settlement = CustodySettlement.objects.select_for_update().get(pk=settlement.pk)
+        custody = settlement.custody
+        custody = Custody.objects.select_for_update().get(pk=custody.pk)
+        
         if settlement.is_posted:
             raise ValueError("هذه التسوية مرحلة بالفعل")
-            
-        custody = settlement.custody
         # ✅ Fix: Over-settlement validation
         posted_expenses = custody.expense_set.filter(status='posted', settlement__isnull=True)
         current_expenses_total = posted_expenses.aggregate(t=Sum('amount'))['t'] or 0

@@ -1,3 +1,5 @@
+from decimal import Decimal
+from datetime import date as date_type
 from django.views.generic import ListView, CreateView, UpdateView, DetailView, DeleteView, TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.urls import reverse_lazy, reverse
@@ -14,7 +16,8 @@ from .models import (
 from .forms import (
     CustomerForm, SalesInvoiceForm, SalesInvoiceLineFormSet, 
     CustomerReceiptForm, SalesRepresentativeForm, SalesReturnLineFormSet,
-    QuotationForm, QuotationLineFormSet, PriceListForm, PriceListItemFormSet
+    QuotationForm, QuotationLineFormSet, PriceListForm, PriceListItemFormSet,
+    CustomerSectorForm
 )
 from .services import CustomerService, SalesRepresentativeService, SalesService, RepSettlementService
 
@@ -43,6 +46,8 @@ class QuotationCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateVie
     def form_valid(self, form):
         context = self.get_context_data()
         lines = context['lines']
+        
+        is_valid = False
         with transaction.atomic():
             form.instance.created_by = self.request.user
             if not form.instance.number:
@@ -54,10 +59,21 @@ class QuotationCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateVie
             if lines.is_valid():
                 lines.instance = self.object
                 lines.save()
-                messages.success(self.request, f"تم إنشاء العرض {self.object.name} بنجاح")
+                is_valid = True
             else:
-                return self.form_invalid(form)
-        return redirect(self.success_url)
+                transaction.set_rollback(True)
+                
+        if is_valid:
+            messages.success(self.request, f"تم إنشاء العرض {self.object.name} بنجاح")
+            return redirect('sales:quotation-list')
+        else:
+            messages.error(self.request, "يوجد خطأ في بيانات الأصناف المرفقة بالعرض. يرجى مراجعتها.")
+            return self.form_invalid(form)
+
+    def form_invalid(self, form):
+        if not self.request.POST.getlist('lines-0-item'): # Just a general check, but we'll show message anyway
+            messages.error(self.request, "يرجى التأكد من إدخال جميع الحقول الإلزامية بشكل صحيح.")
+        return super().form_invalid(form)
 
 class QuotationUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = Quotation
@@ -81,15 +97,27 @@ class QuotationUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateVie
 
         context = self.get_context_data()
         lines = context['lines']
+        
+        is_valid = False
         with transaction.atomic():
             self.object = form.save()
             if lines.is_valid():
                 lines.instance = self.object
                 lines.save()
-                messages.success(self.request, f"تم تحديث العرض {self.object.name} بنجاح")
+                is_valid = True
             else:
-                return self.form_invalid(form)
-        return redirect(self.success_url)
+                transaction.set_rollback(True)
+                
+        if is_valid:
+            messages.success(self.request, f"تم تحديث العرض {self.object.name} بنجاح")
+            return redirect('sales:quotation-list')
+        else:
+            messages.error(self.request, "يوجد خطأ في بيانات الأصناف المرفقة بالعرض. يرجى مراجعتها.")
+            return self.form_invalid(form)
+
+    def form_invalid(self, form):
+        messages.error(self.request, "يرجى التأكد من إدخال جميع الحقول الإلزامية بشكل صحيح.")
+        return super().form_invalid(form)
 
 class QuotationCancelView(LoginRequiredMixin, PermissionRequiredMixin, View):
     permission_required = 'sales.change_quotation'
@@ -111,6 +139,28 @@ class CustomerSectorListView(LoginRequiredMixin, PermissionRequiredMixin, ListVi
     template_name = 'sales/sectors/list.html'
     context_object_name = 'sectors'
     permission_required = 'sales.view_customersector'
+
+class CustomerSectorCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = CustomerSector
+    form_class = CustomerSectorForm
+    template_name = 'sales/sectors/form.html'
+    permission_required = 'sales.add_customersector'
+    success_url = reverse_lazy('sales:sector-list')
+
+    def form_valid(self, form):
+        messages.success(self.request, "تم إنشاء القطاع بنجاح")
+        return super().form_valid(form)
+
+class CustomerSectorUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = CustomerSector
+    form_class = CustomerSectorForm
+    template_name = 'sales/sectors/form.html'
+    permission_required = 'sales.change_customersector'
+    success_url = reverse_lazy('sales:sector-list')
+
+    def form_valid(self, form):
+        messages.success(self.request, "تم تحديث القطاع بنجاح")
+        return super().form_valid(form)
 
 class PriceListListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = PriceList
@@ -136,15 +186,22 @@ class PriceListCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateVie
     def form_valid(self, form):
         context = self.get_context_data()
         items = context['items']
+        
+        is_valid = False
         with transaction.atomic():
             self.object = form.save()
             if items.is_valid():
                 items.instance = self.object
                 items.save()
-                messages.success(self.request, f"تم إنشاء قائمة الأسعار {self.object.name} بنجاح")
+                is_valid = True
             else:
-                return self.form_invalid(form)
-        return redirect(self.success_url)
+                transaction.set_rollback(True)
+                
+        if is_valid:
+            messages.success(self.request, f"تم إنشاء قائمة الأسعار {self.object.name} بنجاح")
+            return redirect('sales:pricelist-list')
+        else:
+            return self.form_invalid(form)
 
 class PriceListUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = PriceList
@@ -164,15 +221,22 @@ class PriceListUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateVie
     def form_valid(self, form):
         context = self.get_context_data()
         items = context['items']
+        
+        is_valid = False
         with transaction.atomic():
             self.object = form.save()
             if items.is_valid():
                 items.instance = self.object
                 items.save()
-                messages.success(self.request, f"تم تحديث قائمة الأسعار {self.object.name} بنجاح")
+                is_valid = True
             else:
-                return self.form_invalid(form)
-        return redirect(self.success_url)
+                transaction.set_rollback(True)
+                
+        if is_valid:
+            messages.success(self.request, f"تم تحديث قائمة الأسعار {self.object.name} بنجاح")
+            return redirect('sales:pricelist-list')
+        else:
+            return self.form_invalid(form)
 
 class PriceListDeleteView(LoginRequiredMixin, PermissionRequiredMixin, View):
     permission_required = 'sales.change_pricelist'
@@ -388,6 +452,8 @@ class SalesInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
     def form_valid(self, form):
         context = self.get_context_data()
         lines = context['lines']
+        
+        is_valid = False
         with transaction.atomic():
             form.instance.created_by = self.request.user
             from apps.core.services import DocumentService
@@ -464,10 +530,15 @@ class SalesInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
                 self.object.tax_amount = tax_total_added - tax_total_deducted
                 self.object.total = gross_total - discount_total + tax_total_added - tax_total_deducted
                 self.object.save()
-                messages.success(self.request, f"تم حفظ فاتورة المبيعات {self.object.number} بنجاح (مسودة)")
+                is_valid = True
             else:
-                return self.form_invalid(form)
-        return redirect(self.success_url)
+                transaction.set_rollback(True)
+                
+        if is_valid:
+            messages.success(self.request, f"تم حفظ فاتورة المبيعات {self.object.number} بنجاح (مسودة)")
+            return redirect('sales:invoice-list')
+        else:
+            return self.form_invalid(form)
 
 class SalesInvoiceUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = SalesInvoice
@@ -495,6 +566,8 @@ class SalesInvoiceUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Update
 
         context = self.get_context_data()
         lines = context['lines']
+        
+        is_valid = False
         with transaction.atomic():
             if lines.is_valid():
                 self.object = form.save()
@@ -550,10 +623,15 @@ class SalesInvoiceUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Update
                 self.object.tax_amount = tax_total_added - tax_total_deducted
                 self.object.total = gross_total - discount_total + tax_total_added - tax_total_deducted
                 self.object.save()
-                messages.success(self.request, f"تم تحديث الفاتورة {self.object.number} بنجاح")
+                is_valid = True
             else:
-                return self.form_invalid(form)
-        return redirect(self.success_url)
+                transaction.set_rollback(True)
+                
+        if is_valid:
+            messages.success(self.request, f"تم تحديث الفاتورة {self.object.number} بنجاح")
+            return redirect('sales:invoice-list')
+        else:
+            return self.form_invalid(form)
 
 class SalesInvoiceReverseView(LoginRequiredMixin, PermissionRequiredMixin, View):
     permission_required = 'sales.change_salesinvoice'
@@ -739,10 +817,6 @@ class RepDailySettlementCreateView(LoginRequiredMixin, PermissionRequiredMixin, 
         from django.db import transaction
         try:
             with transaction.atomic():
-                from datetime import date as date_type
-                from decimal import Decimal
-                from .models import RepDailySettlement, RepSettlementInvoice
-                from .services import RepSettlementService
                 from apps.core.services import DocumentService
                 
                 rep  = SalesRepresentative.objects.get(pk=rep_id)
@@ -891,9 +965,9 @@ class SalesReturnCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateV
             
             form.instance.subtotal = 0
             form.instance.total = 0
-            self.object = form.save()
             
             if lines.is_valid():
+                self.object = form.save()
                 from apps.core.models import Account
                 from django.conf import settings
                 default_ret_acc = Account.objects.get(code=getattr(settings, 'DEFAULT_SALES_RETURN_ACCOUNT', '413'))
@@ -930,11 +1004,11 @@ class SalesReturnCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateV
                 
                 for line in self.object.lines.all():
                     gross_line = line.quantity * line.unit_price
-                    disc_line = gross_line * (line.discount_percent / 100)
+                    disc_line = gross_line * (line.discount_percent / Decimal('100'))
                     net_line = gross_line - disc_line
                     
                     # Tax logic
-                    tax_val = net_line * (line.tax_percent / 100)
+                    tax_val = net_line * (line.tax_percent / Decimal('100'))
                     if line.tax_type and line.tax_type.category in ['wht', 'salary', 'insurance']:
                         tax_total_deducted += tax_val
                         tax_signed = -tax_val
@@ -987,9 +1061,10 @@ class RepDetailsAPIView(LoginRequiredMixin, PermissionRequiredMixin, View):
             'warehouse_id': rep.warehouse_id,
             'cash_box_id': rep.cash_box_id
         })
-class RepStockStatusView(LoginRequiredMixin, TemplateView):
+class RepStockStatusView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
     """عرض بضاعة المندوب الحالية في مخزنه الخاص"""
     template_name = 'sales/reps/my_stock.html'
+    permission_required = 'sales.view_salesrepresentative'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

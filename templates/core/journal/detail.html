@@ -29,9 +29,27 @@
                     {% if entry.source_document %}
                     <tr><th>المستند الأصلي:</th>
                         <td>
-                            <span class="text-muted small">{{ entry.content_type.model }}: {{ entry.object_id }}</span>
+                            <a href="{{ entry.source_document.get_absolute_url }}">
+                                {{ entry.content_type.model }}: {{ entry.source_document }}
+                            </a>
                         </td>
                     </tr>
+                    {# إضافة رابط قيد السداد التلقائي للمشتريات الكاش #}
+                    {% if entry.content_type.model == 'purchaseinvoice' %}
+                        {% with invoice=entry.source_document %}
+                            {% if invoice.payment_type == 'cash' %}
+                                {% with payment=invoice.supplierpayment_set.first %}
+                                    {% if payment and payment.journal_entry and payment.journal_entry != entry %}
+                                    <tr><th>قيد السداد المرتبط:</th>
+                                        <td><a href="{% url 'core:journal-detail' payment.journal_entry.pk %}" class="fw-bold text-success">
+                                            <i class="bi bi-link-45deg"></i> {{ payment.journal_entry.number }}
+                                        </a></td>
+                                    </tr>
+                                    {% endif %}
+                                {% endwith %}
+                            {% endif %}
+                        {% endwith %}
+                    {% endif %}
                     {% endif %}
                     {% if entry.reversed_by %}
                     <tr><th>قيد العكس:</th>

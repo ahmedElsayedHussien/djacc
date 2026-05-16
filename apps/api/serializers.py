@@ -28,7 +28,7 @@ from apps.sales.models import Quotation, QuotationLine
 class QuotationLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuotationLine
-        fields = ['item', 'extra_discount_percent']
+        fields = ['item', 'discount_percent']
 
 class QuotationSerializer(serializers.ModelSerializer):
     lines = QuotationLineSerializer(many=True, read_only=True)

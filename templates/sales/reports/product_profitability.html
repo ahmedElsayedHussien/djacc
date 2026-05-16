@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% load custom_filters %}
+
+{% block title %}ربحية الأصناف الفترية{% endblock %}
+{% block header %}تحليل ربحية الأصناف{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">من تاريخ</label>
+                    <input type="date" name="from" class="form-control" value="{{ from_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">إلى تاريخ</label>
+                    <input type="date" name="to" class="form-control" value="{{ to_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-filter me-2"></i>عرض التقرير</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0" style="border-radius: 15px;">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">الصنف / التصنيف</th>
+                            <th class="text-center">الكمية المباعة</th>
+                            <th class="text-end">إجمالي الإيراد</th>
+                            <th class="text-end">إجمالي التكلفة</th>
+                            <th class="text-end">صافي الربح</th>
+                            <th class="text-center pe-4">نسبة الهامش (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for line in report %}
+                        <tr>
+                            <td class="ps-4">
+                                <span class="fw-bold text-dark">{{ line.item__name }}</span><br>
+                                <small class="text-muted">{{ line.item__code }} | {{ line.item__category__name }}</small>
+                            </td>
+                            <td class="text-center">{{ line.total_qty|floatformat:0 }}</td>
+                            <td class="text-end fw-bold text-primary">{{ line.total_revenue|floatformat:2|intcomma }}</td>
+                            <td class="text-end text-muted">{{ line.total_cost|floatformat:2|intcomma }}</td>
+                            <td class="text-end fw-bold {% if line.profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                {{ line.profit|floatformat:2|intcomma }}
+                            </td>
+                            <td class="text-center pe-4">
+                                {% with margin=line.profit|divide:line.total_revenue|multiply:100 %}
+                                <div class="progress" style="height: 10px; min-width: 60px;">
+                                    <div class="progress-bar {% if margin > 20 %}bg-success{% elif margin > 10 %}bg-info{% else %}bg-warning{% endif %}" 
+                                         role="progressbar" style="width: {{ margin }}%"></div>
+                                </div>
+                                <small class="fw-bold">{{ margin|floatformat:1 }}%</small>
+                                {% endwith %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="text-center py-5 text-muted">لا توجد بيانات للفترة المحددة</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {% if report.paginator.num_pages > 1 %}
+        {% include 'partials/pagination.html' with page_obj=report is_paginated=True %}
+    {% endif %}
+</div>
+{% endblock %}

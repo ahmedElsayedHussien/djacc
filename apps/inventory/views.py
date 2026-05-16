@@ -7,9 +7,12 @@ from django.shortcuts import get_object_or_404, redirect
 from django.db import transaction
 from django.views import View
 from .models import Item, ItemCategory, Warehouse, UnitOfMeasure, ItemLedger, WarehouseTransfer, LoadingOrder, LoadingOrderLine, StockMovement, StockVoucher
-from .forms import ItemForm, ItemCategoryForm, WarehouseForm, WarehouseTransferForm, LoadingOrderForm, LoadingOrderLineFormSet
+from .forms import ItemForm, ItemCategoryForm, WarehouseForm, WarehouseTransferForm, WarehouseTransferLineFormSet, LoadingOrderForm, LoadingOrderLineFormSet, UnitOfMeasureForm
+
 from .services import InventoryService, LoadingService
 from django.db.models import F, ExpressionWrapper, DecimalField
+from django.db.models.functions import Coalesce
+from decimal import Decimal
 
 class InventoryDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = StockMovement
@@ -33,8 +36,8 @@ class InventoryDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListVi
         # 2. Low Stock Alerts (Stock <= Min Stock)
         # We need to join Item with its total stock
         low_stock_items = Item.objects.annotate(
-            current_stock=Sum('itemledger__quantity_on_hand')
-        ).filter(current_stock__lte=F('minimum_stock'), is_active=True).order_by('current_stock')
+            current_stock=Coalesce(Sum('itemledger__quantity_on_hand'), Decimal('0'))
+        ).filter(current_stock__lt=F('minimum_stock'), is_active=True).order_by('current_stock')
         ctx['low_stock_items'] = low_stock_items[:10]
         ctx['low_stock_count'] = low_stock_items.count()
 
@@ -90,7 +93,8 @@ class ItemCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     success_url = reverse_lazy('inventory:item-list')
 
     def form_valid(self, form):
-        messages.success(self.request, f'تم إنشاء الصنف "{form.instance.name}" بنجاح')
+        form.instance.code = InventoryService.generate_item_code()
+        messages.success(self.request, f'تم إضافة الصنف "{form.instance.name}" بنجاح بالكود {form.instance.code}')
         return super().form_valid(form)
 
 class ItemUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
@@ -129,6 +133,12 @@ class ItemCategoryCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
     success_url = reverse_lazy('inventory:category-list')
     permission_required = 'inventory.add_itemcategory'
 
+    def form_valid(self, form):
+        # Generate code automatically before saving
+        form.instance.code = InventoryService.generate_category_code()
+        messages.success(self.request, f'تم إضافة الفئة "{form.instance.name}" بنجاح بالكود {form.instance.code}')
+        return super().form_valid(form)
+
 class UnitListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = UnitOfMeasure
     template_name = 'inventory/units/list.html'
@@ -136,10 +146,15 @@ class UnitListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
 
 class UnitCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = UnitOfMeasure
-    fields = ['code', 'name']
+    form_class = UnitOfMeasureForm
     template_name = 'inventory/units/form.html'
     success_url = reverse_lazy('inventory:unit-list')
     permission_required = 'inventory.add_unitofmeasure'
+
+    def form_valid(self, form):
+        form.instance.code = InventoryService.generate_unit_code()
+        messages.success(self.request, f'تم إضافة الوحدة "{form.instance.name}" بنجاح بالكود {form.instance.code}')
+        return super().form_valid(form)
 
 class WarehouseTransferListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = WarehouseTransfer
@@ -154,13 +169,63 @@ class WarehouseTransferCreateView(LoginRequiredMixin, PermissionRequiredMixin, C
     success_url = reverse_lazy('inventory:transfer-list')
     permission_required = 'inventory.add_warehousetransfer'
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        if self.request.POST:
+            ctx['lines'] = WarehouseTransferLineFormSet(self.request.POST)
+        else:
+            ctx['lines'] = WarehouseTransferLineFormSet()
+        return ctx
+
     def form_valid(self, form):
+        ctx = self.get_context_data()
+        lines = ctx['lines']
+        
         with transaction.atomic():
-            from apps.core.services import DocumentService
-            form.instance.number = DocumentService.generate_number(WarehouseTransfer, 'TRNF')
-            self.object = form.save()
+            if lines.is_valid():
+                from apps.core.services import DocumentService
+                form.instance.number = DocumentService.generate_number(WarehouseTransfer, 'TRNF')
+                self.object = form.save()
+                lines.instance = self.object
+                lines.save()
+            else:
+                return self.form_invalid(form)
+                
         messages.success(self.request, f'تم تسجيل طلب التحويل {self.object.number}')
         return redirect(self.success_url)
+
+class WarehouseTransferUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = WarehouseTransfer
+    form_class = WarehouseTransferForm
+    template_name = 'inventory/transfers/form.html'
+    success_url = reverse_lazy('inventory:transfer-list')
+    permission_required = 'inventory.change_warehousetransfer'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        if self.request.POST:
+            ctx['lines'] = WarehouseTransferLineFormSet(self.request.POST, instance=self.object)
+        else:
+            ctx['lines'] = WarehouseTransferLineFormSet(instance=self.object)
+        return ctx
+
+    def form_valid(self, form):
+        ctx = self.get_context_data()
+        lines = ctx['lines']
+        if lines.is_valid():
+            with transaction.atomic():
+                self.object = form.save()
+                lines.save()
+            messages.success(self.request, f'تم تحديث طلب التحويل {self.object.number}')
+            return redirect(self.success_url)
+        return self.form_invalid(form)
+
+class WarehouseTransferDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    model = WarehouseTransfer
+    template_name = 'inventory/transfers/detail.html'
+    context_object_name = 'transfer'
+    permission_required = 'inventory.view_warehousetransfer'
+
 
 class WarehouseTransferPostView(LoginRequiredMixin, PermissionRequiredMixin, View):
     permission_required = 'inventory.change_warehousetransfer'
@@ -173,6 +238,19 @@ class WarehouseTransferPostView(LoginRequiredMixin, PermissionRequiredMixin, Vie
             messages.success(request, f'تم تنفيذ التحويل {transfer.number} وتحديث المخزون')
         except Exception as e:
             messages.error(request, f'خطأ: {e}')
+        return redirect('inventory:transfer-list')
+
+class WarehouseTransferReverseView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'inventory.change_warehousetransfer'
+    
+    def post(self, request, pk):
+        transfer = get_object_or_404(WarehouseTransfer, pk=pk)
+        try:
+            from .services import InventoryService
+            InventoryService.reverse_transfer(transfer, request.user)
+            messages.success(request, f'تم عكس التحويل {transfer.number} وتحديث المخزون')
+        except Exception as e:
+            messages.error(request, f'خطأ أثناء العكس: {e}')
         return redirect('inventory:transfer-list')
 
 # --- Loading Order Views ---
@@ -227,21 +305,34 @@ class LoadingOrderCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
         return ctx
 
     def form_valid(self, form):
+        # ✅ التأكد من أن المستخدم الحالي هو مندوب مبيعات
+        if not hasattr(self.request.user, 'salesrepresentative'):
+            messages.error(self.request, 'عذراً، طلبات تحميل البضاعة مخصصة للمناديب فقط. حسابك الحالي غير مرتبط بمندوب مبيعات. يمكنك بدلاً من ذلك عمل طلب تحويل مخزني.')
+            return self.form_invalid(form)
+
+
         ctx = self.get_context_data()
         lines = ctx['lines']
+
         
         # Ensure to_warehouse matches rep warehouse
-        if form.instance.sales_rep and form.instance.sales_rep.warehouse:
-            form.instance.to_warehouse = form.instance.sales_rep.warehouse
+        if form.instance.sales_rep:
+            if form.instance.sales_rep.warehouse:
+                form.instance.to_warehouse = form.instance.sales_rep.warehouse
+            else:
+                form.add_error('sales_rep', 'هذا المندوب ليس لديه مستودع (سيارة) مرتبط به. يرجى ضبط مستودع المندوب في إعدادات المبيعات أولاً.')
+                return self.form_invalid(form)
             
         with transaction.atomic():
-            from apps.core.services import DocumentService
-            form.instance.number = DocumentService.generate_number(LoadingOrder, 'LOAD')
-            form.instance.requested_by = self.request.user
-            self.object = form.save()
             if lines.is_valid():
+                from apps.core.services import DocumentService
+                form.instance.number = DocumentService.generate_number(LoadingOrder, 'LOAD')
+                form.instance.requested_by = self.request.user
+                self.object = form.save()
                 lines.instance = self.object
                 lines.save()
+                for obj in lines.deleted_objects:
+                    obj.delete()
             else:
                 return self.form_invalid(form)
         messages.success(self.request, f'تم إنشاء طلب التحميل {self.object.number}')
@@ -333,14 +424,16 @@ class StockVoucherCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
         ctx = self.get_context_data()
         lines = ctx['lines']
         with transaction.atomic():
-            from apps.core.services import DocumentService
-            vt_prefix = 'REC' if form.instance.voucher_type == StockVoucher.VoucherType.RECEIPT else 'ISS'
-            form.instance.number = DocumentService.generate_number(StockVoucher, f'V-{vt_prefix}')
-            form.instance.created_by = self.request.user
-            self.object = form.save()
             if lines.is_valid():
+                from apps.core.services import DocumentService
+                vt_prefix = 'REC' if form.instance.voucher_type == StockVoucher.VoucherType.RECEIPT else 'ISS'
+                form.instance.number = DocumentService.generate_number(StockVoucher, f'V-{vt_prefix}')
+                form.instance.created_by = self.request.user
+                self.object = form.save()
                 lines.instance = self.object
                 lines.save()
+                for obj in lines.deleted_objects:
+                    obj.delete()
             else:
                 return self.form_invalid(form)
         messages.success(self.request, f'تم إنشاء الإذن {self.object.number}')
@@ -385,8 +478,9 @@ class ItemDetailsAPIView(LoginRequiredMixin, PermissionRequiredMixin, View):
         units = []
         if item.base_unit:
             units.append({'id': item.base_unit.id, 'name': item.base_unit.name, 'factor': 1})
-        if item.sales_unit:
+        if item.sales_unit and item.sales_unit != item.base_unit:
             units.append({'id': item.sales_unit.id, 'name': item.sales_unit.name, 'factor': float(item.conversion_factor)})
+        
         if item.purchase_unit and item.purchase_unit != item.base_unit and item.purchase_unit != item.sales_unit:
             units.append({
                 'id': item.purchase_unit.id, 
@@ -396,6 +490,16 @@ class ItemDetailsAPIView(LoginRequiredMixin, PermissionRequiredMixin, View):
         
         return JsonResponse({
             'units': units,
-            'default_unit_id': item.sales_unit_id or item.base_unit_id
+            'default_unit_id': item.sales_unit_id or item.base_unit_id,
+            'standard_price': float(item.standard_price)
         })
 
+class InventoryReportDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    model = Item
+    template_name = 'inventory/reports/dashboard.html'
+    permission_required = 'inventory.view_item'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        # We will add report stats here later
+        return ctx

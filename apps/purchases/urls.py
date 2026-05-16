@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views
+from . import views, report_views
 
 app_name = 'purchases'
 
@@ -27,4 +27,13 @@ urlpatterns = [
     path('returns/create/', views.PurchaseReturnCreateView.as_view(), name='return-create'),
     path('returns/<int:pk>/', views.PurchaseReturnDetailView.as_view(), name='return-detail'),
     path('returns/<int:pk>/post/', views.PurchaseReturnPostView.as_view(), name='return-post'),
+
+    # Reports
+    path('reports/', report_views.PurchaseReportDashboardView.as_view(), name='report-dashboard'),
+    path('reports/summary/', report_views.PurchaseSummaryReportView.as_view(), name='report-summary'),
+    path('reports/item-cost/', report_views.ItemPurchaseCostReportView.as_view(), name='report-item-cost'),
+    path('reports/supplier-balances/', report_views.SupplierBalancesReportView.as_view(), name='report-supplier-balances'),
+    path('reports/aging/', report_views.SupplierAgingReportView.as_view(), name='report-aging'),
+    path('reports/open-orders/', report_views.OpenPurchaseOrdersReportView.as_view(), name='report-open-orders'),
+    path('reports/returns-analysis/', report_views.PurchaseReturnAnalysisReportView.as_view(), name='report-returns-analysis'),
 ]

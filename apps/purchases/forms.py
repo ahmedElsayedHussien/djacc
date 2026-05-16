@@ -6,9 +6,8 @@ from apps.inventory.models import Item, Warehouse
 class SupplierForm(forms.ModelForm):
     class Meta:
         model = Supplier
-        fields = ['code', 'name', 'tax_number', 'phone', 'email', 'payment_terms_days', 'address']
+        fields = ['name', 'tax_number', 'phone', 'email', 'payment_terms_days', 'address']
         widgets = {
-            'code': forms.TextInput(attrs={'class': 'form-control'}),
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'tax_number': forms.TextInput(attrs={'class': 'form-control'}),
             'phone': forms.TextInput(attrs={'class': 'form-control'}),
@@ -36,17 +35,55 @@ class SupplierForm(forms.ModelForm):
             self.fields['initial_balance_type'].initial = self.instance.account.initial_balance_type
 
 class PurchaseInvoiceForm(forms.ModelForm):
+    number = forms.CharField(
+        required=False,
+        widget=forms.HiddenInput()
+    )
+    supplier_invoice_number = forms.CharField(
+        required=False,
+        widget=forms.HiddenInput()
+    )
     class Meta:
         model = PurchaseInvoice
-        fields = ['number', 'supplier_invoice_number', 'date', 'supplier', 'cost_center', 'due_date']
+        fields = ['number', 'supplier_invoice_number', 'date', 'supplier', 'payment_type', 'payment_method', 'cash_box', 'bank_account', 'cost_center', 'due_date']
         widgets = {
-            'number': forms.TextInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
-            'supplier_invoice_number': forms.TextInput(attrs={'class': 'form-control'}),
             'date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'supplier': forms.Select(attrs={'class': 'form-select'}),
+            'payment_type': forms.Select(attrs={'class': 'form-select', 'id': 'id_payment_type'}),
+            'payment_method': forms.Select(attrs={'class': 'form-select', 'id': 'id_payment_method'}),
+            'cash_box': forms.Select(attrs={'class': 'form-select'}),
+            'bank_account': forms.Select(attrs={'class': 'form-select'}),
             'cost_center': forms.Select(attrs={'class': 'form-select'}),
             'due_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        payment_type = cleaned_data.get('payment_type')
+        payment_method = cleaned_data.get('payment_method')
+        cash_box = cleaned_data.get('cash_box')
+        bank_account = cleaned_data.get('bank_account')
+
+        if payment_type == 'cash':
+            if payment_method == 'cash' and not cash_box:
+                self.add_error('cash_box', 'يجب اختيار الخزنة للمشتريات النقدية')
+            elif payment_method == 'bank' and not bank_account:
+                self.add_error('bank_account', 'يجب اختيار الحساب البنكي للمشتريات عبر البنك')
+        return cleaned_data
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.treasury.models import CashBox
+        from apps.sales.models import SalesRepresentative
+        
+        # Exclude cash boxes assigned to sales representatives
+        rep_cash_boxes = SalesRepresentative.objects.values_list('cash_box_id', flat=True)
+        if 'cash_box' in self.fields:
+            self.fields['cash_box'].queryset = CashBox.objects.filter(is_active=True).exclude(id__in=rep_cash_boxes)
+        
+        from apps.core.models import CostCenter
+        if 'cost_center' in self.fields:
+            self.fields['cost_center'].queryset = CostCenter.objects.filter(is_active=True, is_leaf=True).order_by('code')
 
 class PurchaseInvoiceLineForm(forms.ModelForm):
     class Meta:
@@ -62,6 +99,20 @@ class PurchaseInvoiceLineForm(forms.ModelForm):
             'tax_type2': forms.Select(attrs={'class': 'form-select tax-select2'}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.inventory.models import Warehouse
+        from apps.sales.models import SalesRepresentative
+        
+        # Exclude warehouses assigned to sales representatives
+        rep_warehouses = SalesRepresentative.objects.values_list('warehouse_id', flat=True)
+        if 'warehouse' in self.fields:
+            self.fields['warehouse'].queryset = Warehouse.objects.filter(is_active=True).exclude(id__in=rep_warehouses)
+        
+        from apps.core.models import TaxType
+        self.fields['tax_type'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
+        self.fields['tax_type2'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
+
 PurchaseInvoiceLineFormSet = inlineformset_factory(
     PurchaseInvoice, PurchaseInvoiceLine,
     form=PurchaseInvoiceLineForm,
@@ -69,10 +120,15 @@ PurchaseInvoiceLineFormSet = inlineformset_factory(
     can_delete=True
 )
 
+
 class SupplierPaymentForm(forms.ModelForm):
+    number = forms.CharField(
+        required=False,
+        widget=forms.HiddenInput()
+    )
     class Meta:
         model = SupplierPayment
-        fields = ['date', 'supplier', 'amount', 'payment_method', 'bank_account', 'cash_box']
+        fields = ['number', 'date', 'supplier', 'amount', 'payment_method', 'bank_account', 'cash_box']
         widgets = {
             'date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'supplier': forms.Select(attrs={'class': 'form-select'}),
@@ -82,14 +138,25 @@ class SupplierPaymentForm(forms.ModelForm):
             'cash_box': forms.Select(attrs={'class': 'form-select'}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.treasury.models import CashBox
+        from apps.sales.models import SalesRepresentative
+        rep_cash_boxes = SalesRepresentative.objects.values_list('cash_box_id', flat=True)
+        if 'cash_box' in self.fields:
+            self.fields['cash_box'].queryset = CashBox.objects.filter(is_active=True).exclude(id__in=rep_cash_boxes)
+
 from .models import PurchaseReturn, PurchaseReturnLine
 
 class PurchaseReturnForm(forms.ModelForm):
+    number = forms.CharField(
+        required=False,
+        widget=forms.HiddenInput()
+    )
     class Meta:
         model = PurchaseReturn
-        fields = ['number', 'date', 'invoice', 'supplier', 'notes']
+        fields = ['number', 'date', 'invoice', 'supplier', 'cost_center', 'notes']
         widgets = {
-            'number': forms.TextInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
             'date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'invoice': forms.Select(attrs={'class': 'form-select'}),
             'supplier': forms.Select(attrs={'class': 'form-select'}),
@@ -109,6 +176,18 @@ class PurchaseReturnLineForm(forms.ModelForm):
             'tax_type': forms.Select(attrs={'class': 'form-select'}),
             'tax_type2': forms.Select(attrs={'class': 'form-select'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.inventory.models import Warehouse
+        from apps.sales.models import SalesRepresentative
+        rep_warehouses = SalesRepresentative.objects.values_list('warehouse_id', flat=True)
+        if 'warehouse' in self.fields:
+            self.fields['warehouse'].queryset = Warehouse.objects.filter(is_active=True).exclude(id__in=rep_warehouses)
+        
+        from apps.core.models import TaxType
+        self.fields['tax_type'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
+        self.fields['tax_type2'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
 
 PurchaseReturnLineFormSet = inlineformset_factory(
     PurchaseReturn, PurchaseReturnLine,

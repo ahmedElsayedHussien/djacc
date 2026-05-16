@@ -74,6 +74,10 @@ class TreasuryService:
     @staticmethod
     @transaction.atomic
     def update_cash_box(cash_box: CashBox, validated_data: dict) -> CashBox:
+        # Lock the cash box and its linked account
+        cash_box = CashBox.objects.select_for_update().get(pk=cash_box.pk)
+        cash_box.account = Account.objects.select_for_update().get(pk=cash_box.account.pk)
+        
         update_account = False
         if 'name' in validated_data and validated_data['name'] != cash_box.name:
             cash_box.account.name = validated_data['name']
@@ -99,6 +103,10 @@ class TreasuryService:
     @staticmethod
     @transaction.atomic
     def update_bank_account(bank_account: BankAccount, validated_data: dict) -> BankAccount:
+        # Lock the bank account and its linked account
+        bank_account = BankAccount.objects.select_for_update().get(pk=bank_account.pk)
+        bank_account.account = Account.objects.select_for_update().get(pk=bank_account.account.pk)
+        
         update_account = False
         full_name = f'{validated_data.get("bank_name", bank_account.bank_name)} — {validated_data.get("name", bank_account.name)}'
         if full_name != bank_account.account.name:
@@ -315,7 +323,7 @@ class BankReconciliationService:
         Finalizes a reconciliation.
         Marks all linked transactions as reconciled and calculates the final book balance.
         """
-        if reconciliation.is_reconciled:
+        if reconciliation.status == BankReconciliation.Status.COMPLETED:
             raise ValueError("هذه التسوية منتهية بالفعل")
             
         # Update linked transactions
@@ -324,7 +332,7 @@ class BankReconciliationService:
             trans.reconciled_at = timezone.now()
             trans.save()
             
-        reconciliation.is_reconciled = True
+        reconciliation.status = BankReconciliation.Status.COMPLETED
         reconciliation.save()
         
         from apps.core.services import AuditService

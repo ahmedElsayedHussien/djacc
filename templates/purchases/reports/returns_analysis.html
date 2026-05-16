@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}تحليل مرتجعات الشراء{% endblock %}
+{% block header %}تحليل جودة التوريد ونسب المرتجعات{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">من تاريخ</label>
+                    <input type="date" name="from" class="form-control" value="{{ from_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">إلى تاريخ</label>
+                    <input type="date" name="to" class="form-control" value="{{ to_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-filter me-2"></i>عرض التقرير</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0" style="border-radius: 15px;">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">المورد</th>
+                            <th class="text-end">إجمالي المشتريات</th>
+                            <th class="text-end text-danger">إجمالي المرتجعات</th>
+                            <th class="text-center pe-4">نسبة المرتجع (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in report %}
+                        <tr>
+                            <td class="ps-4 fw-bold text-dark">{{ row.supplier.name }}</td>
+                            <td class="text-end">{{ row.total_purchases|floatformat:2|intcomma }}</td>
+                            <td class="text-end text-danger fw-bold">{{ row.total_returns|floatformat:2|intcomma }}</td>
+                            <td class="text-center pe-4" style="width: 250px;">
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <div class="progress flex-grow-1 me-2" style="height: 10px;">
+                                        <div class="progress-bar {% if row.return_rate > 10 %}bg-danger{% elif row.return_rate > 5 %}bg-warning{% else %}bg-success{% endif %}" 
+                                             role="progressbar" style="width: {{ row.return_rate|floatformat:0 }}%"></div>
+                                    </div>
+                                    <span class="fw-bold {% if row.return_rate > 10 %}text-danger{% endif %}">{{ row.return_rate|floatformat:1 }}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center py-5 text-muted">لا توجد مرتجعات للفترة المحددة</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

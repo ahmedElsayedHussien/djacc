@@ -28,7 +28,7 @@
                     <tr><th>القيد المحاسبي:</th>
                         <td>
                             {% if voucher.journal_entry %}
-                            <a href="/admin/core/journalentry/{{ voucher.journal_entry.pk }}/change/">{{ voucher.journal_entry.number }}</a>
+                            <a href="{% url 'core:journal-detail' voucher.journal_entry.pk %}">{{ voucher.journal_entry.number }}</a>
                             {% else %}
                             -
                             {% endif %}
@@ -81,7 +81,8 @@
                             {% for line in voucher.lines.all %}
                             <tr>
                                 <td>{{ line.item.name }}</td>
-                                <td>{{ line.quantity|floatformat:2 }}</td>
+                                <td>{{ line.quantity|floatformat:0 }}</td>
+
                                 <td>{% if voucher.status == 'posted' or voucher.voucher_type == 'receipt' %}{{ line.unit_cost|floatformat:2 }}{% else %}<span class="text-muted">عند الترحيل</span>{% endif %}</td>
                                 <td>{% if voucher.status == 'posted' or voucher.voucher_type == 'receipt' %}{{ line.total_cost|floatformat:2 }}{% else %}-{% endif %}</td>
                                 <td>{{ line.notes }}</td>

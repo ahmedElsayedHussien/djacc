@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'apps.hr',
     'apps.assets',
     'apps.users',
+    'apps.e_invoice',
 ]
 
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
@@ -141,15 +142,21 @@ SALES_REP_RECEIVABLE_PARENT   = '1141'   # ذمم مناديب
 DEFAULT_SALES_ACCOUNT         = '411'    # مبيعات بضاعة
 DEFAULT_SALES_RETURN_ACCOUNT  = '413'    # مردودات المبيعات
 DEFAULT_COGS_ACCOUNT          = '511'    # تكلفة البضاعة المباعة
-CHEQUES_ISSUED_ACCOUNT        = '2132'   # شيكات مسحوبة
+CHEQUES_ISSUED_ACCOUNT        = '2141'   # شيكات مسحوبة
 RETAINED_EARNINGS_ACCOUNT     = '34'     # أرباح مرحلة
-BANK_CHARGES_ACCOUNT          = '5161'   # عمولات بنكية
-INTEREST_REVENUE_ACCOUNT      = '4141'   # فوائد بنكية
+BANK_CHARGES_ACCOUNT          = '531'    # عمولات بنكية
+INTEREST_REVENUE_ACCOUNT      = '421'    # فوائد بنكية
 CUSTODY_ACCOUNTS_PARENT       = '1142'   # عهد الموظفين
 SALES_DISCOUNT_ACCOUNT        = '413'    # مردودات وخصم مبيعات (Fix #1: توافق مع شجرة الحسابات)
 DEFAULT_INVENTORY_ACCOUNT     = '1131'   # مخزون البضاعة
 ALLOW_NEGATIVE_STOCK          = False    # السماح بالسحب بالسالب
 CASH_PARENT_ACCOUNT           = '1111'   # الأب لحسابات الصناديق
+
+# Inventory Voucher Offset Accounts
+INVENTORY_OPENING_BALANCE_ACCOUNT = '35'
+INVENTORY_ADJUSTMENT_IN_ACCOUNT  = '424'
+INVENTORY_ADJUSTMENT_OUT_ACCOUNT = '542'
+INVENTORY_INTERNAL_CONSUMPTION_ACCOUNT = '524'
 
 # Allauth settings
 AUTHENTICATION_BACKENDS = [

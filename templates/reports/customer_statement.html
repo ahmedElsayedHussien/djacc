@@ -81,10 +81,17 @@
                     <tr>
                         <td>{{ line.date|date:'Y-m-d' }}</td>
                         <td>
+                            {% if line.source_url %}
+                            <a href="{{ line.source_url }}" class="text-decoration-none fw-bold text-primary">
+                                {{ line.number|default:line.description }}
+                            </a>
+                            <div class="small text-muted">{{ line.description }}</div>
+                            {% else %}
                             <a href="{% url 'core:journal-detail' line.entry_id %}" class="text-decoration-none text-dark">
                                 {{ line.description }}
                                 <i class="bi bi-box-arrow-up-right ms-1 small text-muted"></i>
                             </a>
+                            {% endif %}
                         </td>
                         <td class="text-end text-success">{% if line.debit > 0 %}{{ line.debit }}{% else %}-{% endif %}</td>
                         <td class="text-end text-danger">{% if line.credit > 0 %}{{ line.credit }}{% else %}-{% endif %}</td>

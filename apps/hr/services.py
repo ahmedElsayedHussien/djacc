@@ -40,7 +40,8 @@ from .models import PayrollPeriod, Payslip
 # مساعد: جلب أو إنشاء حساب في دليل الحسابات
 # ─────────────────────────────────────────────────────────────────────────────
 def _get_or_create_account(code, name, parent_code, account_type):
-    parent = Account.objects.filter(code=parent_code).first()
+    # ✅ Fix: Use select_for_update() to prevent race conditions during account creation
+    parent = Account.objects.select_for_update().get(code=parent_code)
     acc, _ = Account.objects.get_or_create(
         code=code,
         defaults={
@@ -54,6 +55,45 @@ def _get_or_create_account(code, name, parent_code, account_type):
 
 
 class PayrollService:
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # الشرائح الضريبية المصرية (قانون الضرائب - السنوية)
+    # ─────────────────────────────────────────────────────────────────────────
+    TAX_BRACKETS = [
+        (Decimal('15000'), Decimal('0.00')),      # إعفاء
+        (Decimal('30000'), Decimal('0.01')),      # 1%
+        (Decimal('45000'), Decimal('0.025')),     # 2.5%
+        (Decimal('60000'), Decimal('0.05')),      # 5%
+        (Decimal('200000'), Decimal('0.10')),     # 10%
+        (Decimal('400000'), Decimal('0.15')),     # 15%
+        (Decimal('600000'), Decimal('0.20')),     # 20%
+        (Decimal('999999999'), Decimal('0.25')),  # 25% (حد أقصى)
+    ]
+
+    @staticmethod
+    def _calculate_income_tax_brackets(annual_taxable: Decimal) -> Decimal:
+        """
+        يحسب ضريبة كسب العمل الشهرية باستخدام الشرائح المصرية.
+        يتم تقسيمannual_taxable على 12 للحصول على الراتب الشهري.
+        """
+        if annual_taxable <= 0:
+            return Decimal('0')
+
+        monthly_taxable = annual_taxable / 12
+        monthly_tax = Decimal('0')
+
+        prev_limit = Decimal('0')
+        for limit, rate in PayrollService.TAX_BRACKETS:
+            bracket_size = limit - prev_limit
+            if monthly_taxable <= limit:
+                taxable_in_bracket = min(monthly_taxable - prev_limit, bracket_size)
+                monthly_tax += taxable_in_bracket * rate
+                break
+            else:
+                monthly_tax += bracket_size * rate
+                prev_limit = limit
+
+        return monthly_tax.quantize(Decimal('0.01'))
 
     # ─────────────────────────────────────────────────────────────────────────
     # الدالة الرئيسية: قيد الاستحقاق
@@ -81,11 +121,11 @@ class PayrollService:
         if not payslips.exists():
             raise ValueError("لا يوجد قسائم رواتب في هذه الفترة للترحيل.")
 
-        # ── الحسابات الرئيسية ─────────────────────────────────────────────
+        # ── الحسابات الرئيسية (حسب المعايير المحاسبية والتوجيه الصحيح) ─────────────────
         salary_acc    = _get_or_create_account('5210', 'الرواتب والأجور الأساسية',         '521', AccountType.EXPENSE)
         other_add_acc = _get_or_create_account('5213', 'مصروف بدلات وإضافات أخرى',       '521', AccountType.EXPENSE)
-        ins_emp_acc   = _get_or_create_account('2124', 'تأمينات اجتماعية ح/الموظف (وسيط)', '212', AccountType.LIABILITY)
-        payable_acc   = _get_or_create_account('2133', 'رواتب وأجور مستحقة',              '213', AccountType.LIABILITY)
+        ins_emp_acc   = _get_or_create_account('2133', 'تأمينات اجتماعية مستحقة',          '213', AccountType.LIABILITY)
+        payable_acc   = _get_or_create_account('2132', 'رواتب وأجور مستحقة',              '213', AccountType.LIABILITY)
         loan_acc      = _get_or_create_account('1143', 'سلف الموظفين والقروض',            '114', AccountType.ASSET)
         other_ded_acc = _get_or_create_account('2126', 'استقطاعات أخرى من الموظفين',     '212', AccountType.LIABILITY)
         tax_acc       = _get_or_create_account('2125', 'مصلحة الضرائب - كسب عمل',         '212', AccountType.LIABILITY)
@@ -228,10 +268,9 @@ class PayrollService:
     @transaction.atomic
     def post_insurance_entry(period: PayrollPeriod, employer_rate: Decimal, posted_by) -> JournalEntry:
         """
-        يُولِّد قيد التأمينات الاجتماعية المنفصل:
-          مدين: مصروف تأمينات حصة المنشأة (5214)  — بمراكز التكلفة
-          مدين: تأمينات ح/الموظف الوسيط  (2124)  — إقفال الحساب الوسيط
-          دائن: الهيئة العامة للتأمينات  (2127)   ✅ Fix #2: حساب منفصل
+        يُولِّد قيد التأمينات الاجتماعية (حصة المنشأة):
+          مدين: مصروف تأمينات حصة المنشأة (5214)
+          دائن: تأمينات اجتماعية مستحقة (2133)
         """
         payslips = period.payslips.select_related(
             'employee__department__cost_center'
@@ -241,67 +280,55 @@ class PayrollService:
             raise ValueError("لا يوجد موظفون خاضعون للتأمينات الاجتماعية في هذه الفترة.")
 
         ins_expense_acc = _get_or_create_account('5214', 'حصة المنشأة في التأمينات الاجتماعية', '521', AccountType.EXPENSE)
-        # ✅ Bug #2 Fix: حساب الموظف الوسيط (2124) منفصل عن حساب الهيئة (2127)
-        ins_emp_acc     = _get_or_create_account('2124', 'تأمينات اجتماعية ح/الموظف (وسيط)', '212', AccountType.LIABILITY)
-        authority_acc   = _get_or_create_account('2127', 'الهيئة العامة للتأمينات الاجتماعية', '212', AccountType.LIABILITY)
+        ins_payable_acc = _get_or_create_account('2133', 'تأمينات اجتماعية مستحقة', '213', AccountType.LIABILITY)
 
-        by_cc = defaultdict(lambda: Decimal(0))
+        lines = []
+        total_employer_ins = Decimal(0)
+
         for slip in payslips:
             cc = slip.employee.department.cost_center if (
                 slip.employee.department and slip.employee.department.cost_center
             ) else None
+            
             if slip.social_insurance:
-                by_cc[cc] += slip.social_insurance
+                # حساب حصة الشركة بناءً على ما خُصم من الموظف والنسبة المدخلة
+                # (بافتراض أن خصم الموظف هو 11% والشركة 18.75% مثلاً)
+                # هنا نستخدم الـ employer_rate الممررة (مثلاً 0.1875)
+                # ولكن عادة النسبة تُطبق على "الأجر التأميني". للتبسيط سنحسبها كنسبة من الأساسي
+                employer_ins = (slip.basic_salary * employer_rate).quantize(Decimal('0.01'))
 
-        lines = []
-        total_employee_ins = Decimal(0)
-        total_employer_ins = Decimal(0)
+                if employer_ins > 0:
+                    lines.append({
+                        'account': ins_expense_acc,
+                        'cost_center': cc,
+                        'debit': employer_ins,
+                        'credit': 0,
+                        'description': f'مصروف تأمينات حصة المنشأة - {slip.employee}',
+                    })
+                    total_employer_ins += employer_ins
 
-        for cc, emp_ins in by_cc.items():
-            employer_ins = (emp_ins * employer_rate).quantize(Decimal('0.01'))
-
-            # مصروف حصة المنشأة (مدين)
-            if employer_ins > 0:
-                lines.append({
-                    'account': ins_expense_acc,
-                    'cost_center': cc,
-                    'debit': employer_ins,
-                    'credit': 0,
-                    'description': f'تأمينات حصة المنشأة - {cc or "بدون مركز تكلفة"}',
-                })
-                total_employer_ins += employer_ins
-
-            # إقفال حساب الموظف الوسيط (مدين)
-            if emp_ins > 0:
-                lines.append({
-                    'account': ins_emp_acc,
-                    'cost_center': cc,
-                    'debit': emp_ins,
-                    'credit': 0,
-                    'description': f'إقفال ح/ تأمينات الموظف - {cc or "بدون مركز تكلفة"}',
-                })
-                total_employee_ins += emp_ins
-
-        # دائن: الهيئة العامة للتأمينات (2127) — إجمالي الطرفين
-        total_authority = total_employer_ins + total_employee_ins
-        if total_authority > 0:
+        if total_employer_ins > 0:
             lines.append({
-                'account': authority_acc,
+                'account': ins_payable_acc,
                 'debit': 0,
-                'credit': total_authority,
-                'description': f'مستحقات الهيئة العامة للتأمينات - {period.name}',
+                'credit': total_employer_ins,
+                'description': f'إجمالي تأمينات حصة المنشأة - {period.name}',
             })
 
-        entry = JournalService.create_entry(
-            date_val=period.end_date,
-            entry_type=JournalEntry.EntryType.MANUAL,
-            description=f'قيد التأمينات الاجتماعية - {period.name}',
-            lines=lines,
-            source_document=period,
-            created_by=posted_by,
-        )
-        AuditService.log(posted_by, 'Post', period, f'ترحيل قيد تأمينات اجتماعية - {period.name}')
-        return entry
+            entry = JournalService.create_entry(
+                date_val=period.end_date,
+                entry_type=JournalEntry.EntryType.MANUAL,
+                description=f'قيد حصة المنشأة في التأمينات - {period.name}',
+                lines=lines,
+                source_document=period,
+                created_by=posted_by,
+            )
+            period.insurance_entry = entry
+            period.save(update_fields=['insurance_entry'])
+            AuditService.log(posted_by, 'Post', period, f'ترحيل حصة المنشأة في التأمينات - {period.name}')
+            return entry
+        
+        raise ValueError("لم يتم حساب أي مبالغ لحصة المنشأة.")
 
     # ─────────────────────────────────────────────────────────────────────────
     # قيد سداد الرواتب (من حساب البنك أو الخزينة)
@@ -316,7 +343,7 @@ class PayrollService:
         """
         payslips = period.payslips.select_related('employee__department__cost_center').all()
 
-        payable_acc = _get_or_create_account('2133', 'رواتب وأجور مستحقة', '213', AccountType.LIABILITY)
+        payable_acc = _get_or_create_account('2132', 'رواتب وأجور مستحقة', '213', AccountType.LIABILITY)
 
         by_cc = defaultdict(lambda: Decimal(0))
         for slip in payslips:
@@ -355,8 +382,67 @@ class PayrollService:
             source_document=period,
             created_by=posted_by,
         )
+        period.payment_entry = entry
+        period.save(update_fields=['payment_entry'])
         AuditService.log(posted_by, 'Post', period, f'سداد رواتب الفترة - {period.name}')
         return entry
+
+    @staticmethod
+    @transaction.atomic
+    def post_government_payment(period: PayrollPeriod, payment_account: Account, insurance_amount: Decimal, tax_amount: Decimal, posted_by) -> JournalEntry:
+        """
+        يُولِّد قيد توريد الاستقطاعات بمبالغ يحددها المستخدم:
+          مدين: تأمينات اجتماعية مستحقة (2133)
+          مدين: مصلحة الضرائب - كسب عمل (2125)
+          دائن: البنك / الخزينة
+        """
+        ins_acc = _get_or_create_account('2133', 'تأمينات اجتماعية مستحقة', '213', AccountType.LIABILITY)
+        tax_acc = _get_or_create_account('2125', 'مصلحة الضرائب - كسب عمل', '212', AccountType.LIABILITY)
+        
+        lines = []
+        if insurance_amount > 0:
+            lines.append({
+                'account': ins_acc,
+                'debit': insurance_amount,
+                'credit': 0,
+                'description': f'توريد تأمينات اجتماعية - {period.name if period else "سداد عام"}'
+            })
+        
+        if tax_amount > 0:
+            lines.append({
+                'account': tax_acc,
+                'debit': tax_amount,
+                'credit': 0,
+                'description': f'توريد ضريبة كسب عمل - {period.name if period else "سداد عام"}'
+            })
+            
+        total_payment = insurance_amount + tax_amount
+        
+        if total_payment > 0:
+            lines.append({
+                'account': payment_account,
+                'debit': 0,
+                'credit': total_payment,
+                'description': f'سداد استقطاعات للجهات الحكومية - {period.name if period else ""}'
+            })
+
+            entry = JournalService.create_entry(
+                date_val=period.end_date if period else date.today(),
+                entry_type=JournalEntry.EntryType.PAYMENT,
+                description=f'قيد توريد استقطاعات - {period.name if period else "سداد مانيوال"}',
+                lines=lines,
+                source_document=period,
+                created_by=posted_by,
+            )
+            
+            if period:
+                period.gov_payment_entry = entry
+                period.save(update_fields=['gov_payment_entry'])
+                
+            AuditService.log(posted_by, 'Post', period, f'توريد استقطاعات مانيوال - {period.name if period else ""}')
+            return entry
+        
+        raise ValueError("يجب إدخال مبالغ أكبر من الصفر للتوريد.")
 
     # ─────────────────────────────────────────────────────────────────────────
     # توليد القسائم المبدئية
@@ -407,12 +493,17 @@ class PayrollService:
                 ins_rate  = emp.social_insurance_rate / Decimal('100')
                 insurance = (basic * ins_rate).quantize(Decimal('0.01'))
 
-            # ── ضريبة كسب العمل (على الأساسي مطروحاً منه التأمينات) ──
+            # ── ضريبة كسب العمل (الشرائح المصرية أو النسبة الثابتة) ──
             tax = Decimal(0)
-            if emp.has_taxes and basic and emp.income_tax_rate:
-                taxable  = basic - insurance
-                tax_rate = emp.income_tax_rate / Decimal('100')
-                tax = (taxable * tax_rate).quantize(Decimal('0.01')) if taxable > 0 else Decimal(0)
+            if emp.has_taxes and basic:
+                taxable = max(Decimal('0'), basic - insurance)
+                if emp.income_tax_rate and emp.income_tax_rate > 0:
+                    # الوضع القديم: نسبة ثابتة
+                    tax_rate = emp.income_tax_rate / Decimal('100')
+                    tax = (taxable * tax_rate).quantize(Decimal('0.01'))
+                else:
+                    # الوضع الجديد: الشرائح الضريبية المصرية
+                    tax = PayrollService._calculate_income_tax_brackets(taxable)
 
             # ✅ Bug #1 Fix: الصافي يشمل البدلات والإضافات ليتوازن قيد post_payroll
             net = basic + total_allowances + other_additions - insurance - tax - loan_deduction - other_deductions

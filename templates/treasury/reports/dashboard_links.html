@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block title %}مركز تقارير النقدية والبنوك{% endblock %}
+{% block header %}مركز تقارير النقدية والبنوك{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-card {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border: none;
+        border-radius: 16px;
+    }
+    .report-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 20px rgba(0,0,0,0.1) !important;
+    }
+    .icon-shape {
+        width: 60px;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 14px;
+        margin-bottom: 1.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- الأرصدة والسيولة -->
+    <h5 class="mb-4 fw-bold text-dark"><i class="bi bi-cash-stack me-2 text-primary"></i>الأرصدة والسيولة اللحظية</h5>
+    <div class="row g-4 mb-5">
+        <div class="col-md-4">
+            <a href="{% url 'treasury:report-liquidity' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm border-start border-primary border-4">
+                    <div class="card-body">
+                        <div class="icon-shape bg-primary bg-opacity-10 text-primary">
+                            <i class="bi bi-bank fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">الموقف النقدي والسيولة اللحظية</h6>
+                        <p class="text-muted small mb-0">عرض أرصدة الخزن والبنوك وتوزيع السيولة حسب العملة.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'treasury:movement-report' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm">
+                    <div class="card-body">
+                        <div class="icon-shape bg-info bg-opacity-10 text-info">
+                            <i class="bi bi-file-earmark-text fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">كشف حركة الخزينة / البنك</h6>
+                        <p class="text-muted small mb-0">دفتر أستاذ مساعد لعرض حركات الإيداع والسحب بالتفصيل.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- الرقابة والتحويلات -->
+    <h5 class="mb-4 fw-bold text-dark"><i class="bi bi-arrow-left-right me-2 text-success"></i>الرقابة والتحويلات الداخلية</h5>
+    <div class="row g-4 mb-5">
+        <div class="col-md-4">
+            <a href="{% url 'treasury:report-in-transit' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm border-start border-danger border-4">
+                    <div class="card-body">
+                        <div class="icon-shape bg-danger bg-opacity-10 text-danger">
+                            <i class="bi bi-clock-history fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">التحويلات النقدية المعلقة (قيد الطريق)</h6>
+                        <p class="text-muted small mb-0">كشف الأموال التي خرجت ولم يتم تأكيد استلامها بعد.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'treasury:report-transfers-summary' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm">
+                    <div class="card-body">
+                        <div class="icon-shape bg-success bg-opacity-10 text-success">
+                            <i class="bi bi-arrow-repeat fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">ملخص التحويلات المالية الداخلية</h6>
+                        <p class="text-muted small mb-0">تحليل حركة تدوير الأموال بين الحسابات المختلفة.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- التسويات والعمليات البنكية -->
+    <h5 class="mb-4 fw-bold text-dark"><i class="bi bi-check2-square me-2 text-warning"></i>التسويات والعمليات البنكية</h5>
+    <div class="row g-4">
+        <div class="col-md-4">
+            <a href="{% url 'treasury:report-reconciliation-detail' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm border-start border-warning border-4">
+                    <div class="card-body">
+                        <div class="icon-shape bg-warning bg-opacity-10 text-warning">
+                            <i class="bi bi-shield-check fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">تقرير التسوية البنكية والمطابقة</h6>
+                        <p class="text-muted small mb-0">مقارنة الرصيد الدفتري مع كشف حساب البنك وعرض الفروقات.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'treasury:report-charges-interest' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm">
+                    <div class="card-body">
+                        <div class="icon-shape bg-dark bg-opacity-10 text-dark">
+                            <i class="bi bi-percent fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">تحليل المصاريف والفوائد البنكية</h6>
+                        <p class="text-muted small mb-0">عرض إجمالي العمولات والفوائد المحققة لكل بنك.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -24,35 +24,81 @@
                 </div>
             </div>
             
-            {% if period.status == 'draft' %}
-            <div class="card-footer bg-light d-flex justify-content-between">
-                <form method="post" action="{% url 'hr:payroll-generate' period.pk %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-magic"></i> توليد قسائم الرواتب آلياً (للموظفين النشطين)</button>
-                </form>
-                
-                {% if payslips %}
-                <form method="post" action="{% url 'hr:payroll-post' period.pk %}" onsubmit="return confirm('هل أنت متأكد من ترحيل هذا المسير وإنشاء قيد محاسبي؟ لا يمكن التراجع عن هذه الخطوة.');">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-success"><i class="bi bi-journal-check"></i> اعتماد وترحيل محاسبي</button>
-                </form>
+            <div class="card-footer bg-light d-flex flex-wrap gap-2 justify-content-between">
+                {# الحالة: مسودة #}
+                {% if period.status == 'draft' %}
+                <div class="d-flex gap-2">
+                    <form method="post" action="{% url 'hr:payroll-generate' period.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-magic"></i> توليد قسائم الرواتب</button>
+                    </form>
+                    
+                    {% if payslips %}
+                    <form method="post" action="{% url 'hr:payroll-approve' period.pk %}" onsubmit="return confirm('تأكيد اعتماد مبالغ الرواتب؟ بعد الاعتماد يمكنك الترحيل للحسابات.');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-info text-white"><i class="bi bi-check-all"></i> اعتماد المسير (Review Done)</button>
+                    </form>
+                    {% endif %}
+                </div>
                 {% endif %}
+
+                {# الحالة: معتمد (بانتظار الترحيل) #}
+                {% if period.status == 'approved' %}
+                <div class="d-flex gap-2">
+                    <form method="post" action="{% url 'hr:payroll-post' period.pk %}" onsubmit="return confirm('تأكيد الترحيل النهائي للحسابات؟ لا يمكن التعديل بعد هذه الخطوة.');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-success"><i class="bi bi-journal-check"></i> ترحيل المسير محاسبياً (Post Entry)</button>
+                    </form>
+                </div>
+                {% endif %}
+                
+                <div class="text-end">
+                    <a href="{% url 'hr:payroll-list' %}" class="btn btn-outline-secondary">عودة للقائمة</a>
+                </div>
             </div>
-            {% endif %}
 
             {% if period.status == 'posted' %}
-            <div class="card-footer bg-light d-flex gap-3">
-                <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#insuranceModal">
-                    <i class="bi bi-shield-check"></i> إثبات حصة المنشأة (تأمينات)
+            <div class="card-footer bg-light d-flex flex-wrap gap-2 align-items-center">
+                {# حصة المنشأة #}
+                {% if not period.insurance_entry %}
+                <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#insuranceModal">
+                    <i class="bi bi-shield-check"></i> إثبات حصة المنشأة
                 </button>
-                <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#paymentModal">
-                    <i class="bi bi-cash-stack"></i> إثبات صرف الرواتب
-                </button>
-                {% if period.journal_entry %}
-                <a href="{% url 'core:entry-detail' period.journal_entry.pk %}" class="btn btn-link text-decoration-none">
-                    <i class="bi bi-journal-text"></i> عرض قيد الاستحقاق
+                {% else %}
+                <a href="{% url 'core:journal-detail' period.insurance_entry.pk %}" class="btn btn-sm btn-info text-white">
+                    <i class="bi bi-check-circle"></i> قيد حصة المنشأة
                 </a>
                 {% endif %}
+
+                {# صرف الرواتب #}
+                {% if not period.payment_entry %}
+                <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#paymentModal">
+                    <i class="bi bi-cash-stack"></i> إثبات صرف الرواتب
+                </button>
+                {% else %}
+                <a href="{% url 'core:journal-detail' period.payment_entry.pk %}" class="btn btn-sm btn-success">
+                    <i class="bi bi-check-circle"></i> قيد صرف الرواتب
+                </a>
+                {% endif %}
+
+                {# توريد الاستقطاعات #}
+                {% if not period.gov_payment_entry %}
+                <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#govPaymentModal">
+                    <i class="bi bi-bank"></i> توريد (ضرائب وتأمينات)
+                </button>
+                {% else %}
+                <a href="{% url 'core:journal-detail' period.gov_payment_entry.pk %}" class="btn btn-sm btn-warning">
+                    <i class="bi bi-check-circle"></i> قيد التوريد الحكومي
+                </a>
+                {% endif %}
+
+                <div class="ms-auto d-flex gap-2">
+                    {% if period.journal_entry %}
+                    <a href="{% url 'core:journal-detail' period.journal_entry.pk %}" class="btn btn-sm btn-link text-decoration-none">
+                        <i class="bi bi-journal-text"></i> عرض قيد الاستحقاق
+                    </a>
+                    {% endif %}
+                </div>
             </div>
             {% endif %}
         </div>
@@ -101,19 +147,20 @@
                         <option value="bank">بنك</option>
                     </select>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">الحساب</label>
-                    <select name="source_id" class="form-select" required>
-                        <optgroup label="الخزائن" id="cash_options">
-                            {% for cash in cash_boxes %}
-                            <option value="{{ cash.pk }}">{{ cash.name }} ({{ cash.current_balance }})</option>
-                            {% endfor %}
-                        </optgroup>
-                        <optgroup label="البنوك" id="bank_options" style="display:none;">
-                            {% for bank in bank_accounts %}
-                            <option value="{{ bank.pk }}">{{ bank.name }} ({{ bank.current_balance }})</option>
-                            {% endfor %}
-                        </optgroup>
+                <div class="mb-3" id="cash_select_group">
+                    <label class="form-label">الخزينة</label>
+                    <select name="source_id_cash" class="form-select" id="cash_select">
+                        {% for cash in cash_boxes %}
+                        <option value="{{ cash.pk }}">{{ cash.name }} ({{ cash.current_balance }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3" id="bank_select_group" style="display:none;">
+                    <label class="form-label">الحساب البنكي</label>
+                    <select name="source_id_bank" class="form-select" id="bank_select">
+                        {% for bank in bank_accounts %}
+                        <option value="{{ bank.pk }}">{{ bank.name }} ({{ bank.current_balance }})</option>
+                        {% endfor %}
                     </select>
                 </div>
             </div>
@@ -124,16 +171,82 @@
     </div>
 </div>
 
+<!-- Government Payment Modal (Torid) -->
+<div class="modal fade" id="govPaymentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="post" action="{% url 'hr:payroll-post-gov-payment' period.pk %}" class="modal-content">
+            {% csrf_token %}
+            <div class="modal-header">
+                <h5 class="modal-title">توريد الاستقطاعات للجهات الحكومية</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">يمكنك تعديل المبالغ أدناه حسب التحويل الفعلي:</p>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">تأمينات اجتماعية (2133)</label>
+                        <input type="number" name="ins_amount" class="form-control" value="{{ suggested_ins|floatformat:2 }}" step="0.01">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">كسب عمل (2125)</label>
+                        <input type="number" name="tax_amount" class="form-control" value="{{ suggested_tax|floatformat:2 }}" step="0.01">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">مصدر السداد</label>
+                    <select name="source_type" class="form-select" id="gov_source_type" required>
+                        <option value="bank">بنك</option>
+                        <option value="cash">خزينة</option>
+                    </select>
+                </div>
+                <div class="mb-3" id="gov_bank_select_group">
+                    <label class="form-label">الحساب البنكي</label>
+                    <select name="source_id_bank" class="form-select" id="gov_bank_select">
+                        {% for bank in bank_accounts %}
+                        <option value="{{ bank.pk }}">{{ bank.name }} ({{ bank.current_balance }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3" id="gov_cash_select_group" style="display:none;">
+                    <label class="form-label">الخزينة</label>
+                    <select name="source_id_cash" class="form-select" id="gov_cash_select">
+                        {% for cash in cash_boxes %}
+                        <option value="{{ cash.pk }}">{{ cash.name }} ({{ cash.current_balance }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-warning">تأكيد التوريد</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
     document.getElementById('source_type').addEventListener('change', function() {
-        const cashOpt = document.getElementById('cash_options');
-        const bankOpt = document.getElementById('bank_options');
+        const cashGroup = document.getElementById('cash_select_group');
+        const bankGroup = document.getElementById('bank_select_group');
         if (this.value === 'bank') {
-            cashOpt.style.display = 'none';
-            bankOpt.style.display = 'block';
+            cashGroup.style.display = 'none';
+            bankGroup.style.display = 'block';
         } else {
-            cashOpt.style.display = 'block';
-            bankOpt.style.display = 'none';
+            cashGroup.style.display = 'block';
+            bankGroup.style.display = 'none';
+        }
+    });
+
+    document.getElementById('gov_source_type').addEventListener('change', function() {
+        const cashGroup = document.getElementById('gov_cash_select_group');
+        const bankGroup = document.getElementById('gov_bank_select_group');
+        if (this.value === 'bank') {
+            cashGroup.style.display = 'none';
+            bankGroup.style.display = 'block';
+        } else {
+            cashGroup.style.display = 'block';
+            bankGroup.style.display = 'none';
         }
     });
 </script>

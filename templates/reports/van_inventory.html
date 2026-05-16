@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block title %}جرد عهدة المندوب{% endblock %}
+{% block header %}تقرير جرد السيارة (عهدة المندوب){% endblock %}
+
+{% block content %}
+<div class="card shadow-sm border-0 mb-4 no-print">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-8">
+                <label class="form-label fw-bold">اختر المندوب</label>
+                <select name="rep" class="form-select select2" required>
+                    <option value="">اختر المندوب...</option>
+                    {% for rep in reps %}
+                    <option value="{{ rep.id }}" {% if selected_rep == rep.id %}selected{% endif %}>{{ rep.name }} ({{ rep.warehouse.name }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-warning w-100 fw-bold">
+                    <i class="bi bi-search me-1"></i> عرض جرد السيارة
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger border-0 shadow-sm">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i> {{ error }}
+</div>
+{% endif %}
+
+{% if report %}
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="mb-0 fw-bold text-warning"><i class="bi bi-truck-front me-2"></i>جرد سيارة: {{ report.rep.name }}</h5>
+            <small class="text-muted">مستودع المندوب: {{ report.rep.warehouse.name }}</small>
+        </div>
+        <button onclick="window.print()" class="btn btn-sm btn-outline-secondary no-print">
+            <i class="bi bi-printer me-1"></i> طباعة الجرد
+        </button>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>كود الصنف</th>
+                        <th>اسم الصنف</th>
+                        <th>الفئة</th>
+                        <th class="text-center">الكمية الموجودة</th>
+                        <th class="text-end">التكلفة</th>
+                        <th class="text-end">إجمالي القيمة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item_ledger in report.items %}
+                    <tr>
+                        <td><code>{{ item_ledger.item.code }}</code></td>
+                        <td><strong>{{ item_ledger.item.name }}</strong></td>
+                        <td>{{ item_ledger.item.category.name }}</td>
+                        <td class="text-center fw-bold fs-5 text-primary">{{ item_ledger.quantity_on_hand|floatformat:0 }}</td>
+                        <td class="text-end text-muted small">{{ item_ledger.average_cost|floatformat:2 }}</td>
+                        <td class="text-end fw-bold">{{ item_ledger.total_value|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">السيارة فارغة حالياً. لا يوجد رصيد للمندوب.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-warning fw-bold">
+                    <tr>
+                        <td colspan="5" class="text-end">إجمالي قيمة عهدة المندوب:</td>
+                        <td class="text-end fs-5">{{ report.total_value|floatformat:2 }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        {% if report.items.paginator.num_pages > 1 %}
+            {% include 'partials/pagination.html' with page_obj=report.items is_paginated=True %}
+        {% endif %}
+
+    </div>
+</div>
+{% else %}
+
+{% if not error %}
+<div class="text-center py-5 text-muted">
+    <i class="bi bi-truck fs-1 d-block mb-3"></i>
+    اختر المندوب من القائمة أعلاه لعرض جرد السيارة اللحظي.
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

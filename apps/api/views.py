@@ -1,4 +1,5 @@
 from rest_framework import viewsets, permissions
+from rest_framework.response import Response
 from rest_framework.decorators import action
 from apps.core.models import Account, JournalEntry, TaxType
 from apps.sales.models import Customer, SalesInvoice, PriceList, PriceListItem, Quotation
@@ -55,13 +56,13 @@ class PriceListViewSet(viewsets.ReadOnlyModelViewSet):
     def item_price(self, request, pk=None):
         item_id = request.query_params.get('item_id')
         if not item_id:
-            return viewsets.response.Response({'error': 'item_id is required'}, status=400)
+            return Response({'error': 'item_id is required'}, status=400)
         
         try:
             item_price = PriceListItem.objects.get(price_list_id=pk, item_id=item_id)
-            return viewsets.response.Response({'price': item_price.unit_price})
+            return Response({'price': item_price.unit_price})
         except PriceListItem.DoesNotExist:
-            return viewsets.response.Response({'price': None})
+            return Response({'price': None})
 class QuotationViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Quotation.objects.filter(is_active=True, status='active')
     serializer_class = QuotationSerializer
@@ -71,7 +72,7 @@ class QuotationViewSet(viewsets.ReadOnlyModelViewSet):
     def active_for_sector(self, request):
         sector_id = request.query_params.get('sector_id')
         if not sector_id:
-            return viewsets.response.Response({'error': 'sector_id is required'}, status=400)
+            return Response({'error': 'sector_id is required'}, status=400)
         
         from django.utils import timezone
         today = timezone.now().date()
@@ -84,4 +85,4 @@ class QuotationViewSet(viewsets.ReadOnlyModelViewSet):
             end_date__gte=today
         )
         serializer = self.get_serializer(offers, many=True)
-        return viewsets.response.Response(serializer.data)
+        return Response(serializer.data)

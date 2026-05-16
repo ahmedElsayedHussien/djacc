@@ -13,7 +13,39 @@ class AccountType(models.TextChoices):
     REVENUE = 'revenue', 'إيرادات'
     EXPENSE = 'expense', 'مصروفات'
 
-class Account(models.Model):
+from django.utils import timezone
+
+class ConcurrencyModel(models.Model):
+    """
+    Base model to handle concurrency and auditing.
+    """
+    created_at = models.DateTimeField(default=timezone.now, verbose_name="تاريخ الإنشاء")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="تاريخ التحديث")
+    version = models.PositiveIntegerField(default=1, verbose_name="الإصدار")
+
+    class Meta:
+        abstract = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._original_state = self.__dict__.copy()
+
+    @property
+    def is_dirty(self):
+        for field in self._meta.fields:
+            if field.name == 'updated_at' or field.name == 'version':
+                continue
+            if getattr(self, field.name) != self._original_state.get(field.name):
+                return True
+        return False
+
+    def save(self, *args, **kwargs):
+        if self.pk and self.is_dirty:
+            self.version += 1
+        super().save(*args, **kwargs)
+        self._original_state = self.__dict__.copy()
+
+class Account(ConcurrencyModel):
     """
     Chart of Accounts (دليل الحسابات)
     Supports multi-level hierarchy via parent FK (self-referential).
@@ -28,7 +60,15 @@ class Account(models.Model):
     initial_balance_type = models.CharField(max_length=10, choices=[('debit', 'مدين'), ('credit', 'دائن')], default='debit')
     is_active = models.BooleanField(default=True)
     notes = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        if self.parent:
+            self.account_type = self.parent.account_type
+            # الحسابات الجديدة تأخذ نفس طبيعة الحساب الأب تلقائياً
+            if is_new:
+                self.initial_balance_type = self.parent.initial_balance_type
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.code} - {self.name}"
@@ -204,17 +244,33 @@ class TaxType(models.Model):
         WHT = 'wht', 'ضريبة الخصم والتحصيل (تحت حساب الضريبة)'
         STAMP = 'stamp', 'ضريبة الدمغة'
         SALARY = 'salary', 'ضريبة كسب العمل'
-        INCOME = 'income', 'ضريبة الدخل (شركات/أفراد)'
         ESTATE = 'estate', 'ضريبة التصرفات العقارية'
         CUSTOMS = 'customs', 'ضرائب جمركية'
         INSURANCE = 'insurance', 'تأمينات اجتماعية'
         OTHER = 'other', 'أخرى'
 
-    name = models.CharField(max_length=100)
-    category = models.CharField(max_length=20, choices=Category.choices)
-    rate = models.DecimalField(max_digits=5, decimal_places=2, help_text="النسبة المئوية (مثال: 14.00)")
-    account = models.ForeignKey(Account, on_delete=models.PROTECT, help_text="الحساب المحاسبي المرتبط")
-    is_active = models.BooleanField(default=True)
+    name = models.CharField(max_length=100, verbose_name="اسم الضريبة")
+    category = models.CharField(
+        max_length=20, 
+        choices=Category.choices, 
+        default=Category.VAT,
+        verbose_name="تصنيف الضريبة"
+    )
+    rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="النسبة الافتراضية (%)")
+    account = models.ForeignKey(
+        Account, 
+        on_delete=models.PROTECT, 
+        verbose_name="الحساب المحاسبي المرتبط"
+    )
+    is_active = models.BooleanField(default=True, verbose_name="نشط")
+    
+    # حقول التحكم في ظهور الضريبة في واجهات النظام
+    appear_in_invoices = models.BooleanField(default=True, verbose_name="تظهر في فواتير البيع والشراء")
+    appear_in_payroll = models.BooleanField(default=False, verbose_name="تظهر في مسيرات الرواتب")
+
+    class Meta:
+        verbose_name = "نوع الضريبة"
+        verbose_name_plural = "أنواع الضرائب"
 
     def __str__(self):
         return f"{self.name} ({self.rate}%)"

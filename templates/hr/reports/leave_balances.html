@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}أرصدة الإجازات السنوية{% endblock %}
+{% block header %}أرصدة الإجازات السنوية والمتبقية{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm border-0" style="border-radius: 15px;">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-calendar-range me-2 text-info"></i>أرصدة الإجازات حسب الموظف</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">الموظف</th>
+                        <th>نوع الإجازة / السنة</th>
+                        <th class="text-center">الرصيد الكلي</th>
+                        <th class="text-center">المستهلك</th>
+                        <th class="text-end pe-4">الرصيد المتبقي</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report %}
+                    <tr>
+                        <td class="ps-4">
+                            <span class="fw-bold text-dark">{{ row.employee.first_name }} {{ row.employee.last_name }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-soft-info text-info">{{ row.leave_type.name }}</span><br>
+                            <small class="text-muted">سنة: {{ row.year }}</small>
+                        </td>
+                        <td class="text-center">{{ row.total_days|floatformat:1 }} يوم</td>
+                        <td class="text-center text-danger">{{ row.used_days|floatformat:1 }} يوم</td>
+                        <td class="text-end pe-4 fw-bold fs-5 text-success">{{ row.remaining_days|floatformat:1 }} يوم</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-4 text-muted">لا توجد أرصدة إجازات مسجلة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

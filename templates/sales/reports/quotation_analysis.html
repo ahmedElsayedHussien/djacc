@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}تحليل عروض الأسعار ونسبة التحويل{% endblock %}
+{% block header %}تقرير تحليل عروض الأسعار{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">من تاريخ</label>
+                    <input type="date" name="from" class="form-control" value="{{ from_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">إلى تاريخ</label>
+                    <input type="date" name="to" class="form-control" value="{{ to_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-filter me-2"></i>عرض التقرير</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="row g-4 mb-5">
+        <div class="col-md-3">
+            <div class="card h-100 shadow-sm border-0 bg-primary text-white">
+                <div class="card-body">
+                    <h6 class="text-white-50">إجمالي العروض الصادرة</h6>
+                    <h3 class="fw-bold">{{ report.total_count }}</h3>
+                    <small>{{ report.total_value|floatformat:0|intcomma }} EGP</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100 shadow-sm border-0 bg-success text-white">
+                <div class="card-body">
+                    <h6 class="text-white-50">العروض المحولة لفواتير</h6>
+                    <h3 class="fw-bold">{{ report.converted_count }}</h3>
+                    <small>{{ report.converted_value|floatformat:0|intcomma }} EGP</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100 shadow-sm border-0 bg-info text-white">
+                <div class="card-body">
+                    <h6 class="text-white-50">نسبة التحويل (Conversion Rate)</h6>
+                    <h3 class="fw-bold">{{ report.conversion_rate|floatformat:1 }}%</h3>
+                    <div class="progress mt-2" style="height: 5px; background: rgba(255,255,255,0.2);">
+                        <div class="progress-bar bg-white" role="progressbar" style="width: {{ report.conversion_rate }}%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100 shadow-sm border-0 bg-danger text-white">
+                <div class="card-body">
+                    <h6 class="text-white-50">العروض الملغية/المنتهية</h6>
+                    <h3 class="fw-bold">{{ report.cancelled_count }}</h3>
+                    <small>تحتاج لمتابعة أسباب الرفض</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-info border-0 shadow-sm d-flex align-items-center" style="border-radius: 12px;">
+        <i class="bi bi-info-circle-fill fs-4 me-3"></i>
+        <div>
+            <strong>نصيحة تحليلية:</strong> إذا كانت نسبة التحويل أقل من 20%، يرجى مراجعة تنافسية قوائم الأسعار أو جودة متابعة فريق المبيعات للعملاء بعد تقديم العرض.
+        </div>
+    </div>
+</div>
+{% endblock %}

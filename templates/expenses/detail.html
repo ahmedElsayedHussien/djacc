@@ -16,8 +16,8 @@
                     {% if expense.tax_type %}
                     <tr>
                         <th>{{ expense.tax_type.name }}:</th>
-                        <td class="{% if expense.tax_type.category in 'wht,salary,insurance' %}text-danger{% else %}text-success{% endif %}">
-                            {% if expense.tax_type.category in 'wht,salary,insurance' %}-{% else %}+{% endif %}
+                        <td class="{% if expense.tax_type.category == 'wht' or expense.tax_type.category == 'salary' or expense.tax_type.category == 'insurance' %}text-danger{% else %}text-success{% endif %}">
+                            {% if expense.tax_type.category == 'wht' or expense.tax_type.category == 'salary' or expense.tax_type.category == 'insurance' %}-{% else %}+{% endif %}
                             {{ expense.tax_amount|default:"0" }}
                         </td>
                     </tr>
@@ -64,7 +64,7 @@
                 <hr>
                 <h6>الربط المحاسبي</h6>
                 {% if expense.journal_entry %}
-                <p>رقم القيد: <a href="/admin/core/journalentry/{{ expense.journal_entry.pk }}/change/">{{ expense.journal_entry.number }}</a></p>
+                <p>رقم القيد: <a href="{% url 'core:journal-detail' expense.journal_entry.pk %}">{{ expense.journal_entry.number }}</a></p>
                 {% else %}
                 <p class="text-muted">لم يتم الترحيل بعد.</p>
                 {% endif %}

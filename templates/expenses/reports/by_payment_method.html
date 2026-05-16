@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}المصروفات حسب طريقة الدفع{% endblock %}
+{% block header %}تحليل المصروفات حسب طريقة الدفع{% endblock %}
+
+{% block content %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label fw-bold">من تاريخ</label>
+                <input type="date" name="from" class="form-control" value="{{ from_date }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">إلى تاريخ</label>
+                <input type="date" name="to" class="form-control" value="{{ to_date }}">
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search me-2"></i>تحليل وسيلة الدفع</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0" style="border-radius: 15px;">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">وسيلة الدفع</th>
+                        <th class="text-center">عدد العمليات</th>
+                        <th class="text-end pe-4">إجمالي المبالغ المنصرفة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report %}
+                    <tr>
+                        <td class="ps-4">
+                            {% if row.payment_method == 'cash' %}
+                                <span class="badge bg-soft-success text-success fs-6"><i class="bi bi-wallet2 me-2"></i>نقدي</span>
+                            {% elif row.payment_method == 'bank' %}
+                                <span class="badge bg-soft-info text-info fs-6"><i class="bi bi-bank me-2"></i>بنكي / تحويل</span>
+                            {% elif row.payment_method == 'custody' %}
+                                <span class="badge bg-soft-warning text-warning fs-6"><i class="bi bi-person-badge me-2"></i>من العهدة</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center fw-bold">{{ row.count }}</td>
+                        <td class="text-end pe-4 fw-bold text-dark fs-5">{{ row.total_sum|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3" class="text-center py-4 text-muted">لا توجد بيانات لهذه الفترة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

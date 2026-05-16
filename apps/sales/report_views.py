@@ -292,3 +292,141 @@ class SalesAgingReportView(LoginRequiredMixin, PermissionRequiredMixin, Template
             
         context['summary'] = summary
         return context
+class SalesReportDashboardView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    template_name = 'sales/reports/dashboard_links.html'
+    permission_required = 'sales.view_salesinvoice'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        return context
+
+class NetSalesProfitabilityReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    template_name = 'sales/reports/net_sales_profitability.html'
+    permission_required = 'sales.view_salesinvoice'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from_date = self.request.GET.get('from', date.today().replace(day=1).isoformat())
+        to_date = self.request.GET.get('to', date.today().isoformat())
+        
+        from_date_obj = date.fromisoformat(from_date)
+        to_date_obj = date.fromisoformat(to_date)
+        
+        from apps.reports.services import ReportService
+        context['report'] = ReportService.net_sales_profitability_report(from_date_obj, to_date_obj)
+        context['from_date'] = from_date_obj
+        context['to_date'] = to_date_obj
+        return context
+
+class ProductProfitabilityReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    template_name = 'sales/reports/product_profitability.html'
+    permission_required = 'sales.view_salesinvoice'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from_date = self.request.GET.get('from', date.today().replace(day=1).isoformat())
+        to_date = self.request.GET.get('to', date.today().isoformat())
+        
+        from_date_obj = date.fromisoformat(from_date)
+        to_date_obj = date.fromisoformat(to_date)
+        
+        from apps.reports.services import ReportService
+        report_data = ReportService.product_profitability_report(from_date_obj, to_date_obj)
+        
+        from django.core.paginator import Paginator
+        paginator = Paginator(report_data, 50)
+        page_number = self.request.GET.get('page')
+        context['report'] = paginator.get_page(page_number)
+        
+        context['from_date'] = from_date_obj
+        context['to_date'] = to_date_obj
+        return context
+
+class SalesBySectorReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    template_name = 'sales/reports/by_sector.html'
+    permission_required = 'sales.view_salesinvoice'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from_date = self.request.GET.get('from', date.today().replace(day=1).isoformat())
+        to_date = self.request.GET.get('to', date.today().isoformat())
+        
+        from_date_obj = date.fromisoformat(from_date)
+        to_date_obj = date.fromisoformat(to_date)
+        
+        from apps.reports.services import ReportService
+        report_data = ReportService.sales_by_sector_report(from_date_obj, to_date_obj)
+        
+        from django.core.paginator import Paginator
+        paginator = Paginator(report_data, 50)
+        page_number = self.request.GET.get('page')
+        context['report'] = paginator.get_page(page_number)
+        
+        context['from_date'] = from_date_obj
+        context['to_date'] = to_date_obj
+        return context
+
+class RepPerformanceEnhancedReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    template_name = 'sales/reports/rep_performance_enhanced.html'
+    permission_required = 'sales.view_salesinvoice'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from_date = self.request.GET.get('from', date.today().replace(day=1).isoformat())
+        to_date = self.request.GET.get('to', date.today().isoformat())
+        
+        from_date_obj = date.fromisoformat(from_date)
+        to_date_obj = date.fromisoformat(to_date)
+        
+        from apps.reports.services import ReportService
+        report_data = ReportService.rep_performance_report_enhanced(from_date_obj, to_date_obj)
+        
+        from django.core.paginator import Paginator
+        paginator = Paginator(report_data, 50)
+        page_number = self.request.GET.get('page')
+        context['report'] = paginator.get_page(page_number)
+        
+        context['from_date'] = from_date_obj
+        context['to_date'] = to_date_obj
+        return context
+
+class CustomerAgingSummaryReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    template_name = 'sales/reports/aging_summary.html'
+    permission_required = 'sales.view_salesinvoice'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        customer_id = self.request.GET.get('customer')
+        
+        from apps.reports.services import ReportService
+        report_data = ReportService.customer_aging_summary_report(customer_id)
+        
+        from django.core.paginator import Paginator
+        paginator = Paginator(report_data, 50)
+        page_number = self.request.GET.get('page')
+        context['report'] = paginator.get_page(page_number)
+        
+        context['customers'] = Customer.objects.all()
+        if customer_id:
+            context['selected_customer'] = int(customer_id)
+            
+        return context
+
+class QuotationAnalysisReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    template_name = 'sales/reports/quotation_analysis.html'
+    permission_required = 'sales.view_quotation'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from_date = self.request.GET.get('from', date.today().replace(day=1).isoformat())
+        to_date = self.request.GET.get('to', date.today().isoformat())
+        
+        from_date_obj = date.fromisoformat(from_date)
+        to_date_obj = date.fromisoformat(to_date)
+        
+        from apps.reports.services import ReportService
+        context['report'] = ReportService.quotation_analysis_report(from_date_obj, to_date_obj)
+        context['from_date'] = from_date_obj
+        context['to_date'] = to_date_obj
+        return context
+

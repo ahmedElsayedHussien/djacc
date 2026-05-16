@@ -1,12 +1,13 @@
 from django.views.generic import ListView, CreateView, UpdateView, DetailView
+from decimal import Decimal
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 from django.db import transaction
 from django.views import View
-from .models import CashBox, BankAccount, CashTransfer, BankReconciliation
-from .forms import CashBoxForm, BankAccountForm, CashTransferForm
+from .models import CashBox, BankAccount, CashTransfer, BankReconciliation, BankTransaction
+from .forms import CashBoxForm, BankAccountForm, CashTransferForm, BankReconciliationForm, BankTransactionForm
 from .services import TreasuryService
 from django.db.models import Sum, Count, Q
 from django.utils import timezone
@@ -53,11 +54,72 @@ class TreasuryDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListVie
         ).count()
         
         # 4. Bank Reconciliation Stats
-        ctx['pending_reconciliations'] = BankReconciliation.objects.filter(is_reconciled=False).count()
+        ctx['pending_reconciliations'] = BankReconciliation.objects.filter(status=BankReconciliation.Status.DRAFT).count()
 
         # 5. Recent Transfers
         ctx['recent_transfers'] = CashTransfer.objects.order_by('-date', '-id')[:10]
 
+        return ctx
+
+class CashBoxMovementReportView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    model = CashBox
+    template_name = 'treasury/reports/movements.html'
+    permission_required = 'treasury.view_cashbox'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        from apps.core.models import JournalLine
+        
+        start_date = self.request.GET.get('start_date')
+        end_date = self.request.GET.get('end_date')
+        selected_box = self.request.GET.get('cash_box')
+        
+        ctx['start_date'] = start_date
+        ctx['end_date'] = end_date
+        ctx['selected_box'] = selected_box
+        
+        movements_qs = JournalLine.objects.filter(entry__is_posted=True).select_related('entry', 'account')
+        
+        if selected_box:
+            box = get_object_or_404(CashBox, pk=selected_box)
+            movements_qs = movements_qs.filter(account=box.account)
+        else:
+            # All cash box accounts
+            box_accounts = CashBox.objects.values_list('account_id', flat=True)
+            movements_qs = movements_qs.filter(account_id__in=box_accounts)
+            
+        if start_date:
+            movements_qs = movements_qs.filter(entry__date__gte=start_date)
+        if end_date:
+            movements_qs = movements_qs.filter(entry__date__lte=end_date)
+            
+        # Order chronologically to calculate running balance
+        movements = list(movements_qs.order_by('entry__date', 'id'))
+        
+        opening_balance = Decimal('0')
+        if selected_box:
+            box = get_object_or_404(CashBox, pk=selected_box)
+            from apps.core.utils import get_account_balance
+            from datetime import date as date_type, timedelta
+            if start_date:
+                # Balance before start_date
+                prev_date = date_type.fromisoformat(start_date) - timedelta(days=1)
+                opening_balance = get_account_balance(box.account, as_of_date=prev_date)
+            else:
+                # No start date means we include all history, but initial balance still applies
+                # Actually, get_account_balance with no date gives current, but we need start of time.
+                # If no start_date, opening balance is just the initial balance of the account
+                opening_balance = box.account.initial_balance if box.account.initial_balance_type == 'debit' else -box.account.initial_balance
+        
+        running_balance = opening_balance
+        for mv in movements:
+            running_balance += (mv.debit - mv.credit)
+            mv.running_balance = running_balance
+            
+        ctx['opening_balance'] = opening_balance
+        # Show chronologically (oldest first) as requested
+        ctx['movements'] = movements
+        ctx['all_boxes'] = CashBox.objects.filter(is_active=True)
         return ctx
 
 class CashBoxListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
@@ -193,6 +255,7 @@ class CashTransferReceiveView(LoginRequiredMixin, PermissionRequiredMixin, View)
         except Exception as e:
             messages.error(request, f'خطأ أثناء التأكيد: {e}')
         return redirect('treasury:transfer-detail', pk=pk)
+
 class BankReconciliationListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = BankReconciliation
     template_name = 'treasury/bankreconciliations/list.html'
@@ -200,19 +263,19 @@ class BankReconciliationListView(LoginRequiredMixin, PermissionRequiredMixin, Li
     context_object_name = 'reconciliations'
 
     def get_queryset(self):
-        return BankReconciliation.objects.select_related('bank_account').all()
+        return BankReconciliation.objects.select_related('bank_account', 'created_by').all()
 
 class BankReconciliationCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = BankReconciliation
-    fields = ['bank_account', 'statement_date', 'statement_balance', 'book_balance']
+    form_class = BankReconciliationForm
     template_name = 'treasury/bankreconciliations/form.html'
     permission_required = 'treasury.add_bankreconciliation'
     success_url = reverse_lazy('treasury:bankreconciliation-list')
 
     def form_valid(self, form):
-        # Calculate difference automatically
         obj = form.save(commit=False)
         obj.difference = obj.statement_balance - obj.book_balance
+        obj.created_by = self.request.user
         obj.save()
         messages.success(self.request, f'تم إنشاء تسوية بنكية للبيان {obj.statement_date}')
         return redirect(self.success_url)
@@ -225,14 +288,14 @@ class BankReconciliationDetailView(LoginRequiredMixin, PermissionRequiredMixin, 
 
 class BankReconciliationUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = BankReconciliation
-    fields = ['bank_account', 'statement_date', 'statement_balance', 'book_balance', 'notes']
+    form_class = BankReconciliationForm
     template_name = 'treasury/bankreconciliations/form.html'
     permission_required = 'treasury.change_bankreconciliation'
     success_url = reverse_lazy('treasury:bankreconciliation-list')
 
     def get_queryset(self):
         # ✅ Fix: Prevent editing if already reconciled
-        return super().get_queryset().filter(is_reconciled=False)
+        return super().get_queryset().filter(status=BankReconciliation.Status.DRAFT)
 
     def dispatch(self, request, *args, **kwargs):
         obj = self.get_object()
@@ -273,3 +336,48 @@ class CashTransferReverseView(LoginRequiredMixin, PermissionRequiredMixin, View)
         except Exception as e:
             messages.error(request, f'خطأ أثناء العكس: {e}')
         return redirect('treasury:transfer-detail', pk=pk)
+
+# --- Bank Transaction Views ---
+
+class BankTransactionListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    model = BankTransaction
+    template_name = 'treasury/banktransactions/list.html'
+    permission_required = 'treasury.view_banktransaction'
+    context_object_name = 'transactions'
+
+    def get_queryset(self):
+        return BankTransaction.objects.select_related('bank_account', 'created_by').order_by('-date', '-id')
+
+class BankTransactionCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = BankTransaction
+    form_class = BankTransactionForm
+    template_name = 'treasury/banktransactions/form.html'
+    permission_required = 'treasury.add_banktransaction'
+    success_url = reverse_lazy('treasury:banktransaction-list')
+
+    def form_valid(self, form):
+        with transaction.atomic():
+            from apps.core.services import DocumentService
+            form.instance.number = DocumentService.generate_number(BankTransaction, 'BTRN')
+            form.instance.created_by = self.request.user
+            self.object = form.save()
+            messages.success(self.request, f'تم تسجيل الحركة البنكية {self.object.number}')
+        return redirect(self.success_url)
+
+class BankTransactionDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    model = BankTransaction
+    template_name = 'treasury/banktransactions/detail.html'
+    permission_required = 'treasury.view_banktransaction'
+    context_object_name = 'transaction'
+
+class BankTransactionPostView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'treasury.change_banktransaction'
+    
+    def post(self, request, pk):
+        trans = get_object_or_404(BankTransaction, pk=pk)
+        try:
+            TreasuryService.process_bank_transaction(trans, request.user)
+            messages.success(request, f'تم ترحيل الحركة البنكية {trans.number} بنجاح')
+        except Exception as e:
+            messages.error(request, f'خطأ أثناء الترحيل: {e}')
+        return redirect('treasury:banktransaction-detail', pk=pk)

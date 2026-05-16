@@ -49,7 +49,7 @@
 {% block extra_js %}
 <script>
     function toggleSource(val) {
-        document.getElementById('bank_div').style.display = (val === 'bank') ? 'block' : 'none';
+        document.getElementById('bank_div').style.display = (val === 'bank' || val === 'cheque') ? 'block' : 'none';
         document.getElementById('cash_div').style.display = (val === 'cash') ? 'block' : 'none';
     }
     

@@ -106,132 +106,126 @@
         </div>
     </div>
 
+    <!-- Main Operations Section -->
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0" style="border-radius: 20px;">
+                <div class="card-header bg-white border-0 py-3">
+                    <h5 class="mb-0 fw-bold"><i class="bi bi-grid-3x3-gap me-2 text-primary"></i>العمليات والمدخلات</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        {% if perms.sales.view_salesinvoice %}
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="{% url 'sales:invoice-list' %}" class="btn btn-outline-primary w-100 py-3 shadow-sm border-2">
+                                <i class="bi bi-file-earmark-plus d-block mb-2 fs-3"></i>
+                                <span class="fw-bold">فواتير المبيعات</span>
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% if perms.sales.view_customerreceipt %}
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="{% url 'sales:receipt-list' %}" class="btn btn-outline-success w-100 py-3 shadow-sm border-2">
+                                <i class="bi bi-cash-coin d-block mb-2 fs-3"></i>
+                                <span class="fw-bold">سندات القبض</span>
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% if perms.sales.view_repdailysettlement %}
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="{% url 'sales:settlement-list' %}" class="btn btn-outline-info w-100 py-3 shadow-sm border-2">
+                                <i class="bi bi-truck d-block mb-2 fs-3"></i>
+                                <span class="fw-bold">تسوية المناديب</span>
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% if perms.sales.view_salesreturn %}
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="{% url 'sales:return-list' %}" class="btn btn-outline-danger w-100 py-3 shadow-sm border-2">
+                                <i class="bi bi-arrow-counterclockwise d-block mb-2 fs-3"></i>
+                                <span class="fw-bold">مرتجع مبيعات</span>
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% if perms.sales.view_customer %}
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="{% url 'sales:customer-list' %}" class="btn btn-outline-dark w-100 py-3 shadow-sm border-2">
+                                <i class="bi bi-people d-block mb-2 fs-3"></i>
+                                <span class="fw-bold">سجل العملاء</span>
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% if perms.sales.view_salesrepresentative %}
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="{% url 'sales:rep-list' %}" class="btn btn-outline-secondary w-100 py-3 shadow-sm border-2">
+                                <i class="bi bi-person-vcard d-block mb-2 fs-3"></i>
+                                <span class="fw-bold">المناديب</span>
+                            </a>
+                        </div>
+                        {% endif %}
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="{% url 'sales:report-dashboard' %}" class="btn btn-dark w-100 py-3 shadow-sm border-2">
+                                <i class="bi bi-bar-chart-line d-block mb-2 fs-3 text-warning"></i>
+                                <span class="fw-bold">تقارير المبيعات</span>
+                            </a>
+                        </div>
+
+                    </div>
+                    <div class="row g-3 mt-1">
+                        {% if perms.sales.view_customersector %}
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="{% url 'sales:sector-list' %}" class="btn btn-light w-100 text-start border shadow-sm">
+                                <i class="bi bi-diagram-3 me-2"></i>قطاعات العملاء
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% if perms.sales.view_pricelist %}
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="{% url 'sales:pricelist-list' %}" class="btn btn-light w-100 text-start border shadow-sm">
+                                <i class="bi bi-tags me-2"></i>قوائم الأسعار
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% if perms.sales.view_quotation %}
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="{% url 'sales:quotation-list' %}" class="btn btn-light w-100 text-start border shadow-sm">
+                                <i class="bi bi-percent me-2"></i>العروض والخصومات
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% if user.salesrepresentative %}
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="{% url 'sales:rep-stock' %}" class="btn btn-soft-info w-100 text-start border shadow-sm" style="background-color: #e0f2fe; color: #0369a1;">
+                                <i class="bi bi-box-seam me-2"></i>بضاعتي الحالية
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="row g-4 mb-4">
         <!-- Sales Performance Chart -->
-        <div class="col-md-8">
+        <div class="col-md-12">
             <div class="card h-100 shadow-sm border-0" style="border-radius: 20px;">
                 <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
                     <h5 class="mb-0 fw-bold">أداء المبيعات (آخر 6 أشهر)</h5>
-                    <button class="btn btn-sm btn-light text-primary"><i class="bi bi-download"></i> تصوير</button>
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'sales:report-dashboard' %}" class="btn btn-sm btn-dark"><i class="bi bi-bar-chart-line me-1"></i> كافة التقارير</a>
+                        <button class="btn btn-sm btn-light text-primary"><i class="bi bi-download"></i> تصوير</button>
+                    </div>
                 </div>
                 <div class="card-body">
-                    <div class="chart-container">
+                    <div class="chart-container" style="height: 400px;">
                         <canvas id="salesChart"></canvas>
                     </div>
                 </div>
             </div>
         </div>
-
-        <!-- Quick Links -->
-        <div class="col-md-4">
-            <div class="card h-100 shadow-sm border-0" style="border-radius: 20px;">
-                <div class="card-header bg-white border-0 py-3">
-                    <h5 class="mb-0 fw-bold">التقارير التفصيلية</h5>
-                </div>
-                <div class="card-body">
-                    <a href="{% url 'sales:report-detailed' %}" class="text-decoration-none text-dark">
-                        <div class="report-link-card p-3 d-flex align-items-center">
-                            <div class="icon-box text-secondary" style="background: #f8fafc;">
-                                <i class="bi bi-list-columns-reverse"></i>
-                            </div>
-                            <div>
-                                <h6 class="mb-0 fw-bold">حركة المبيعات التفصيلية</h6>
-                                <small class="text-muted">بيانات المعاملات لحظة بلحظة</small>
-                            </div>
-                        </div>
-                    </a>
-                    <a href="{% url 'sales:report-by-item' %}" class="text-decoration-none text-dark">
-                        <div class="report-link-card p-3 d-flex align-items-center">
-                            <div class="icon-box bg-light-primary text-primary" style="background: #eef2ff;">
-                                <i class="bi bi-box-seam"></i>
-                            </div>
-                            <div>
-                                <h6 class="mb-0 fw-bold">تحليل الأصناف</h6>
-                                <small class="text-muted">الأكثر مبيعاً والربحية</small>
-                            </div>
-                        </div>
-                    </a>
-                    <a href="{% url 'sales:report-by-rep' %}" class="text-decoration-none text-dark">
-                        <div class="report-link-card p-3 d-flex align-items-center">
-                            <div class="icon-box text-success" style="background: #ecfdf5;">
-                                <i class="bi bi-person-badge"></i>
-                            </div>
-                            <div>
-                                <h6 class="mb-0 fw-bold">أداء المناديب</h6>
-                                <small class="text-muted">المستهدف مقابل الفعلي</small>
-                            </div>
-                        </div>
-                    </a>
-                    <a href="{% url 'reports:rep_commission' %}" class="text-decoration-none text-dark">
-                        <div class="report-link-card p-3 d-flex align-items-center">
-                            <div class="icon-box text-primary" style="background: #eef2ff;">
-                                <i class="bi bi-wallet2"></i>
-                            </div>
-                            <div>
-                                <h6 class="mb-0 fw-bold">عمولات المناديب</h6>
-                                <small class="text-muted">حساب المستحقات والحوافز</small>
-                            </div>
-                        </div>
-                    </a>
-                    <a href="{% url 'sales:report-by-customer' %}" class="text-decoration-none text-dark">
-                        <div class="report-link-card p-3 d-flex align-items-center">
-                            <div class="icon-box text-info" style="background: #f0f9ff;">
-                                <i class="bi bi-person-lines-fill"></i>
-                            </div>
-                            <div>
-                                <h6 class="mb-0 fw-bold">تحليل العملاء</h6>
-                                <small class="text-muted">الولاء وحجم المشتريات</small>
-                            </div>
-                        </div>
-                    </a>
-                    <a href="{% url 'reports:customer_statement' %}" class="text-decoration-none text-dark">
-                        <div class="report-link-card p-3 d-flex align-items-center">
-                            <div class="icon-box text-warning" style="background: #fffbeb;">
-                                <i class="bi bi-file-earmark-person"></i>
-                            </div>
-                            <div>
-                                <h6 class="mb-0 fw-bold">كشف حساب عميل</h6>
-                                <small class="text-muted">ميزان المراجعة التفصيلي للعميل</small>
-                            </div>
-                        </div>
-                    </a>
-                    <a href="{% url 'reports:rep_statement' %}" class="text-decoration-none text-dark">
-                        <div class="report-link-card p-3 d-flex align-items-center">
-                            <div class="icon-box text-danger" style="background: #fef2f2;">
-                                <i class="bi bi-person-rolodex"></i>
-                            </div>
-                            <div>
-                                <h6 class="mb-0 fw-bold">كشف حساب مندوب</h6>
-                                <small class="text-muted">حركة العهدة والمبيعات للمندوب</small>
-                            </div>
-                        </div>
-                    </a>
-                    <a href="{% url 'sales:report-aging' %}" class="text-decoration-none text-dark">
-                        <div class="report-link-card p-3 d-flex align-items-center">
-                            <div class="icon-box text-dark" style="background: #f1f5f9;">
-                                <i class="bi bi-hourglass-split"></i>
-                            </div>
-                            <div>
-                                <h6 class="mb-0 fw-bold">تقرير أعمار الديون</h6>
-                                <small class="text-muted">متابعة المبالغ المستحقة وفترات التأخير</small>
-                            </div>
-                        </div>
-                    </a>
-                    <a href="{% url 'sales:report-returns' %}" class="text-decoration-none text-dark">
-                        <div class="report-link-card p-3 d-flex align-items-center">
-                            <div class="icon-box text-danger" style="background: #fef2f2;">
-                                <i class="bi bi-arrow-counterclockwise"></i>
-                            </div>
-                            <div>
-                                <h6 class="mb-0 fw-bold">مرتجع المبيعات</h6>
-                                <small class="text-muted">إحصائيات المردودات وأسبابها</small>
-                            </div>
-                        </div>
-                    </a>
-                </div>
-            </div>
-        </div>
     </div>
+
 
     <div class="row g-4">
         <!-- Top Customers -->

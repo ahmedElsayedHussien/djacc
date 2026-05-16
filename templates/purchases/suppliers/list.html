@@ -31,7 +31,7 @@
                         <td><code>{{ supplier.account.code }}</code></td>
                         <td>{{ supplier.tax_number|default:"---" }}</td>
                         <td>{{ supplier.phone|default:"---" }}</td>
-                        <td>{{ supplier.balance|default:"0.00" }}</td>
+                        <td>{{ supplier.balance|floatformat:2 }}</td>
                         <td>
                             <a href="{% url 'purchases:supplier-edit' supplier.pk %}" class="btn btn-sm btn-outline-primary">تعديل</a>
                         </td>

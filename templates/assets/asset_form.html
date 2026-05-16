@@ -16,8 +16,7 @@
                 <form method="post">
                     {% csrf_token %}
                     <div class="row">
-                        <div class="col-md-6">{{ form.code|as_crispy_field }}</div>
-                        <div class="col-md-6">{{ form.name|as_crispy_field }}</div>
+                        <div class="col-md-12">{{ form.name|as_crispy_field }}</div>
                     </div>
                     <div class="row">
                         <div class="col-md-6">{{ form.category|as_crispy_field }}</div>
@@ -38,7 +37,7 @@
                             <select name="offset_account_id" class="form-select" required>
                                 <option value="">--- اختر الحساب المقابل ---</option>
                                 {% for acc in offset_accounts %}
-                                <option value="{{ acc.pk }}">{{ acc.code }} — {{ acc.name }}</option>
+                                <option value="{{ acc.pk }}" {% if default_offset_account and default_offset_account.pk == acc.pk %}selected{% endif %}>{{ acc.code }} — {{ acc.name }}</option>
                                 {% endfor %}
                             </select>
                             <div class="form-text">للترحيل من نظام قديم: استخدم ح/35 (أرصدة افتتاحية). للشراء الجديد: استخدم حساب المورد أو النقدية.</div>

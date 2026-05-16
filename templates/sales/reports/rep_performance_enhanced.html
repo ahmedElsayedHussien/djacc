@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}أداء المناديب والعمولات{% endblock %}
+{% block header %}تحليل أداء المناديب والعمولات المستحقة{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">من تاريخ</label>
+                    <input type="date" name="from" class="form-control" value="{{ from_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">إلى تاريخ</label>
+                    <input type="date" name="to" class="form-control" value="{{ to_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-filter me-2"></i>عرض التقرير</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0" style="border-radius: 15px;">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">المندوب</th>
+                            <th class="text-end">صافي المبيعات</th>
+                            <th class="text-end">الهدف (Target)</th>
+                            <th class="text-center">التحقيق (%)</th>
+                            <th class="text-end pe-4">العمولة المستحقة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in report %}
+                        <tr>
+                            <td class="ps-4">
+                                <span class="fw-bold text-dark">{{ row.rep.name }}</span><br>
+                                <small class="text-muted">نسبة العمولة: {{ row.rep.commission_rate }}%</small>
+                            </td>
+                            <td class="text-end fw-bold">{{ row.net_sales|floatformat:2|intcomma }}</td>
+                            <td class="text-end text-muted">{{ row.target|floatformat:2|intcomma }}</td>
+                            <td class="text-center" style="width: 200px;">
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <div class="progress flex-grow-1 me-2" style="height: 8px;">
+                                        <div class="progress-bar {% if row.achievement >= 100 %}bg-success{% elif row.achievement >= 75 %}bg-info{% else %}bg-warning{% endif %}" 
+                                             role="progressbar" style="width: {{ row.achievement|min_val:100 }}%"></div>
+
+                                    </div>
+                                    <span class="fw-bold">{{ row.achievement|floatformat:1 }}%</span>
+                                </div>
+                            </td>
+                            <td class="text-end pe-4">
+                                <span class="badge bg-success-soft text-success fs-6 fw-bold" style="background-color: rgba(25, 135, 84, 0.1);">
+                                    {{ row.commission|floatformat:2|intcomma }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center py-5 text-muted">لا توجد بيانات للفترة المحددة</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% if report.paginator.num_pages > 1 %}
+        {% include 'partials/pagination.html' with page_obj=report is_paginated=True %}
+    {% endif %}
+</div>
+{% endblock %}
+

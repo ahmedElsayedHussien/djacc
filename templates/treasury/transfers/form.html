@@ -50,3 +50,36 @@
     </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const fromBox = document.getElementById('id_from_cash_box');
+        const fromBank = document.getElementById('id_from_bank');
+        const toBox = document.getElementById('id_to_cash_box');
+        const toBank = document.getElementById('id_to_bank');
+
+        function toggleMutual(el1, el2) {
+            if (el1.value) {
+                el2.value = "";
+                el2.disabled = true;
+                el2.classList.add('bg-light');
+            } else {
+                el2.disabled = false;
+                el2.classList.remove('bg-light');
+            }
+        }
+
+        fromBox.addEventListener('change', () => toggleMutual(fromBox, fromBank));
+        fromBank.addEventListener('change', () => toggleMutual(fromBank, fromBox));
+        toBox.addEventListener('change', () => toggleMutual(toBox, toBank));
+        toBank.addEventListener('change', () => toggleMutual(toBank, toBox));
+
+        // Initial check
+        if (fromBox.value) toggleMutual(fromBox, fromBank);
+        if (fromBank.value) toggleMutual(fromBank, fromBox);
+        if (toBox.value) toggleMutual(toBox, toBank);
+        if (toBank.value) toggleMutual(toBank, toBox);
+    });
+</script>
+{% endblock %}

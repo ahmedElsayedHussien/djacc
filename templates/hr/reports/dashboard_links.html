@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+
+{% block title %}مركز تقارير الموارد البشرية والرواتب{% endblock %}
+{% block header %}مركز تقارير الموارد البشرية والرواتب{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-card {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border: none;
+        border-radius: 16px;
+    }
+    .report-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 20px rgba(0,0,0,0.1) !important;
+    }
+    .icon-shape {
+        width: 60px;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 14px;
+        margin-bottom: 1.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- شؤون العاملين والامتثال -->
+    <h5 class="mb-4 fw-bold text-dark"><i class="bi bi-people me-2 text-primary"></i>شؤون العاملين والامتثال</h5>
+    <div class="row g-4 mb-5">
+        <div class="col-md-4">
+            <a href="{% url 'hr:report-org-chart' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm border-start border-primary border-4">
+                    <div class="card-body">
+                        <div class="icon-shape bg-primary bg-opacity-10 text-primary">
+                            <i class="bi bi-diagram-3 fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">الهيكل التنظيمي والقوة العاملة</h6>
+                        <p class="text-muted small mb-0">توزيع الموظفين على الإدارات وأنواع العقود.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'hr:report-document-expiry' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm border-start border-danger border-4">
+                    <div class="card-body">
+                        <div class="icon-shape bg-danger bg-opacity-10 text-danger">
+                            <i class="bi bi-exclamation-triangle fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">صلاحية الوثائق والعقود</h6>
+                        <p class="text-muted small mb-0">تنبيهات بمواعيد انتهاء الإقامات والجوازات والعقود.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'hr:report-employee-assets' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm">
+                    <div class="card-body">
+                        <div class="icon-shape bg-dark bg-opacity-10 text-dark">
+                            <i class="bi bi-laptop fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">جرد العهد العينية</h6>
+                        <p class="text-muted small mb-0">حصر الأجهزة والسيارات الموجودة بحوزة الموظفين.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- الحضور والإجازات -->
+    <h5 class="mb-4 fw-bold text-dark"><i class="bi bi-calendar-check me-2 text-success"></i>الحضور والإجازات</h5>
+    <div class="row g-4 mb-5">
+        <div class="col-md-4">
+            <a href="{% url 'hr:report-attendance-summary' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm border-start border-success border-4">
+                    <div class="card-body">
+                        <div class="icon-shape bg-success bg-opacity-10 text-success">
+                            <i class="bi bi-clock-history fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">ملخص الحضور والإضافي</h6>
+                        <p class="text-muted small mb-0">إحصائيات الغياب، التأخير، وساعات العمل الإضافي.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'hr:report-leave-balances' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm">
+                    <div class="card-body">
+                        <div class="icon-shape bg-info bg-opacity-10 text-info">
+                            <i class="bi bi-calendar-range fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">أرصدة الإجازات السنوية</h6>
+                        <p class="text-muted small mb-0">متابعة الأرصدة المستهلكة والمتبقية لكل موظف.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- الرواتب والماليات -->
+    <h5 class="mb-4 fw-bold text-dark"><i class="bi bi-cash-stack me-2 text-warning"></i>الرواتب والماليات</h5>
+    <div class="row g-4 mb-5">
+        <div class="col-md-4">
+            <a href="{% url 'hr:report-payroll-register' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm border-start border-warning border-4">
+                    <div class="card-body">
+                        <div class="icon-shape bg-warning bg-opacity-10 text-warning">
+                            <i class="bi bi-file-earmark-spreadsheet fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">كشف مسير الرواتب الشهري</h6>
+                        <p class="text-muted small mb-0">عرض تفصيلي لكافة عناصر الراتب لجميع الموظفين.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'hr:report-payroll-cost-center' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm border-start border-secondary border-4">
+                    <div class="card-body">
+                        <div class="icon-shape bg-secondary bg-opacity-10 text-secondary">
+                            <i class="bi bi-calculator fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">الرواتب حسب مراكز التكلفة</h6>
+                        <p class="text-muted small mb-0">توزيع تكاليف العمالة على مشاريع وفروع الشركة.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'hr:report-payroll-taxes' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm">
+                    <div class="card-body">
+                        <div class="icon-shape bg-dark bg-opacity-10 text-dark">
+                            <i class="bi bi-bank fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">الاستقطاعات الحكومية (تأمينات وضرائب)</h6>
+                        <p class="text-muted small mb-0">حصر مبالغ التأمينات والضرائب الواجب توريدها.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- السلف ونهاية الخدمة -->
+    <h5 class="mb-4 fw-bold text-dark"><i class="bi bi-briefcase me-2 text-secondary"></i>السلف ونهاية الخدمة</h5>
+    <div class="row g-4">
+        <div class="col-md-4">
+            <a href="{% url 'hr:report-loans-balance' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm">
+                    <div class="card-body">
+                        <div class="icon-shape bg-soft-info text-info">
+                            <i class="bi bi-wallet2 fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">أرصدة السلف غير المسددة</h6>
+                        <p class="text-muted small mb-0">متابعة ذمم الموظفين المتبقية من القروض الشخصية.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'hr:report-eos-settlements' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm border-start border-danger border-4">
+                    <div class="card-body">
+                        <div class="icon-shape bg-danger bg-opacity-10 text-danger">
+                            <i class="bi bi-person-x fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">تسويات نهاية الخدمة</h6>
+                        <p class="text-muted small mb-0">مراجعة المخالصات المالية للموظفين المغادرين.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}المصروفات حسب التصنيفات{% endblock %}
+{% block header %}تحليل المصروفات حسب التصنيفات{% endblock %}
+
+{% block content %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label fw-bold">من تاريخ</label>
+                <input type="date" name="from" class="form-control" value="{{ from_date }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">إلى تاريخ</label>
+                <input type="date" name="to" class="form-control" value="{{ to_date }}">
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search me-2"></i>تحديث التقرير</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0" style="border-radius: 15px;">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">التصنيف</th>
+                        <th class="text-center">عدد الفواتير</th>
+                        <th class="text-end">المبلغ قبل الضريبة</th>
+                        <th class="text-end">إجمالي الضرائب</th>
+                        <th class="text-end pe-4">الإجمالي النهائي</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report %}
+                    <tr>
+                        <td class="ps-4 fw-bold text-dark">{{ row.category__name }}</td>
+                        <td class="text-center">{{ row.invoice_count }}</td>
+                        <td class="text-end">{{ row.total_subtotal|floatformat:2|intcomma }}</td>
+                        <td class="text-end text-muted">{{ row.total_tax|floatformat:2|intcomma }}</td>
+                        <td class="text-end pe-4 fw-bold text-primary">{{ row.total_final|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-4 text-muted">لا توجد بيانات لهذه الفترة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

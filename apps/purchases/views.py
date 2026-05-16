@@ -51,6 +51,12 @@ class PurchaseDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListVie
         # 5. Recent Activity
         ctx['recent_invoices'] = PurchaseInvoice.objects.select_related('supplier').order_by('-date', '-id')[:10]
 
+        # 6. Monthly Payments (Aggregation)
+        monthly_payments = SupplierPayment.objects.filter(
+            date__gte=month_start
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        ctx['monthly_payments'] = monthly_payments
+
         return ctx
 
 class PurchaseReturnListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
@@ -81,17 +87,14 @@ class PurchaseReturnCreateView(LoginRequiredMixin, PermissionRequiredMixin, Crea
         lines = context['lines']
         with transaction.atomic():
             form.instance.created_by = self.request.user
-            from apps.core.services import DocumentService
-            form.instance.number = DocumentService.generate_number(PurchaseReturn, 'PRET')
             
             form.instance.subtotal = 0
             form.instance.total = 0
-            self.object = form.save()
-            
             try:
                 if lines.is_valid():
+                    self.object = form.save()
                     lines.instance = self.object
-                    lines.save()
+                    instances = lines.save(commit=False)
                     
                     # ... (rest of the logic inside the previous block)
                     # I will replace the whole block to be safe
@@ -100,7 +103,8 @@ class PurchaseReturnCreateView(LoginRequiredMixin, PermissionRequiredMixin, Crea
                     tax_total_added = 0
                     tax_total_deducted = 0
                     
-                    for line in self.object.lines.all():
+                    from decimal import Decimal
+                    for line in instances:
                         # ✅ Fix: Quantity validation against original invoice
                         if self.object.invoice:
                             from django.db.models import Sum
@@ -122,10 +126,10 @@ class PurchaseReturnCreateView(LoginRequiredMixin, PermissionRequiredMixin, Crea
                                 )
 
                         line_subtotal = line.quantity * line.unit_cost
-                        line_discount = line_subtotal * (line.discount_percent / 100)
+                        line_discount = line_subtotal * (line.discount_percent / Decimal('100'))
                         net_line = line_subtotal - line_discount
                         
-                        tax1 = net_line * (line.tax_percent / 100)
+                        tax1 = net_line * (line.tax_percent / Decimal('100'))
                         if line.tax_type and line.tax_type.category in ['wht', 'salary', 'insurance']:
                             tax_total_deducted += tax1
                             tax1_signed = -tax1
@@ -133,7 +137,7 @@ class PurchaseReturnCreateView(LoginRequiredMixin, PermissionRequiredMixin, Crea
                             tax_total_added += tax1
                             tax1_signed = tax1
 
-                        tax2 = net_line * (line.tax_percent2 / 100)
+                        tax2 = net_line * (line.tax_percent2 / Decimal('100'))
                         if line.tax_type2 and line.tax_type2.category in ['wht', 'salary', 'insurance']:
                             tax_total_deducted += tax2
                             tax2_signed = -tax2
@@ -207,7 +211,7 @@ class SupplierCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView
     def form_valid(self, form):
         supplier = SupplierService.create_supplier(form.cleaned_data)
         messages.success(self.request,
-            f'تم إنشاء المورد "{supplier.name}" — كود الحساب: {supplier.account.code}')
+            f'تم إنشاء المورد "{supplier.name}" بكود {supplier.code} — كود الحساب: {supplier.account.code}')
         return redirect(self.success_url)
 
 class SupplierUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
@@ -262,14 +266,11 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
         context = self.get_context_data()
         lines = context['lines']
         with transaction.atomic():
-            from apps.core.services import DocumentService
-            form.instance.number = DocumentService.generate_number(PurchaseInvoice, 'PINV')
             form.instance.subtotal = 0
             form.instance.total = 0
             form.instance.created_by = self.request.user
-            self.object = form.save()
-            
             if lines.is_valid():
+                self.object = form.save()
                 lines.instance = self.object
                 instances = lines.save(commit=False)
                 
@@ -279,14 +280,14 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                 tax_total_added = 0      # VAT, Table, Customs, Stamp
                 tax_total_deducted = 0   # WHT, Salary, Insurance
                 
+                from decimal import Decimal
                 for instance in instances:
-                    instance.save()
                     line_subtotal = instance.quantity * instance.unit_cost
-                    line_discount = line_subtotal * (instance.discount_percent / 100)
+                    line_discount = line_subtotal * (instance.discount_percent / Decimal('100'))
                     net_line = line_subtotal - line_discount
                     
                     # Tax 1
-                    tax1 = net_line * (instance.tax_percent / 100)
+                    tax1 = net_line * (instance.tax_percent / Decimal('100'))
                     if instance.tax_type and instance.tax_type.category in ['wht', 'salary', 'insurance']:
                         tax_total_deducted += tax1
                         tax1_signed = -tax1
@@ -295,7 +296,7 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                         tax1_signed = tax1
 
                     # Tax 2
-                    tax2 = net_line * (instance.tax_percent2 / 100)
+                    tax2 = net_line * (instance.tax_percent2 / Decimal('100'))
                     if instance.tax_type2 and instance.tax_type2.category in ['wht', 'salary', 'insurance']:
                         tax_total_deducted += tax2
                         tax2_signed = -tax2
@@ -377,8 +378,6 @@ class SupplierPaymentCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
 
     def form_valid(self, form):
         with transaction.atomic():
-            from apps.core.services import DocumentService
-            form.instance.number = DocumentService.generate_number(SupplierPayment, 'PAY')
             form.instance.created_by = self.request.user
             self.object = form.save()
             

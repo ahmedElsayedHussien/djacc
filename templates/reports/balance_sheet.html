@@ -36,7 +36,7 @@
                         {% for item in report.assets %}
                         <tr>
                             <td>{{ item.name }}</td>
-                            <td class="text-end">{{ item.balance }}</td>
+                            <td class="text-end">{{ item.balance|floatformat:2 }}</td>
                         </tr>
                         {% empty %}
                         <tr><td colspan="2" class="text-center text-muted">لا توجد أصول مسجلة.</td></tr>
@@ -45,7 +45,7 @@
                     <tfoot>
                         <tr class="table-success fw-bold fs-5">
                             <td>إجمالي الأصول</td>
-                            <td class="text-end">{{ report.total_assets }}</td>
+                            <td class="text-end">{{ report.total_assets|floatformat:2 }}</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -65,7 +65,7 @@
                         {% for item in report.liabilities %}
                         <tr>
                             <td>{{ item.name }}</td>
-                            <td class="text-end">{{ item.balance }}</td>
+                            <td class="text-end">{{ item.balance|floatformat:2 }}</td>
                         </tr>
                         {% empty %}
                         <tr><td colspan="2" class="text-center text-muted">لا توجد التزامات مسجلة.</td></tr>
@@ -74,7 +74,7 @@
                     <tfoot>
                         <tr class="table-danger fw-bold fs-5">
                             <td>إجمالي الالتزامات</td>
-                            <td class="text-end">{{ report.total_liabilities }}</td>
+                            <td class="text-end">{{ report.total_liabilities|floatformat:2 }}</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -91,14 +91,14 @@
                         {% for item in report.equity %}
                         <tr>
                             <td>{{ item.name }}</td>
-                            <td class="text-end">{{ item.balance }}</td>
+                            <td class="text-end">{{ item.balance|floatformat:2 }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                     <tfoot>
                         <tr class="table-info fw-bold fs-5">
                             <td>إجمالي حقوق الملكية</td>
-                            <td class="text-end">{{ report.total_equity }}</td>
+                            <td class="text-end">{{ report.total_equity|floatformat:2 }}</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -109,7 +109,7 @@
             <div class="card-body py-3">
                 <div class="d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">إجمالي الالتزامات وحقوق الملكية</h5>
-                    <h4 class="mb-0">{{ report.total_liabilities|add:report.total_equity }}</h4>
+                    <h4 class="mb-0">{{ report.total_liabilities|add:report.total_equity|floatformat:2 }}</h4>
                 </div>
             </div>
         </div>
@@ -126,7 +126,7 @@
 
 {% if report.total_assets != report.total_liabilities|add:report.total_equity %}
 <div class="alert alert-danger mt-4 text-center">
-    <i class="bi bi-exclamation-triangle-fill"></i> تحذير: الميزانية غير متوازنة! الفرق: {{ report.total_assets|add:"-"|add:report.total_liabilities|add:"-"|add:report.total_equity }}
+    <i class="bi bi-exclamation-triangle-fill"></i> تحذير: الميزانية غير متوازنة!
 </div>
 {% endif %}
 

@@ -4,10 +4,9 @@ from .models import Asset, AssetCategory
 class AssetForm(forms.ModelForm):
     class Meta:
         model = Asset
-        fields = ['code', 'name', 'category', 'purchase_date', 'purchase_value', 'salvage_value', 'initial_accumulated_depreciation', 'depreciation_rate', 'department', 'location', 'notes']
+        fields = ['name', 'category', 'purchase_date', 'purchase_value', 'salvage_value', 'initial_accumulated_depreciation', 'depreciation_rate', 'department', 'location', 'notes']
         widgets = {
             'purchase_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'code': forms.TextInput(attrs={'class': 'form-control'}),
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'category': forms.Select(attrs={'class': 'form-select'}),
             'purchase_value': forms.NumberInput(attrs={'class': 'form-control'}),

@@ -11,6 +11,7 @@ DEFAULT_ACCOUNTS = [
           ('1111', 'خزائن النقدية', AccountType.ASSET, '111', True),
           ('1112', 'البنوك', AccountType.ASSET, '111', True),
           ('1113', 'عهد نقدية / صندوق نثرية', AccountType.ASSET, '111', True), 
+          ('1114', 'نقدية بالطريق', AccountType.ASSET, '111', True), 
         ('112', 'الذمم المدينة', AccountType.ASSET, '11', False),
           ('1121', 'العملاء', AccountType.ASSET, '112', False),
           ('1122', 'ضريبة خصم وتحصيل - مدينة', AccountType.ASSET, '112', True),
@@ -20,7 +21,7 @@ DEFAULT_ACCOUNTS = [
         ('114', 'سلف وعهد وذمم', AccountType.ASSET, '11', False),
           ('1141', 'ذمم مناديب المبيعات', AccountType.ASSET, '114', False),
           ('1142', 'عهد الموظفين', AccountType.ASSET, '114', False),
-          ('1143', 'سلف الموظفين', AccountType.ASSET, '114', False), 
+          ('1143', 'سلف الموظفين والقروض', AccountType.ASSET, '114', True), 
         ('115', 'أوراق قبض', AccountType.ASSET, '11', False),
           ('1151', 'شيكات تحت التحصيل', AccountType.ASSET, '115', True),
         ('116', 'أرصدة مدينة أخرى', AccountType.ASSET, '11', False), 
@@ -38,9 +39,14 @@ DEFAULT_ACCOUNTS = [
         ('211', 'الذمم الدائنة', AccountType.LIABILITY, '21', False),
           ('2111', 'الموردون', AccountType.LIABILITY, '211', False),
         ('212', 'الضرائب المستحقة', AccountType.LIABILITY, '21', False),
-          ('2121', 'ضريبة القيمة المضافة', AccountType.LIABILITY, '212', True),
+          ('2121', 'ضريبة القيمة المضافة', AccountType.LIABILITY, '212', False),
+            ('21211', 'ضريبة القيمة المضافة - مخرجات (مبيعات)', AccountType.LIABILITY, '2121', True),
+            ('21212', 'ضريبة القيمة المضافة - مدخلات (مشتريات)', AccountType.LIABILITY, '2121', True),
+            ('21213', 'ضريبة القيمة المضافة - حساب التسوية', AccountType.LIABILITY, '2121', True),
           ('2122', 'ضريبة الدخل المستحقة', AccountType.LIABILITY, '212', True),
           ('2123', 'ضريبة خصم وتحصيل - دائنة', AccountType.LIABILITY, '212', True),
+          ('2124', 'ضريبة الدمغة', AccountType.LIABILITY, '212', True),
+          ('2125', 'مصلحة الضرائب - كسب عمل', AccountType.LIABILITY, '212', True),
         ('213', 'مصروفات مستحقة', AccountType.LIABILITY, '21', False),
           ('2131', 'عمولات مناديب مستحقة', AccountType.LIABILITY, '213', True),
           ('2132', 'رواتب وأجور مستحقة', AccountType.LIABILITY, '213', True), 
@@ -76,7 +82,7 @@ DEFAULT_ACCOUNTS = [
         ('414', 'خصم مبيعات ممنوح', AccountType.REVENUE, '41', True), 
       ('42', 'إيرادات أخرى', AccountType.REVENUE, '4', False),
         ('421', 'فوائد بنكية دائنة', AccountType.REVENUE, '42', True), 
-        ('422', 'خصم مكتسب', AccountType.REVENUE, '42', True), 
+        ('422', 'خصم مكتسب (مشتريات)', AccountType.REVENUE, '42', True), 
         ('423', 'أرباح فروق عملة', AccountType.REVENUE, '42', True), # (إضافة جديدة)
         ('424', 'فروقات تسوية وزيادة المخزون', AccountType.REVENUE, '42', True), # (إضافة جديدة)
 
@@ -103,7 +109,9 @@ DEFAULT_ACCOUNTS = [
       ('54', 'مصروفات وخسائر أخرى', AccountType.EXPENSE, '5', False), # (إضافة جديدة)
         ('541', 'خسائر فروق عملة', AccountType.EXPENSE, '54', True), # (إضافة جديدة)
         ('542', 'عجز وتوالف المخزون', AccountType.EXPENSE, '54', True), # (إضافة جديدة)
-        ('543', 'ديون معدومة', AccountType.EXPENSE, '54', True), # (إضافة جديدة)
+        ('543', 'ديون معدومة', AccountType.EXPENSE, '54', True), 
+      ('55', 'ضرائب الدخل', AccountType.EXPENSE, '5', False),
+        ('551', 'مصروف ضريبة الدخل', AccountType.EXPENSE, '55', True),
 ]
 
 class Command(BaseCommand):
@@ -119,5 +127,9 @@ class Command(BaseCommand):
         sub_count = AccountService.setup_common_sub_accounts()
         if sub_count > 0:
             self.stdout.write(self.style.SUCCESS(f'تم إضافة {sub_count} حساب فرعي شائع.'))
+
+        cc_count = AccountService.setup_default_cost_centers()
+        if cc_count > 0:
+            self.stdout.write(self.style.SUCCESS(f'تم إنشاء {cc_count} مركز تكلفة افتراضي.'))
         
-        self.stdout.write(self.style.SUCCESS('تم تجهيز شجرة الحسابات بنجاح وفقاً للمعايير الاحترافية.'))
+        self.stdout.write(self.style.SUCCESS('تم تجهيز شجرة الحسابات ومراكز التكلفة بنجاح.'))

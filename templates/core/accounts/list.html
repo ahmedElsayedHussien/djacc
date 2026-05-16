@@ -7,19 +7,13 @@
         <h5 class="mb-0">شجرة الحسابات</h5>
         <div class="d-flex gap-2">
             {% if current_fiscal_year %}
-            <form method="post" action="{% url 'core:fiscalyear-post-opening' current_fiscal_year.pk %}" onsubmit="return confirm('هل تريد توليد القيد الافتتاحي بناءً على أرصدة دليل الحسابات؟');">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-outline-success">
-                    <i class="bi bi-journal-plus"></i> توليد القيد الافتتاحي
-                </button>
-            </form>
+            <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#postOpeningModal">
+                <i class="bi bi-journal-plus"></i> توليد القيد الافتتاحي
+            </button>
             {% endif %}
-            <form method="post" action="{% url 'core:account-initialize' %}" onsubmit="return confirm('هل تريد إنشاء/تحديث شجرة الحسابات الافتراضية؟ لن يتم حذف أي حساب موجود.');">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-outline-primary">
-                    <i class="bi bi-diagram-3"></i> تجهيز الشجرة الافتراضية
-                </button>
-            </form>
+            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#initChartModal">
+                <i class="bi bi-diagram-3"></i> تجهيز الشجرة الافتراضية
+            </button>
             <a href="{% url 'core:account-create' %}" class="btn btn-primary">
                 <i class="bi bi-plus-lg"></i> إضافة حساب جديد
             </a>
@@ -69,8 +63,15 @@
                 </thead>
                 <tbody>
                     {% for account in accounts %}
-                    <tr>
-                        <td><code>{{ account.code }}</code></td>
+                    <tr class="{% if not account.is_leaf %}
+                                 {% if account.code|length == 1 %}table-primary fs-5 fw-bold
+                                 {% elif account.code|length == 2 %}table-info fw-bold
+                                 {% elif account.code|length == 3 %}table-success fw-bold
+                                 {% elif account.code|length == 4 %}table-warning fw-bold
+                                 {% else %}table-secondary fw-bold
+                                 {% endif %}
+                               {% endif %}">
+                        <td><strong>{{ account.code }}</strong></td>
                         <td style="padding-right: calc(({{ account.code|length }} - 1) * 15px);">
                             {{ account.name }}
                         </td>
@@ -99,9 +100,16 @@
                             {% endif %}
                         </td>
                         <td>
-                            <a href="{% url 'core:account-edit' account.pk %}" class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-pencil"></i>
-                            </a>
+                            <div class="btn-group">
+                                <a href="{% url 'core:account-edit' account.pk %}" class="btn btn-sm btn-outline-primary" title="تعديل">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% if account.is_leaf %}
+                                <a href="{% url 'reports:account_statement' %}?account={{ account.pk }}" class="btn btn-sm btn-outline-info" title="كشف الحساب">
+                                    <i class="bi bi-journal-text"></i>
+                                </a>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% empty %}
@@ -115,4 +123,83 @@
         {% include 'partials/pagination.html' %}
     </div>
 </div>
+
+<!-- Modal for Chart Initialization Warning -->
+<div class="modal fade" id="initChartModal" tabindex="-1" aria-labelledby="initChartModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'core:account-initialize' %}">
+                {% csrf_token %}
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title" id="initChartModalLabel">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> تحذير: تحديث الشجرة الافتراضية
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>أنت على وشك تشغيل معالج <strong>"تجهيز الشجرة الافتراضية"</strong>.</p>
+                    <div class="alert alert-danger">
+                        <strong>ما الذي سيتغير؟</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>أي <strong>حسابات أساسية</strong> (أنشأها النظام سابقاً) قمت بتعديل <strong>اسمها</strong> أو <strong>طبيعتها (مدين/دائن)</strong> سيتم <strong>الكتابة عليها (Overwrite)</strong> وإرجاعها للوضع الافتراضي.</li>
+                            <li>سيتم إعادة ضبط الهيكل الهرمي للحسابات الأساسية.</li>
+                        </ul>
+                    </div>
+                    <div class="alert alert-success">
+                        <strong>ما الذي لن يتأثر؟ (آمن تماماً)</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>حساباتك الخاصة أو الفرعية التي قمت بإضافتها يدوياً <strong>لن تُحذف</strong>.</li>
+                            <li>القيود اليومية والمبالغ المالية والميزانية <strong>لن تتأثر</strong>.</li>
+                        </ul>
+                    </div>
+                    <p class="mb-0">هل أنت متأكد من رغبتك في الاستمرار؟</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-check2-circle"></i> نعم، قم بتجهيز الشجرة
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for Posting Opening Balances -->
+<div class="modal fade" id="postOpeningModal" tabindex="-1" aria-labelledby="postOpeningModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            {% if current_fiscal_year %}
+            <form method="post" action="{% url 'core:fiscalyear-post-opening' current_fiscal_year.pk %}">
+                {% csrf_token %}
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title" id="postOpeningModalLabel">
+                        <i class="bi bi-journal-plus me-2"></i> تأكيد توليد القيد الافتتاحي
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>أنت على وشك توليد (أو إعادة توليد) القيد الافتتاحي للسنة المالية الحالية.</p>
+                    <div class="alert alert-info">
+                        <strong>كيف يعمل هذا الإجراء؟</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>إذا كان هناك قيد افتتاحي قديم تم توليده مسبقاً، سيتم <strong>حذفه واستبداله</strong>.</li>
+                            <li>سيتم سحب جميع الأرصدة الافتتاحية المسجلة حالياً في دليل الحسابات وإنشاء قيد محاسبي متزن بها.</li>
+                            <li>في حال عدم تساوي إجمالي المدين مع إجمالي الدائن، سيتم توجيه الفارق آلياً إلى حساب <strong>"الأرصدة الافتتاحية" (35)</strong> لضمان توازن القيد.</li>
+                        </ul>
+                    </div>
+                    <p class="mb-0 text-muted">ملاحظة: هذا الإجراء آمن تماماً، ويمكنك تكراره في أي وقت كلما قمت باكتشاف وتعديل أي رصيد افتتاحي في الحسابات.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check2-circle"></i> نعم، قم بتوليد القيد الافتتاحي
+                    </button>
+                </div>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
 {% endblock %}

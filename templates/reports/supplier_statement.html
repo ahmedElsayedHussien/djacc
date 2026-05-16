@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% load custom_filters %}
+{% block title %}كشف حساب مورد{% endblock %}
+{% block header %}كشف حساب مورد{% endblock %}
+
+{% block content %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label fw-bold">المورد</label>
+                <select name="supplier" class="form-select select2" required>
+                    <option value="">اختر المورد...</option>
+                    {% for sup in suppliers %}
+                    <option value="{{ sup.id }}" {% if selected_supplier == sup.id %}selected{% endif %}>
+                        {{ sup.name }} ({{ sup.code }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold">من تاريخ</label>
+                <input type="date" name="from" class="form-control" value="{{ from_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold">إلى تاريخ</label>
+                <input type="date" name="to" class="form-control" value="{{ to_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search me-2"></i>عرض الكشف</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if report %}
+<div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+        <h5 class="mb-0 fw-bold">كشف حساب: {{ report.supplier.name }}</h5>
+        <span class="badge bg-secondary">الفترة من {{ from_date }} إلى {{ to_date }}</span>
+    </div>
+    <div class="card-body">
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="p-3 bg-light border rounded text-center h-100">
+                    <small class="text-muted d-block mb-1">الرصيد الافتتاحي</small>
+                    <span class="fs-4 fw-bold">{{ report.op_balance|floatformat:2|intcomma }}</span>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 bg-light border rounded text-center h-100">
+                    <small class="text-muted d-block mb-1">الرصيد النهائي</small>
+                    <span class="fs-4 fw-bold {% if report.cl_balance > 0 %}text-danger{% elif report.cl_balance < 0 %}text-success{% endif %}">
+                        {{ report.cl_balance|floatformat:2|intcomma }}
+                    </span>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 bg-primary text-white border rounded text-center h-100">
+                    <small class="d-block mb-1">صافي الحركة</small>
+                    <span class="fs-4 fw-bold">
+                        {{ report.cl_balance|subtract:report.op_balance|floatformat:2|intcomma }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover border">
+                <thead class="table-dark">
+                    <tr>
+                        <th>التاريخ</th>
+                        <th>البيان / الوصف</th>
+                        <th>المرجع</th>
+                        <th class="text-end">مدين (+)</th>
+                        <th class="text-end">دائن (-)</th>
+                        <th class="text-end">الرصيد التراكمي</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="table-light">
+                        <td colspan="3" class="fw-bold">رصيد ما قبل الفترة</td>
+                        <td colspan="2"></td>
+                        <td class="text-end fw-bold">{{ report.op_balance|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% for l in report.movements %}
+                    <tr>
+                        <td>{{ l.date|date:'Y-m-d' }}</td>
+                        <td>
+                            {% if l.source_url %}
+                            <a href="{{ l.source_url }}" class="text-decoration-none fw-bold text-primary">
+                                {{ l.number }}
+                            </a>
+                            <div class="small text-muted">{{ l.description }}</div>
+                            {% else %}
+                            <span class="fw-bold">{{ l.number }}</span>
+                            <div class="small text-muted">{{ l.description }}</div>
+                            {% endif %}
+                        </td>
+                        <td>{{ l.reference|default:"-" }}</td>
+                        <td class="text-end text-success">{% if l.debit > 0 %}{{ l.debit|floatformat:2|intcomma }}{% else %}-{% endif %}</td>
+                        <td class="text-end text-danger">{% if l.credit > 0 %}{{ l.credit|floatformat:2|intcomma }}{% else %}-{% endif %}</td>
+                        <td class="text-end fw-bold">{{ l.balance|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer bg-white text-center py-3">
+        <button class="btn btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer me-2"></i>طباعة كشف الحساب</button>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info text-center shadow-sm" style="border-radius: 12px;">
+    <i class="bi bi-info-circle me-2"></i>الرجاء اختيار مورد وفترة زمنية لعرض كشف الحساب.
+</div>
+{% endif %}
+{% endblock %}

@@ -82,8 +82,14 @@
             <div class="card h-100">
                 <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
                     <h5 class="mb-0 fw-bold"><i class="bi bi-bell me-2 text-danger"></i>تنبيهات انخفاض المخزون</h5>
-                    <a href="{% url 'inventory:item-list' %}?stock_alert=1" class="btn btn-sm btn-outline-primary">عرض الكل</a>
+                    <div>
+                        <a href="{% url 'inventory:report-dashboard' %}" class="btn btn-sm btn-success me-2">
+                            <i class="bi bi-bar-chart"></i> تقارير المخازن
+                        </a>
+                        <a href="{% url 'inventory:item-list' %}?stock_alert=1" class="btn btn-sm btn-outline-primary">عرض الكل</a>
+                    </div>
                 </div>
+
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-custom mb-0">
@@ -102,8 +108,10 @@
                                         <div class="fw-bold">{{ item.name }}</div>
                                         <small class="text-muted">{{ item.code }}</small>
                                     </td>
-                                    <td><span class="badge bg-danger">{{ item.current_stock|default:0|floatformat:2 }}</span></td>
-                                    <td>{{ item.minimum_stock|floatformat:2 }}</td>
+                                    <td><span class="badge bg-danger">{{ item.current_stock|default:0|floatformat:0 }}</span></td>
+
+                                    <td>{{ item.minimum_stock|floatformat:0 }}</td>
+
                                     <td class="text-center">
                                         {% if item.current_stock <= 0 %}
                                             <span class="status-badge bg-soft-danger text-danger">نفذ المخزون</span>
@@ -153,11 +161,43 @@
                     </div>
                     
                     <div class="mt-4">
-                        <h6 class="fw-bold mb-3">روابط سريعة</h6>
-                        <div class="d-grid gap-2">
-                            <a href="{% url 'inventory:voucher-create' %}" class="btn btn-outline-dark text-start btn-sm"><i class="bi bi-plus-circle me-2"></i>إذن صرف/إضافة جديد</a>
-                            <a href="{% url 'inventory:item-create' %}" class="btn btn-outline-dark text-start btn-sm"><i class="bi bi-plus-circle me-2"></i>إضافة صنف جديد</a>
-                            <a href="{% url 'inventory:transfer-create' %}" class="btn btn-outline-dark text-start btn-sm"><i class="bi bi-plus-circle me-2"></i>طلب تحويل مخزني</a>
+                        <h6 class="fw-bold mb-3">إجراءات سريعة</h6>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <a href="{% url 'inventory:voucher-create' %}" class="btn btn-outline-dark w-100 py-2 btn-sm"><i class="bi bi-plus-circle d-block mb-1"></i>إذن مخزني</a>
+                            </div>
+                            <div class="col-6">
+                                <a href="{% url 'inventory:item-create' %}" class="btn btn-outline-dark w-100 py-2 btn-sm"><i class="bi bi-plus-circle d-block mb-1"></i>إضافة صنف</a>
+                            </div>
+                            <div class="col-6">
+                                <a href="{% url 'inventory:transfer-create' %}" class="btn btn-outline-dark w-100 py-2 btn-sm"><i class="bi bi-plus-circle d-block mb-1"></i>طلب تحويل</a>
+                            </div>
+                            <div class="col-6">
+                                <a href="{% url 'inventory:warehouse-create' %}" class="btn btn-outline-dark w-100 py-2 btn-sm"><i class="bi bi-plus-circle d-block mb-1"></i>مستودع جديد</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <h6 class="fw-bold mb-3">السجلات والمعطيات</h6>
+                        <div class="list-group list-group-flush border rounded shadow-sm">
+                            <a href="{% url 'inventory:item-list' %}" class="list-group-item list-group-item-action py-2">
+                                <i class="bi bi-box-seam me-2 text-primary"></i>سجل الأصناف
+                            </a>
+                            <a href="{% url 'inventory:category-list' %}" class="list-group-item list-group-item-action py-2">
+                                <i class="bi bi-tags me-2 text-info"></i>فئات الأصناف
+                            </a>
+                            <a href="{% url 'inventory:unit-list' %}" class="list-group-item list-group-item-action py-2">
+                                <i class="bi bi-rulers me-2 text-secondary"></i>وحدات القياس
+                            </a>
+                            <a href="{% url 'inventory:warehouse-list' %}" class="list-group-item list-group-item-action py-2">
+                                <i class="bi bi-house-door me-2 text-warning"></i>سجل المستودعات
+                            </a>
+                            {% if perms.inventory.view_item %}
+                            <a href="{% url 'reports:stock_status' %}" class="list-group-item list-group-item-action py-2 bg-light fw-bold">
+                                <i class="bi bi-bar-chart-line me-2 text-success"></i>حالة وأرصدة المخازن
+                            </a>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -205,7 +245,8 @@
                                     </td>
                                     <td>
                                         <span class="fw-bold {% if move.quantity > 0 %}text-success{% else %}text-danger{% endif %}">
-                                            {{ move.quantity|floatformat:2 }}
+                                            {{ move.quantity|floatformat:0 }}
+
                                         </span>
                                     </td>
                                     <td>{{ move.warehouse.name }}</td>

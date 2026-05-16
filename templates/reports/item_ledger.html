@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% load custom_filters %}
+{% block title %}كارت الصنف التفصيلي{% endblock %}
+{% block header %}كارت الصنف التفصيلي (تتبع الحركة){% endblock %}
+
+{% block content %}
+<div class="card shadow-sm border-0 mb-4 no-print">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label fw-bold">الصنف</label>
+                <select name="item" class="form-select select2" required>
+                    <option value="">اختر الصنف...</option>
+                    {% for item in items %}
+                    <option value="{{ item.id }}" {% if selected_item == item.id %}selected{% endif %}>{{ item.code }} - {{ item.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold">المستودع (اختياري)</label>
+                <select name="warehouse" class="form-select">
+                    <option value="">كل المستودعات</option>
+                    {% for w in warehouses %}
+                    <option value="{{ w.id }}" {% if selected_warehouse == w.id %}selected{% endif %}>{{ w.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold">من تاريخ</label>
+                <input type="date" name="from" class="form-control" value="{{ from_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold">إلى تاريخ</label>
+                <input type="date" name="to" class="form-control" value="{{ to_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">عرض التقرير</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if report %}
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="mb-0 fw-bold text-primary">{{ report.item.name }}</h5>
+            <small class="text-muted">كود: {{ report.item.code }} | الرصيد الافتتاحي: {{ report.opening_qty|floatformat:0 }}</small>
+        </div>
+        <button onclick="window.print()" class="btn btn-sm btn-outline-secondary no-print">
+            <i class="bi bi-printer me-1"></i> طباعة
+        </button>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>التاريخ</th>
+                        <th>نوع الحركة</th>
+                        <th>المستودع</th>
+                        <th>المرجع</th>
+                        <th class="text-center">الوارد (+)</th>
+                        <th class="text-center">الصادر (-)</th>
+                        <th class="text-center">الرصيد</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="table-info">
+                        <td colspan="4"><strong>رصيد ما قبل الفترة</strong></td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center fw-bold">{{ report.opening_qty|floatformat:0 }}</td>
+                    </tr>
+                    {% for mov in report.movements %}
+                    <tr>
+                        <td>{{ mov.date|date:'Y-m-d' }}</td>
+                        <td>{{ mov.get_movement_type_display }}</td>
+                        <td>{{ mov.warehouse.name }}</td>
+                        <td>
+                            {% if mov.get_source_url %}
+                                <a href="{{ mov.get_source_url }}" class="fw-bold text-decoration-none">
+                                    <i class="bi bi-link-45deg"></i> {{ mov.reference }}
+                                </a>
+                            {% else %}
+                                <code>{{ mov.reference }}</code>
+                            {% endif %}
+                        </td>
+
+                        <td class="text-center text-success">{% if mov.quantity > 0 %}{{ mov.quantity|floatformat:0 }}{% else %}-{% endif %}</td>
+                        <td class="text-center text-danger">{% if mov.quantity < 0 %}{{ mov.quantity|abs_val|floatformat:0 }}{% else %}-{% endif %}</td>
+
+                        <td class="text-center fw-bold">{{ mov.running_quantity|floatformat:0 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if report.movements.paginator.num_pages > 1 %}
+            {% include 'partials/pagination.html' with page_obj=report.movements is_paginated=True %}
+        {% endif %}
+
+    </div>
+</div>
+{% else %}
+
+<div class="text-center py-5 text-muted">
+    <i class="bi bi-search fs-1 d-block mb-3"></i>
+    يرجى اختيار صنف وفترة زمنية لعرض كارت الحركة.
+</div>
+{% endif %}
+{% endblock %}

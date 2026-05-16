@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% load custom_filters %}
+
+{% block title %}تقرير نواقص المخزون{% endblock %}
+{% block header %}تقرير نواقص المخزون (تحت حد الطلب){% endblock %}
+
+{% block content %}
+<div class="alert alert-warning border-0 shadow-sm mb-4">
+    <i class="bi bi-info-circle-fill me-2"></i>
+    هذا التقرير يعرض الأصناف التي وصل رصيدها الحالي إلى مستوى أقل من أو يساوي <strong>حد الطلب</strong> المحدد في بطاقة الصنف.
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold text-danger">الأصناف المطلوبة للمشتريات</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>كود الصنف</th>
+                        <th>اسم الصنف</th>
+                        <th class="text-center">الرصيد الحالي</th>
+                        <th class="text-center">حد الطلب</th>
+                        <th class="text-center">العجز</th>
+                        <th>الحالة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in report %}
+                    <tr>
+                        <td><code>{{ item.code }}</code></td>
+                        <td><strong>{{ item.name }}</strong></td>
+                        <td class="text-center fw-bold {% if item.current_stock <= 0 %}text-danger{% else %}text-warning{% endif %}">
+                            {{ item.current_stock|floatformat:0 }}
+                        </td>
+                        <td class="text-center">{{ item.minimum_stock|floatformat:0 }}</td>
+                        <td class="text-center text-danger">
+                            {% with deficit=item.minimum_stock|add:item.current_stock %}
+                                {{ item.minimum_stock|subtract:item.current_stock|floatformat:0 }}
+                            {% endwith %}
+                        </td>
+                        <td>
+                            {% if item.current_stock <= 0 %}
+                                <span class="badge bg-danger">منتهي من المخزن</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">تحت حد الطلب</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            <i class="bi bi-check-circle text-success fs-1 d-block mb-3"></i>
+                            لا يوجد نواقص حالياً. جميع الأصناف فوق حد الطلب.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if report.paginator.num_pages > 1 %}
+            {% include 'partials/pagination.html' with page_obj=report is_paginated=True %}
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}
+

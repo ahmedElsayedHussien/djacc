@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}الرواتب حسب مراكز التكلفة{% endblock %}
+{% block header %}توزيع تكاليف الرواتب على مراكز التكلفة{% endblock %}
+
+{% block content %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-8">
+                <label class="form-label fw-bold">اختر فترة الرواتب</label>
+                <select name="period" class="form-select select2">
+                    <option value="">اختر من القائمة...</option>
+                    {% for p in periods %}
+                    <option value="{{ p.id }}" {% if selected_period == p.id %}selected{% endif %}>{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-secondary w-100"><i class="bi bi-calculator me-2"></i>تحليل مراكز التكلفة</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if report %}
+<div class="card shadow-sm border-0" style="border-radius: 15px;">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">مركز التكلفة</th>
+                        <th class="text-end">إجمالي الرواتب (Gross)</th>
+                        <th class="text-end">حصة التأمينات</th>
+                        <th class="text-end pe-4">صافي الرواتب (Net)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report %}
+                    <tr>
+                        <td class="ps-4 fw-bold text-dark">{{ row.employee__department__cost_center__name|default:"غير محدد" }}</td>
+                        <td class="text-end">{{ row.total_gross|floatformat:2|intcomma }}</td>
+                        <td class="text-end text-muted">{{ row.total_insurance|floatformat:2|intcomma }}</td>
+                        <td class="text-end pe-4 fw-bold text-primary fs-5">{{ row.total_net|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

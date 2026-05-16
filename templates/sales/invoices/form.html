@@ -50,10 +50,11 @@
                 <thead class="table-light">
                     <tr>
                         <th style="width: 25%;">الصنف</th>
+                        <th style="width: 10%;">الوحدة</th>
                         <th>المستودع</th>
                         <th style="width: 8%;">الكمية</th>
                         <th style="width: 10%;">السعر</th>
-                        <th style="width: 7%;">خصم %</th>
+                        <th style="width: 14%;">خصم %</th>
                         <th style="width: 12%;">ضريبة 1</th>
                         <th style="width: 12%;">ضريبة 2</th>
                         <th style="width: 12%;">الإجمالي</th>
@@ -64,6 +65,7 @@
                     {% for line_form in lines %}
                     <tr class="line-row">
                         <td>{{ line_form.item }}</td>
+                        <td>{{ line_form.unit }}</td>
                         <td>{{ line_form.warehouse }}</td>
                         <td>{{ line_form.quantity }}</td>
                         <td>{{ line_form.unit_price }}</td>
@@ -136,16 +138,20 @@
 
 {% block extra_js %}
 <script>
-    // Simple logic to calculate totals
+    // Professional logic to calculate totals (VAT, WHT, Table Tax)
     function calculateInvoice() {
         let grossTotal = 0;
         let discountTotal = 0;
-        let taxTotal = 0;
+        let taxTotalAdd = 0;
+        let taxTotalSub = 0;
         
         document.querySelectorAll('.line-row').forEach(row => {
             const qtyInput = row.querySelector('.qty-input');
             const priceInput = row.querySelector('.price-input');
             const discInput = row.querySelector('.discount-input');
+            
+            const tax1Select = row.querySelector('.tax-select');
+            const tax2Select = row.querySelector('.tax-select2');
             const tax1RateInput = row.querySelector('.tax-rate');
             const tax2RateInput = row.querySelector('.tax-rate2');
             
@@ -162,9 +168,42 @@
             const tax1Rate = tax1RateInput ? (parseFloat(tax1RateInput.value) || 0) : 0;
             const tax2Rate = tax2RateInput ? (parseFloat(tax2RateInput.value) || 0) : 0;
             
-            const tax1Line = netLine * (tax1Rate / 100);
-            const tax2Line = netLine * (tax2Rate / 100);
-            const lineTotal = netLine + tax1Line + tax2Line;
+            const tax1Cat = tax1Select ? tax1Select.selectedOptions[0]?.dataset.category : '';
+            const tax2Cat = tax2Select ? tax2Select.selectedOptions[0]?.dataset.category : '';
+
+            // 1. Calculate Table Tax first (as it might affect VAT)
+            let tableTaxAmount = 0;
+            if (tax1Cat === 'table') tableTaxAmount += netLine * (tax1Rate / 100);
+            if (tax2Cat === 'table') tableTaxAmount += netLine * (tax2Rate / 100);
+
+            // 2. Calculate VAT and other taxes
+            let lineTaxAdd = 0;
+            let lineTaxSub = 0;
+
+            [
+                {cat: tax1Cat, rate: tax1Rate},
+                {cat: tax2Cat, rate: tax2Rate}
+            ].forEach(tx => {
+                if (!tx.cat || tx.rate === 0) return;
+                
+                let val = 0;
+                if (tx.cat === 'vat') {
+                    // VAT is on (Net + Table Tax)
+                    val = (netLine + tableTaxAmount) * (tx.rate / 100);
+                } else {
+                    // Others are on Net
+                    val = netLine * (tx.rate / 100);
+                }
+
+                // Decide if add or sub
+                if (['wht', 'salary', 'insurance'].includes(tx.cat)) {
+                    lineTaxSub += val;
+                } else {
+                    lineTaxAdd += val;
+                }
+            });
+
+            const lineTotal = netLine + lineTaxAdd - lineTaxSub;
             
             const displayEl = row.querySelector('.line-total-display');
             const totalInput = row.querySelector('.total-input');
@@ -173,16 +212,21 @@
             
             grossTotal += grossLine;
             discountTotal += discLine;
-            taxTotal += (tax1Line + tax2Line);
+            taxTotalAdd += lineTaxAdd;
+            taxTotalSub += lineTaxSub;
         });
         
         document.getElementById('subtotal').innerText = grossTotal.toFixed(2);
         document.getElementById('discountTotal').innerText = discountTotal.toFixed(2);
-        document.getElementById('taxTotal').innerText = taxTotal.toFixed(2);
-        document.getElementById('grandTotal').innerText = (grossTotal - discountTotal + taxTotal).toFixed(2);
+        
+        // Total Tax in display usually shows the net impact or sum of additions? 
+        // We'll show the net tax impact (Additions - Deductions) or separate them.
+        // Let's show net impact to match grand total math.
+        document.getElementById('taxTotal').innerText = (taxTotalAdd - taxTotalSub).toFixed(2);
+        document.getElementById('grandTotal').innerText = (grossTotal - discountTotal + taxTotalAdd - taxTotalSub).toFixed(2);
     }
 
-    // Fetch tax rate when tax type is selected
+    // Fetch tax rate and category when tax type is selected
     async function fetchTaxRate(taxSelect, rateInputClass) {
         const taxId = taxSelect.value;
         const row = taxSelect.closest('.line-row');
@@ -190,6 +234,7 @@
         
         if (!taxId) {
             rateInput.value = '0.00';
+            if (taxSelect.selectedOptions[0]) taxSelect.selectedOptions[0].dataset.category = '';
             calculateInvoice();
             return;
         }
@@ -199,12 +244,21 @@
             if (response.ok) {
                 const data = await response.json();
                 rateInput.value = data.rate;
+                // Store category in the selected option's dataset for calculation
+                if (taxSelect.selectedOptions[0]) {
+                    taxSelect.selectedOptions[0].dataset.category = data.category;
+                }
                 calculateInvoice();
             }
         } catch (error) {
             console.error('Error fetching tax rate:', error);
         }
     }
+
+    // Initialize categories for existing rows on load
+    document.querySelectorAll('.tax-select, .tax-select2').forEach(select => {
+        if (select.value) fetchTaxRate(select, select.classList.contains('tax-select') ? '.tax-rate' : '.tax-rate2');
+    });
 
     document.addEventListener('input', function(e) {
         if (e.target.matches('.qty-input, .price-input, .discount-input')) {
@@ -380,33 +434,49 @@
     }
 
     function applySectorDiscount(row, itemId) {
-        const discountInput = row.querySelector('input[name$="-discount_percent"]');
-        if (!discountInput) return;
+        const discInput = row.querySelector('.discount-input, input[name$="-discount_percent"]');
+        if (!discInput) return;
 
         let totalDiscount = 0;
         currentSectorOffers.forEach(offer => {
             const line = offer.lines.find(l => l.item == itemId);
             if (line) {
-                totalDiscount += parseFloat(line.extra_discount_percent);
+                totalDiscount += parseFloat(line.discount_percent || 0);
             }
         });
 
-        discountInput.value = totalDiscount.toFixed(2);
+        if (totalDiscount > 0) {
+            discInput.value = totalDiscount.toFixed(2);
+        }
         calculateInvoice();
     }
 
     async function fetchItemPrice(itemSelect) {
-        if (!currentCustomerPriceList || !itemSelect.value) return;
+        if (!itemSelect.value) return;
         
         const row = itemSelect.closest('.line-row');
         const priceInput = row.querySelector('.price-input');
 
         try {
-            const response = await fetch(`/api/price-lists/${currentCustomerPriceList}/item_price/?item_id=${itemSelect.value}`);
-            if (response.ok) {
-                const data = await response.json();
-                if (data.price) {
-                    priceInput.value = data.price;
+            // Priority 1: Price from Customer's PriceList
+            if (currentCustomerPriceList) {
+                const response = await fetch(`/api/price-lists/${currentCustomerPriceList}/item_price/?item_id=${itemSelect.value}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.price) {
+                        priceInput.value = data.price;
+                        calculateInvoice();
+                        return;
+                    }
+                }
+            }
+            
+            // Priority 2: Fallback to Item's standard_price
+            const invResponse = await fetch(`/inventory/api/item/${itemSelect.value}/`);
+            if (invResponse.ok) {
+                const data = await invResponse.json();
+                if (data.standard_price) {
+                    priceInput.value = data.standard_price;
                     calculateInvoice();
                 }
             }

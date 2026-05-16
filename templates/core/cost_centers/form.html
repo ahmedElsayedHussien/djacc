@@ -8,23 +8,61 @@
             <div class="card-body">
                 <form method="post" novalidate>
                     {% csrf_token %}
-                    <div class="mb-3">
-                        <label class="form-label">الكود</label>
-                        {{ form.code }}
-                        {% if form.code.errors %}<div class="text-danger small">{{ form.code.errors }}</div>{% endif %}
+                    
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        {{ form.non_field_errors }}
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">الاسم</label>
-                        {{ form.name }}
-                        {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors }}</div>{% endif %}
+                    {% endif %}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.code.label }}</label>
+                            {{ form.code }}
+                            {% if form.code.errors %}<div class="text-danger small">{{ form.code.errors }}</div>{% endif %}
+                            <div class="form-text small">{{ form.code.help_text }}</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.name.label }}</label>
+                            {{ form.name }}
+                            {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors }}</div>{% endif %}
+                            <div class="form-text small">{{ form.name.help_text }}</div>
+                        </div>
                     </div>
+
                     <div class="mb-3">
-                        <label class="form-label">المركز الأب</label>
+                        <label class="form-label">{{ form.center_type.label }}</label>
+                        {{ form.center_type }}
+                        {% if form.center_type.errors %}<div class="text-danger small">{{ form.center_type.errors }}</div>{% endif %}
+                        <div class="form-text small">{{ form.center_type.help_text }}</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.parent.label }}</label>
                         {{ form.parent }}
+                        {% if form.parent.errors %}<div class="text-danger small">{{ form.parent.errors }}</div>{% endif %}
                     </div>
-                    <div class="form-check mb-3">
-                        {{ form.is_active }}
-                        <label class="form-check-label">نشط</label>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                {{ form.is_leaf }}
+                                <label class="form-check-label">{{ form.is_leaf.label }}</label>
+                                <div class="form-text small">{{ form.is_leaf.help_text }}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                {{ form.is_active }}
+                                <label class="form-check-label">{{ form.is_active.label }}</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.description.label }}</label>
+                        {{ form.description }}
+                        {% if form.description.errors %}<div class="text-danger small">{{ form.description.errors }}</div>{% endif %}
                     </div>
                     
                     <div class="d-flex gap-2">

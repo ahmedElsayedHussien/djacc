@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+
+{% block title %}صلاحية الوثائق والعقود{% endblock %}
+{% block header %}تنبيهات انتهاء صلاحية وثائق الموظفين{% endblock %}
+
+{% block content %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-8">
+                <label class="form-label fw-bold">فترة التنبيه (بالأيام)</label>
+                <select name="days" class="form-select">
+                    <option value="30" {% if selected_days == 30 %}selected{% endif %}>تنتهي خلال 30 يوماً</option>
+                    <option value="60" {% if selected_days == 60 %}selected{% endif %}>تنتهي خلال 60 يوماً</option>
+                    <option value="90" {% if selected_days == 90 %}selected{% endif %}>تنتهي خلال 90 يوماً</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-danger w-100"><i class="bi bi-bell me-2"></i>تحديث التنبيهات</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0" style="border-radius: 15px;">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">الموظف</th>
+                        <th>نوع المستند / العنوان</th>
+                        <th class="text-center">تاريخ الانتهاء</th>
+                        <th class="text-center pe-4">الحالة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for doc in report %}
+                    <tr>
+                        <td class="ps-4">
+                            <span class="fw-bold text-dark">{{ doc.employee.first_name }} {{ doc.employee.last_name }}</span><br>
+                            <small class="text-muted">{{ doc.employee.job_title.name }}</small>
+                        </td>
+                        <td>
+                            <span class="badge bg-soft-info text-info">{{ doc.get_document_type_display }}</span><br>
+                            <small class="text-dark">{{ doc.title }}</small>
+                        </td>
+                        <td class="text-center">
+                            <span class="fw-bold text-danger">{{ doc.expiry_date|date:'Y-m-d' }}</span>
+                        </td>
+                        <td class="text-center pe-4">
+                            {% if doc.is_expired %}
+                                <span class="badge bg-danger">منتهى</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">يوشك على الانتهاء</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center py-5 text-success">
+                            <i class="bi bi-check-circle fs-1 d-block mb-3"></i>
+                            لا توجد وثائق تنتهي صلاحيتها خلال الفترة المحددة.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

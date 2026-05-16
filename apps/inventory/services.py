@@ -7,6 +7,47 @@ from apps.core.services import AuditService
 
 class InventoryService:
     @staticmethod
+    def generate_item_code():
+        from .models import Item
+        codes = Item.objects.values_list('code', flat=True)
+        numeric_codes = []
+        for code in codes:
+            if code and str(code).isdigit():
+                numeric_codes.append(int(code))
+        
+        next_num = max(numeric_codes) + 1 if numeric_codes else 1
+        while Item.objects.filter(code=str(next_num)).exists():
+            next_num += 1
+        return str(next_num)
+
+    @staticmethod
+    def generate_unit_code():
+        from .models import UnitOfMeasure
+        codes = UnitOfMeasure.objects.values_list('code', flat=True)
+        numeric_codes = []
+        for code in codes:
+            if code and code.isdigit():
+                numeric_codes.append(int(code))
+        
+        if numeric_codes:
+            return str(max(numeric_codes) + 1)
+        return "1"
+
+    @staticmethod
+    def generate_category_code():
+        from .models import ItemCategory
+        # Find all categories with numeric codes
+        codes = ItemCategory.objects.values_list('code', flat=True)
+        numeric_codes = []
+        for code in codes:
+            if code and code.isdigit():
+                numeric_codes.append(int(code))
+        
+        if numeric_codes:
+            return str(max(numeric_codes) + 1)
+        return "1"
+
+    @staticmethod
     def get_item_cost(item: Item, warehouse: Warehouse) -> Decimal:
         """
         Returns the current average cost of an item in a warehouse.
@@ -32,6 +73,8 @@ class InventoryService:
         """
         Central method to record stock movements and update ledger.
         """
+        if quantity == 0:
+            raise ValueError("لا يمكن تسجيل حركة مخزنية بكمية صفرية") # ✅ Fix: منع الحركات الصفرية برفع خطأ بدلاً من إرجاع None
         # Get or create ledger with lock
         ledger, created = ItemLedger.objects.select_for_update().get_or_create(
             item=item, 
@@ -62,7 +105,7 @@ class InventoryService:
         ledger.total_value += total_cost
         
         # Prevent residual value when stock is zero
-        if ledger.quantity_on_hand <= 0:
+        if ledger.quantity_on_hand == 0:
             ledger.total_value = Decimal('0')
 
         ledger.save()
@@ -114,7 +157,7 @@ class InventoryService:
         ledger.total_value = current_val
         
         # تصفير القيمة إذا كان المخزون صفر
-        if ledger.quantity_on_hand <= 0:
+        if ledger.quantity_on_hand == 0:
             ledger.total_value = Decimal('0')
             
         ledger.save()
@@ -189,7 +232,7 @@ class InventoryService:
             base_qty = getattr(line, 'base_quantity', line.quantity)
             if not base_qty and hasattr(line, 'unit') and line.unit:
                 base_qty = line.item.convert_to_base(line.quantity, line.unit)
-            elif not hasattr(line, 'base_quantity'):
+            elif not base_qty:
                 base_qty = line.quantity
 
             # سعر وحدة الأساس = سعر وحدة الشراء / معامل التحويل
@@ -215,10 +258,9 @@ class InventoryService:
     @transaction.atomic
     def process_transfer(transfer, processed_by) -> None:
         """
-        Records two stock movements:
+        Records two stock movements for each line:
         1. Out from source warehouse
         2. In to destination warehouse
-        ✅ Fix #5: التحقق من عدم التحويل لنفس المستودع
         """
         if transfer.status == 'posted':
             raise ValueError("هذا التحويل مرحّل بالفعل")
@@ -226,49 +268,65 @@ class InventoryService:
         if transfer.from_warehouse == transfer.to_warehouse:
             raise ValueError("لا يمكن التحويل لنفس المستودع. يرجى اختيار مستودعين مختلفين.")
 
+        if not transfer.lines.exists():
+            raise ValueError("لا يمكن ترحيل طلب تحويل بدون أصناف.")
 
-        # 1. Outgoing from source (يتكفل record_movement بحساب التكلفة بعد القفل)
-        out_movement = InventoryService.record_movement(
-            date_val=transfer.date,
-            item=transfer.item,
-            warehouse=transfer.from_warehouse,
-            movement_type=StockMovement.MovementType.TRANSFER_OUT,
-            quantity=-transfer.quantity,
-            unit_cost=None, # auto-calculate cost
-            source=transfer,
-            reference=f'Transfer {transfer.number}'
-        )
+        journal_lines = []
         
-        cost = out_movement.unit_cost
-        total_val = transfer.quantity * cost
+        for line in transfer.lines.all():
+            # 1. Outgoing from source
+            out_movement = InventoryService.record_movement(
+                date_val=transfer.date,
+                item=line.item,
+                warehouse=transfer.from_warehouse,
+                movement_type=StockMovement.MovementType.TRANSFER_OUT,
+                quantity=-line.quantity,
+                unit_cost=None, # auto-calculate cost
+                source=transfer,
+                reference=f'Transfer {transfer.number}'
+            )
+            
+            cost = out_movement.unit_cost
+            line.unit_cost = cost
+            line.save(update_fields=['unit_cost'])
+            
+            line_total_val = line.quantity * cost
 
-        # 2. Incoming to destination
-        InventoryService.record_movement(
-            date_val=transfer.date,
-            item=transfer.item,
-            warehouse=transfer.to_warehouse,
-            movement_type=StockMovement.MovementType.TRANSFER_IN,
-            quantity=transfer.quantity,
-            unit_cost=cost,
-            source=transfer,
-            reference=f'Transfer {transfer.number}'
-        )
+            # 2. Incoming to destination
+            InventoryService.record_movement(
+                date_val=transfer.date,
+                item=line.item,
+                warehouse=transfer.to_warehouse,
+                movement_type=StockMovement.MovementType.TRANSFER_IN,
+                quantity=line.quantity,
+                unit_cost=cost,
+                source=transfer,
+                reference=f'Transfer {transfer.number}'
+            )
 
-        # 3. GL Entry if accounts differ
-        acc_from = transfer.from_warehouse.gl_account or transfer.item.inventory_account
-        acc_to = transfer.to_warehouse.gl_account or transfer.item.inventory_account
+            # 3. Prepare GL Entry lines if accounts differ
+            acc_from = transfer.from_warehouse.gl_account or line.item.inventory_account
+            acc_to = transfer.to_warehouse.gl_account or line.item.inventory_account
+            
+            if acc_from != acc_to:
+                journal_lines.append({
+                    'account': acc_to, 'debit': line_total_val, 'credit': 0, 
+                    'description': f'تحويل وارد - {line.item.name} ({transfer.number})'
+                })
+                journal_lines.append({
+                    'account': acc_from, 'debit': 0, 'credit': line_total_val, 
+                    'description': f'تحويل صادر - {line.item.name} ({transfer.number})'
+                })
         
-        if acc_from != acc_to:
+        # 4. Create GL Entry if needed
+        if journal_lines:
             from apps.core.services import JournalService
             from apps.core.models import JournalEntry
             JournalService.create_entry(
                 date_val=transfer.date,
                 entry_type=JournalEntry.EntryType.INVENTORY,
                 description=f'تحويل مخزني رقم {transfer.number}',
-                lines=[
-                    {'account': acc_to, 'debit': total_val, 'credit': 0, 'description': f'تحويل وارد - {transfer.item.name}'},
-                    {'account': acc_from, 'debit': 0, 'credit': total_val, 'description': f'تحويل صادر - {transfer.item.name}'},
-                ],
+                lines=journal_lines,
                 created_by=processed_by
             )
         
@@ -276,6 +334,57 @@ class InventoryService:
         transfer.save()
 
         AuditService.log(processed_by, 'Post', transfer, f'ترحيل تحويل مخزني رقم {transfer.number}')
+
+
+    @staticmethod
+    @transaction.atomic
+    def reverse_transfer(transfer, reversed_by) -> None:
+        """
+        عكس تحويل مخزني (إنشاء حركات عكسية)
+        """
+        if transfer.status != 'posted':
+            raise ValueError("يمكن عكس التحويلات المرحلة فقط")
+
+        for line in transfer.lines.all():
+            # 1. Reverse outgoing (was negative, now positive into from_warehouse)
+            InventoryService.record_movement(
+                date_val=timezone.now().date(),
+                item=line.item,
+                warehouse=transfer.from_warehouse,
+                movement_type=StockMovement.MovementType.TRANSFER_IN,
+                quantity=line.quantity,
+                unit_cost=line.unit_cost, # استخدام التكلفة الأصلية المخزنة في السطر
+                source=transfer,
+                reference=f'Reversal of {transfer.number}'
+            )
+
+            # 2. Reverse incoming (was positive, now negative out of to_warehouse)
+            InventoryService.record_movement(
+                date_val=timezone.now().date(),
+                item=line.item,
+                warehouse=transfer.to_warehouse,
+                movement_type=StockMovement.MovementType.TRANSFER_OUT,
+                quantity=-line.quantity,
+                unit_cost=line.unit_cost, # استخدام التكلفة الأصلية المخزنة في السطر
+                source=transfer,
+                reference=f'Reversal of {transfer.number}'
+            )
+
+        # 3. GL Entry Reversal
+        from apps.core.models import JournalEntry
+        entries = JournalEntry.objects.filter(
+            description__contains=f'تحويل مخزني رقم {transfer.number}',
+            entry_type=JournalEntry.EntryType.INVENTORY
+        )
+        from apps.core.services import JournalService
+        for entry in entries:
+            JournalService.reverse_entry(entry, timezone.now().date(), reversed_by)
+
+        transfer.status = 'cancelled'
+        transfer.save()
+
+        AuditService.log(reversed_by, 'Reverse', transfer, f'عكس تحويل مخزني رقم {transfer.number}')
+
 
 class LoadingService:
     @staticmethod
@@ -315,23 +424,22 @@ class LoadingService:
                 continue
 
             
-            # الحصول على التكلفة الحالية من المخزن الرئيسي
-            cost = InventoryService.get_item_cost(line.item, order.from_warehouse)
-            line_total_value = qty * cost
-            
-            # 1. صرف من المخزن الرئيسي
-            InventoryService.record_movement(
+            # 1. صرف من المخزن الرئيسي (يتكفل record_movement بحساب التكلفة بعد القفل لتجنب Race Condition)
+            out_movement = InventoryService.record_movement(
                 date_val=order.date,
                 item=line.item,
                 warehouse=order.from_warehouse,
                 movement_type=StockMovement.MovementType.LOADING_OUT,
                 quantity=-qty,
-                unit_cost=cost,
+                unit_cost=None, # auto-calculate cost
                 reference=order.number,
                 source=order
             )
             
-            # 2. إضافة لمخزن المندوب
+            cost = out_movement.unit_cost
+            line_total_value = qty * cost
+            
+            # 2. إضافة لمخزن المندوب بنفس التكلفة
             InventoryService.record_movement(
                 date_val=order.date,
                 item=line.item,
@@ -421,14 +529,25 @@ class StockVoucherService:
 
         for line in voucher.lines.all():
             if voucher.voucher_type == StockVoucher.VoucherType.ISSUE:
-                # Issue: Negative quantity, calculate cost
-                cost = InventoryService.get_item_cost(line.item, voucher.warehouse)
+                # Issue: Negative quantity
                 qty = -line.quantity
+                
+                # ✅ Fix #2: جلب التكلفة داخل record_movement بعد القفل مباشرة لتجنب السباق (Race Condition)
+                movement = InventoryService.record_movement(
+                    date_val=voucher.date,
+                    item=line.item,
+                    warehouse=voucher.warehouse,
+                    movement_type=StockMovement.MovementType.ADJUSTMENT_OUT,
+                    quantity=qty,
+                    unit_cost=None, # auto-calculate cost after lock
+                    reference=voucher.number,
+                    source=voucher
+                )
+                
+                cost = movement.unit_cost
                 line.unit_cost = cost
                 line.total_cost = line.quantity * cost
                 line.save()
-                
-                mov_type = StockMovement.MovementType.ADJUSTMENT_OUT
                 
                 # Financial entry for ISSUE
                 if voucher.offset_account:
@@ -453,7 +572,17 @@ class StockVoucherService:
                 line.total_cost = line.quantity * cost
                 line.save()
                 
-                mov_type = StockMovement.MovementType.ADJUSTMENT_IN
+                # Record Inventory Movement
+                InventoryService.record_movement(
+                    date_val=voucher.date,
+                    item=line.item,
+                    warehouse=voucher.warehouse,
+                    movement_type=StockMovement.MovementType.ADJUSTMENT_IN,
+                    quantity=qty,
+                    unit_cost=cost,
+                    reference=voucher.number,
+                    source=voucher
+                )
                 
                 # Financial entry for RECEIPT
                 if voucher.offset_account:
@@ -466,18 +595,6 @@ class StockVoucherService:
                         'account': voucher.offset_account, 'debit': 0, 'credit': line.total_cost,
                         'description': f'إضافة - {line.item.name}'
                     })
-
-            # Record Inventory Movement
-            InventoryService.record_movement(
-                date_val=voucher.date,
-                item=line.item,
-                warehouse=voucher.warehouse,
-                movement_type=mov_type,
-                quantity=qty,
-                unit_cost=cost,
-                reference=voucher.number,
-                source=voucher
-            )
 
         # Create Journal Entry if there are lines
         if journal_lines:

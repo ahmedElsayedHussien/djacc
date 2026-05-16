@@ -19,8 +19,14 @@
 </head>
 <body>
     <div class="layout-wrapper">
+        <!-- Sidebar Backdrop (Overlay for Mobile) -->
+        <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+        
         <!-- Sidebar -->
         <nav id="sidebar" class="sidebar d-md-block collapse">
+            <button class="sidebar-close-btn" type="button" onclick="toggleSidebar()">
+                <i class="bi bi-x-lg"></i>
+            </button>
             <div class="position-sticky">
                 <div class="brand-area text-center">
                     <a href="{% url 'core:dashboard' %}" class="brand-logo">
@@ -45,9 +51,6 @@
                         <div class="collapse" id="essMenu">
                             <ul class="submenu">
                                 <li><a class="nav-link" href="{% url 'hr:ess-dashboard' %}">صفحتي الشخصية</a></li>
-                                <li><a class="nav-link" href="{% url 'hr:ess-payslips' %}">استعراض الرواتب</a></li>
-                                <li><a class="nav-link" href="{% url 'hr:ess-request-leave' %}">تقديم طلب إجازة</a></li>
-                                <li><a class="nav-link" href="{% url 'hr:ess-request-loan' %}">طلب سلفة مالية</a></li>
                             </ul>
                         </div>
                     </li>
@@ -83,8 +86,6 @@
                         <div class="collapse" id="assetMenu">
                             <ul class="submenu">
                                 <li><a class="nav-link text-primary fw-bold" href="{% url 'assets:dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تحكم الأصول</a></li>
-                                <li><a class="nav-link" href="{% url 'assets:asset-list' %}">سجل الأصول</a></li>
-                                <li><a class="nav-link" href="{% url 'assets:category-list' %}">تصنيفات الأصول</a></li>
                             </ul>
                         </div>
                     </li>
@@ -100,20 +101,6 @@
                         <div class="collapse" id="salesMenu">
                             <ul class="submenu">
                                 <li><a class="nav-link text-primary fw-bold" href="{% url 'sales:dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تحكم المبيعات</a></li>
-                                {% if user.salesrepresentative %}
-                                <li><a class="nav-link text-info fw-bold" href="{% url 'sales:rep-stock' %}"><i class="bi bi-box-seam me-1"></i> بضاعتي الحالية</a></li>
-                                <li><hr class="dropdown-divider bg-secondary mx-2"></li>
-                                {% endif %}
-                                {% if perms.sales.view_salesinvoice %}<li><a class="nav-link" href="{% url 'sales:invoice-list' %}">الفواتير</a></li>{% endif %}
-                                {% if perms.sales.view_customerreceipt %}<li><a class="nav-link" href="{% url 'sales:receipt-list' %}">سندات القبض</a></li>{% endif %}
-                                {% if perms.sales.view_repdailysettlement %}<li><a class="nav-link" href="{% url 'sales:settlement-list' %}">تسوية المناديب</a></li>{% endif %}
-                                {% if perms.sales.view_salesreturn %}<li><a class="nav-link" href="{% url 'sales:return-list' %}">مرتجع المبيعات</a></li>{% endif %}
-                                <li><hr class="dropdown-divider bg-secondary mx-2"></li>
-                                {% if perms.sales.view_customer %}<li><a class="nav-link" href="{% url 'sales:customer-list' %}">العملاء</a></li>{% endif %}
-                                {% if perms.sales.view_customersector %}<li><a class="nav-link" href="{% url 'sales:sector-list' %}">قطاعات العملاء</a></li>{% endif %}
-                                {% if perms.sales.view_salesrepresentative %}<li><a class="nav-link" href="{% url 'sales:rep-list' %}">المناديب</a></li>{% endif %}
-                                {% if perms.sales.view_pricelist %}<li><a class="nav-link" href="{% url 'sales:pricelist-list' %}">قوائم الأسعار</a></li>{% endif %}
-                                {% if perms.sales.view_quotation %}<li><a class="nav-link" href="{% url 'sales:quotation-list' %}">عروض الأسعار والخصومات</a></li>{% endif %}
                             </ul>
                         </div>
                     </li>
@@ -129,11 +116,6 @@
                         <div class="collapse" id="purMenu">
                             <ul class="submenu">
                                 <li><a class="nav-link text-primary fw-bold" href="{% url 'purchases:dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تحكم المشتريات</a></li>
-                                {% if perms.purchases.view_purchaseinvoice %}<li><a class="nav-link" href="{% url 'purchases:invoice-list' %}">فاتورة مشتريات</a></li>{% endif %}
-                                {% if perms.purchases.view_supplierpayment %}<li><a class="nav-link" href="{% url 'purchases:payment-list' %}">سندات الصرف</a></li>{% endif %}
-                                {% if perms.purchases.view_purchasereturn %}<li><a class="nav-link" href="{% url 'purchases:return-list' %}">مرتجع مشتريات</a></li>{% endif %}
-                                <li><hr class="dropdown-divider bg-secondary mx-2"></li>
-                                {% if perms.purchases.view_supplier %}<li><a class="nav-link" href="{% url 'purchases:supplier-list' %}">الموردين</a></li>{% endif %}
                             </ul>
                         </div>
                     </li>
@@ -149,13 +131,6 @@
                         <div class="collapse" id="invMenu">
                             <ul class="submenu">
                                 <li><a class="nav-link text-primary fw-bold" href="{% url 'inventory:dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تحكم المخازن</a></li>
-                                {% if perms.inventory.view_item %}<li><a class="nav-link" href="{% url 'inventory:item-list' %}">الأصناف</a></li>{% endif %}
-                                {% if perms.inventory.view_itemcategory %}<li><a class="nav-link" href="{% url 'inventory:category-list' %}">فئات الأصناف</a></li>{% endif %}
-                                {% if perms.inventory.view_unitofmeasure %}<li><a class="nav-link" href="{% url 'inventory:unit-list' %}">وحدات القياس</a></li>{% endif %}
-                                {% if perms.inventory.view_warehouse %}<li><a class="nav-link" href="{% url 'inventory:warehouse-list' %}">المستودعات</a></li>{% endif %}
-                                {% if perms.inventory.view_stockvoucher %}<li><a class="nav-link" href="{% url 'inventory:voucher-list' %}">أذون الصرف/الإضافة</a></li>{% endif %}
-                                {% if perms.inventory.view_warehousetransfer %}<li><a class="nav-link" href="{% url 'inventory:transfer-list' %}">التحويلات</a></li>{% endif %}
-                                {% if perms.inventory.view_loadingorder %}<li><a class="nav-link" href="{% url 'inventory:loading-list' %}">طلبات التحميل</a></li>{% endif %}
                             </ul>
                         </div>
                     </li>
@@ -171,9 +146,6 @@
                         <div class="collapse" id="treaMenu">
                             <ul class="submenu">
                                 <li><a class="nav-link text-primary fw-bold" href="{% url 'treasury:dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تحكم الخزينة</a></li>
-                                {% if perms.treasury.view_cashbox %}<li><a class="nav-link" href="{% url 'treasury:cashbox-list' %}">الخزن النقدية</a></li>{% endif %}
-                                {% if perms.treasury.view_bankaccount %}<li><a class="nav-link" href="{% url 'treasury:bank-list' %}">الحسابات البنكية</a></li>{% endif %}
-                                {% if perms.treasury.view_cashtransfer %}<li><a class="nav-link" href="{% url 'treasury:transfer-list' %}">تحويلات مالية</a></li>{% endif %}
                             </ul>
                         </div>
                     </li>
@@ -189,9 +161,6 @@
                         <div class="collapse" id="expMenu">
                             <ul class="submenu">
                                 <li><a class="nav-link text-primary fw-bold" href="{% url 'expenses:dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تحكم المصروفات</a></li>
-                                {% if perms.expenses.view_expense %}<li><a class="nav-link" href="{% url 'expenses:expense-list' %}">سجل المصروفات</a></li>{% endif %}
-                                {% if perms.expenses.view_expensecategory %}<li><a class="nav-link" href="{% url 'expenses:category-list' %}">بنود المصروفات (Categories)</a></li>{% endif %}
-                                {% if perms.expenses.view_custody %}<li><a class="nav-link" href="{% url 'expenses:custody-list' %}">العهد المالية</a></li>{% endif %}
                             </ul>
                         </div>
                     </li>
@@ -227,11 +196,31 @@
                         <div class="collapse" id="repMenu">
                             <ul class="submenu">
                                 {% if perms.sales.view_salesinvoice %}<li><a class="nav-link text-primary fw-bold" href="{% url 'sales:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير المبيعات</a></li>{% endif %}
-                                {% if perms.core.view_account %}<li><a class="nav-link" href="{% url 'reports:trial_balance' %}">ميزان المراجعة</a></li>{% endif %}
-                                {% if perms.core.view_account %}<li><a class="nav-link" href="{% url 'reports:account_statement' %}">دفتر الأستاذ (كشف حساب)</a></li>{% endif %}
-                                {% if perms.core.view_account %}<li><a class="nav-link" href="{% url 'reports:income_statement' %}">قائمة الدخل</a></li>{% endif %}
-                                {% if perms.core.view_account %}<li><a class="nav-link" href="{% url 'reports:balance_sheet' %}">المركز المالي</a></li>{% endif %}
-                                {% if perms.inventory.view_item %}<li><a class="nav-link" href="{% url 'reports:stock_status' %}">حالة المخزون</a></li>{% endif %}
+                                {% if perms.purchases.view_purchaseinvoice %}<li><a class="nav-link text-warning fw-bold" href="{% url 'purchases:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير المشتريات</a></li>{% endif %}
+                                {% if perms.treasury.view_cashbox %}<li><a class="nav-link text-info fw-bold" href="{% url 'treasury:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير النقدية</a></li>{% endif %}
+                                {% if perms.inventory.view_item %}<li><a class="nav-link text-success fw-bold" href="{% url 'inventory:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير المخازن</a></li>{% endif %}
+                                {% if perms.expenses.view_expense %}<li><a class="nav-link text-danger fw-bold" href="{% url 'expenses:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير المصروفات</a></li>{% endif %}
+                                {% if perms.hr.view_employee %}<li><a class="nav-link text-primary fw-bold" href="{% url 'hr:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير الموارد البشرية</a></li>{% endif %}
+                                {% if perms.core.view_account %}<li><a class="nav-link text-dark fw-bold border-top mt-2 pt-2" href="{% url 'reports:financial_dashboard' %}"><i class="bi bi-bar-chart-steps me-1"></i> التقارير المالية والضريبية</a></li>{% endif %}
+                            </ul>
+                        </div>
+                    </li>
+                    {% endif %}
+
+                    <!-- E-Invoice Integration -->
+                    {% if user.is_superuser %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-group-title text-info" data-bs-toggle="collapse" href="#etaMenu" role="button" aria-expanded="false">
+                            <span><i class="bi bi-cloud-upload"></i> منظومة الضرائب (ETA)</span>
+                            <i class="bi bi-chevron-left chevron"></i>
+                        </a>
+                        <div class="collapse" id="etaMenu">
+                            <ul class="submenu">
+                                <li><a class="nav-link text-primary fw-bold" href="{% url 'e_invoice:dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تحكم الضرائب</a></li>
+                                <li><a class="nav-link" href="{% url 'e_invoice:config' %}"><i class="bi bi-gear me-2"></i>إعدادات الربط</a></li>
+                                <li><a class="nav-link" href="{% url 'e_invoice:company-settings' %}"><i class="bi bi-building me-2"></i>بيانات الشركة</a></li>
+                                <li><a class="nav-link" href="{% url 'e_invoice:certificate-list' %}"><i class="bi bi-key me-2"></i>الشهادة الرقمية</a></li>
+                                <li><a class="nav-link" href="{% url 'e_invoice:dashboard' %}"><i class="bi bi-list-check me-2"></i>سجل الإرسال</a></li>
                             </ul>
                         </div>
                     </li>
@@ -256,11 +245,7 @@
                     {% endif %}
 
                     {% if user.is_superuser %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/">
-                            <i class="bi bi-shield-lock"></i> الإدارة والتدقيق
-                        </a>
-                    </li>
+
                     {% endif %}
 
                     <li class="nav-item mt-auto">
@@ -280,12 +265,52 @@
             <!-- Navbar -->
             <nav class="top-navbar no-print">
                 <div class="d-flex align-items-center">
-                    <button class="btn-menu-toggle d-md-none ms-3" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar">
+                    <button class="btn-menu-toggle d-md-none ms-3" type="button" onclick="toggleSidebar()">
                         <i class="bi bi-list"></i>
                     </button>
                     <h1 class="page-title">{% block header %}{% endblock %}</h1>
                 </div>
-                
+
+                <!-- Quick Access Dashboards & Reports -->
+                <div class="d-flex align-items-center ms-auto me-2 me-md-4">
+                    <!-- Dashboards Dropdown -->
+                    <div class="dropdown me-2 me-md-3">
+                        <button class="btn btn-sm btn-outline-primary dropdown-toggle rounded-pill px-2 px-md-3 shadow-sm" type="button" id="dashboardsDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-speedometer2"></i>
+                            <span class="d-none d-md-inline ms-1">لوحات التحكم</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2 py-2" aria-labelledby="dashboardsDropdown" style="min-width: 200px;">
+                            <li><a class="dropdown-item py-2" href="{% url 'core:dashboard' %}"><i class="bi bi-grid-1x2 me-2 text-primary"></i> العامة</a></li>
+                            <li><hr class="dropdown-divider opacity-50"></li>
+                            {% if perms.sales.view_salesinvoice %}<li><a class="dropdown-item py-2" href="{% url 'sales:dashboard' %}"><i class="bi bi-cart-check me-2 text-primary"></i> المبيعات</a></li>{% endif %}
+                            {% if perms.purchases.view_purchaseinvoice %}<li><a class="dropdown-item py-2" href="{% url 'purchases:dashboard' %}"><i class="bi bi-bag-check me-2 text-primary"></i> المشتريات</a></li>{% endif %}
+                            {% if perms.inventory.view_item %}<li><a class="dropdown-item py-2" href="{% url 'inventory:dashboard' %}"><i class="bi bi-box-seam me-2 text-primary"></i> المخازن</a></li>{% endif %}
+                            {% if perms.treasury.view_cashbox %}<li><a class="dropdown-item py-2" href="{% url 'treasury:dashboard' %}"><i class="bi bi-wallet2 me-2 text-primary"></i> الخزينة</a></li>{% endif %}
+                            {% if perms.hr.view_employee %}<li><a class="dropdown-item py-2" href="{% url 'hr:dashboard' %}"><i class="bi bi-people me-2 text-primary"></i> الموارد البشرية</a></li>{% endif %}
+                            {% if perms.assets.view_asset %}<li><a class="dropdown-item py-2" href="{% url 'assets:dashboard' %}"><i class="bi bi-building-gear me-2 text-primary"></i> الأصول</a></li>{% endif %}
+                            {% if perms.expenses.view_expense %}<li><a class="dropdown-item py-2" href="{% url 'expenses:dashboard' %}"><i class="bi bi-receipt-cutoff me-2 text-primary"></i> المصروفات</a></li>{% endif %}
+                        </ul>
+                    </div>
+
+                    <!-- Reports Dropdown -->
+                    <div class="dropdown me-2 me-md-0">
+                        <button class="btn btn-sm btn-primary dropdown-toggle rounded-pill px-2 px-md-3 shadow-sm" type="button" id="reportsDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <span class="d-none d-md-inline ms-1">التقارير</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2 py-2" aria-labelledby="reportsDropdown" style="min-width: 220px;">
+                            {% if perms.core.view_account %}<li><a class="dropdown-item py-2 fw-bold text-primary" href="{% url 'reports:financial_dashboard' %}"><i class="bi bi-bank me-2"></i> المالية والضريبية</a></li>{% endif %}
+                            <li><hr class="dropdown-divider opacity-50"></li>
+                            {% if perms.sales.view_salesinvoice %}<li><a class="dropdown-item py-2" href="{% url 'sales:report-dashboard' %}"><i class="bi bi-cart-check me-2 text-secondary"></i> تقارير المبيعات</a></li>{% endif %}
+                            {% if perms.purchases.view_purchaseinvoice %}<li><a class="dropdown-item py-2" href="{% url 'purchases:report-dashboard' %}"><i class="bi bi-bag-check me-2 text-secondary"></i> تقارير المشتريات</a></li>{% endif %}
+                            {% if perms.inventory.view_item %}<li><a class="dropdown-item py-2" href="{% url 'inventory:report-dashboard' %}"><i class="bi bi-box-seam me-2 text-secondary"></i> تقارير المخازن</a></li>{% endif %}
+                            {% if perms.treasury.view_cashbox %}<li><a class="dropdown-item py-2" href="{% url 'treasury:report-dashboard' %}"><i class="bi bi-wallet2 me-2 text-secondary"></i> تقارير النقدية</a></li>{% endif %}
+                            {% if perms.hr.view_employee %}<li><a class="dropdown-item py-2" href="{% url 'hr:report-dashboard' %}"><i class="bi bi-people me-2 text-secondary"></i> تقارير الموارد البشرية</a></li>{% endif %}
+                            {% if perms.expenses.view_expense %}<li><a class="dropdown-item py-2" href="{% url 'expenses:report-dashboard' %}"><i class="bi bi-receipt-cutoff me-2 text-secondary"></i> تقارير المصروفات</a></li>{% endif %}
+                        </ul>
+                    </div>
+                </div>
+
                 <div class="d-flex align-items-center">
                     <div class="dropdown">
                         <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle text-dark" id="userDropdown" data-bs-toggle="dropdown">
@@ -330,6 +355,43 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    
+    <!-- Sidebar Toggle Script -->
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            sidebar.classList.toggle('show');
+            backdrop.classList.toggle('show');
+        }
+        
+        // Close sidebar when clicking backdrop
+        document.getElementById('sidebarBackdrop').addEventListener('click', function() {
+            toggleSidebar();
+        });
+        
+        // Close sidebar on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const sidebar = document.getElementById('sidebar');
+                if (sidebar.classList.contains('show')) {
+                    toggleSidebar();
+                }
+            }
+        });
+        
+        // Add active state to current page in sidebar
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentPath = window.location.pathname;
+            const navLinks = document.querySelectorAll('.sidebar .nav-link');
+            navLinks.forEach(function(link) {
+                if (link.getAttribute('href') === currentPath) {
+                    link.classList.add('active');
+                }
+            });
+        });
+    </script>
+    
     {% block extra_js %}{% endblock %}
 </body>
 </html>

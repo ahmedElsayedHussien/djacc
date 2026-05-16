@@ -527,6 +527,466 @@ a:hover {
 }
 
 /* ── أدوات الطباعة ──────────────────────────────────────── */
+/* ── Mobile Responsive Tables (Bootstrap Override) ─────────── */
+@media (max-width: 767.98px) {
+    /* Table wrapper - يمنع scroll على مستوى الصفحة */
+    .table-responsive {
+        max-width: 100%;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        /* يمنع overflow من التسرب للصفحة */
+        margin-bottom: var(--space-4);
+    }
+    
+    .table-responsive::-webkit-scrollbar {
+        height: 6px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-track {
+        background: var(--bg-page);
+    }
+    
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: var(--border-color);
+        border-radius: 3px;
+    }
+    
+    /* Table fits wrapper - لا يتجاوز عرض الصفحة */
+    .table {
+        width: 100%;
+        min-width: 100%;
+        max-width: 100%;
+        font-size: var(--font-size-sm);
+        margin-bottom: 0;
+    }
+    
+    .table thead th,
+    .table-light th {
+        padding: var(--space-3) var(--space-4);
+        font-size: var(--font-size-xs);
+        white-space: nowrap;
+        background-color: var(--bg-page);
+        /* يجعل المحتوى يتوسع حسب الحاجة داخل الـ wrapper */
+        width: auto;
+    }
+    
+    .table tbody td {
+        padding: var(--space-3) var(--space-4);
+        font-size: var(--font-size-sm);
+        vertical-align: middle;
+    }
+    
+    /* Action buttons in table - touch-friendly */
+    .table .btn-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-1);
+    }
+    
+    .table .btn {
+        min-height: 36px;
+        padding: var(--space-1) var(--space-3);
+        font-size: var(--font-size-xs);
+        white-space: nowrap;
+    }
+    
+    .table .btn-sm {
+        min-height: 32px;
+        padding: 2px var(--space-2);
+        font-size: var(--font-size-xs);
+    }
+    
+    /* Sticky first column - مع حدود */
+    .table thead th:first-child,
+    .table tbody td:first-child,
+    .table-light thead th:first-child {
+        position: sticky;
+        right: 0;
+        background: var(--bg-surface);
+        z-index: 1;
+        box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+    }
+    
+    /* Table with dark header */
+    .table-dark thead th:first-child {
+        background: var(--bg-dark);
+    }
+    
+    /* Compact tables */
+    .table-sm thead th,
+    .table-sm tbody td {
+        padding: var(--space-2) var(--space-3);
+        font-size: var(--font-size-xs);
+    }
+}
+
+/* Tables without .table-responsive wrapper - mobile overflow */
+@media (max-width: 575.98px) {
+    /* أي table بدون wrapper يضاف له overflow مع max-width */
+    .table:not(.table-responsive):not(.table-inline) {
+        display: block;
+        max-width: 100%;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        white-space: nowrap;
+        /* يضمن أن الـ overflow لا يتجاوز الصفحة */
+        box-sizing: border-box;
+    }
+    
+    /* Inline tables stay inline */
+    .table-inline {
+        display: inline-table;
+    }
+    
+    /* Table cell text truncation for narrow screens */
+    .table td.text-truncate {
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    /* Better spacing for table headers on mobile */
+    .table thead th {
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+}
+
+/* ── Mobile Responsive Forms ───────────────────────────────── */
+@media (max-width: 575.98px) {
+    /* Form groups stack vertically */
+    .form-group {
+        margin-bottom: var(--space-4);
+    }
+    
+    /* Labels full width */
+    .form-floating > label,
+    .form-group > label,
+    label {
+        display: block;
+        margin-bottom: var(--space-2);
+        font-weight: var(--font-weight-semibold);
+        color: var(--text-primary);
+    }
+    
+    /* Form controls full width and touch-friendly */
+    .form-control,
+    .form-select,
+    .form-control-sm,
+    .form-select-sm {
+        width: 100%;
+        min-height: 44px;
+        font-size: 1rem;
+        padding: var(--space-3);
+    }
+    
+    /* Remove floating labels on mobile */
+    .form-floating > .form-control:focus ~ label,
+    .form-floating > .form-control:not(:placeholder-shown) ~ label {
+        transform: none;
+        position: static;
+    }
+    
+    /* Checkbox and radio - larger touch area */
+    .form-check {
+        min-height: 44px;
+        padding-top: var(--space-2);
+    }
+    
+    .form-check-input {
+        width: 20px;
+        height: 20px;
+        margin-top: 0;
+    }
+    
+    /* Help text smaller */
+    .form-text {
+        font-size: var(--font-size-xs);
+    }
+    
+    /* Form rows adjust */
+    .row .form-group {
+        margin-bottom: var(--space-3);
+    }
+    
+    /* Card forms */
+    .card .card-body {
+        padding: var(--space-4);
+    }
+    
+    /* Filter forms compact */
+    .filter-form .form-control,
+    .filter-form .form-select {
+        min-height: 40px;
+        font-size: var(--font-size-sm);
+    }
+}
+
+/* ── Mobile Responsive Buttons & Inputs ────────────────────── */
+@media (max-width: 575.98px) {
+    /* Touch-friendly buttons - minimum 44px */
+    .btn {
+        min-height: 44px;
+        padding: var(--space-3) var(--space-5);
+        font-size: var(--font-size-base);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-2);
+        border-radius: var(--border-radius);
+        font-weight: var(--font-weight-semibold);
+        transition: all var(--transition-fast);
+    }
+    
+    /* Smaller buttons also get min-height */
+    .btn-sm {
+        min-height: 36px;
+        padding: var(--space-2) var(--space-4);
+        font-size: var(--font-size-sm);
+    }
+    
+    /* Icon buttons - circular for touch */
+    .btn-icon {
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+    }
+    
+    .btn-icon.btn-sm {
+        width: 36px;
+        height: 36px;
+    }
+    
+    /* Button group wrap on mobile */
+    .btn-group,
+    .button-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+    }
+    
+    .btn-group > .btn {
+        flex: 1 1 auto;
+    }
+    
+    /* Dropdown buttons */
+    .dropdown-menu {
+        min-width: 100%;
+        font-size: var(--font-size-base);
+    }
+    
+    .dropdown-item {
+        padding: var(--space-3) var(--space-4);
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+}
+
+/* ── Mobile Responsive Cards & Stats ───────────────────────── */
+@media (max-width: 575.98px) {
+    /* Stats cards stack vertically */
+    .stat-card {
+        margin-bottom: var(--space-4);
+    }
+    
+    .stat-card .card-body {
+        padding: var(--space-4);
+    }
+    
+    .stat-value {
+        font-size: var(--font-size-2xl);
+        font-weight: var(--font-weight-bold);
+    }
+    
+    .stat-label {
+        font-size: var(--font-size-sm);
+    }
+    
+    .stat-icon {
+        font-size: 3rem;
+        top: -5px;
+        left: -5px;
+    }
+    
+    /* Regular cards */
+    .card {
+        margin-bottom: var(--space-4);
+        border-radius: var(--border-radius);
+    }
+    
+    .card .card-header {
+        padding: var(--space-3) var(--space-4);
+    }
+    
+    .card .card-body {
+        padding: var(--space-4);
+    }
+    
+    .card .card-footer {
+        padding: var(--space-3) var(--space-4);
+    }
+}
+
+/* ── Mobile Responsive Pagination ──────────────────────────── */
+@media (max-width: 575.98px) {
+    /* Touch-friendly pagination */
+    .pagination {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: var(--space-2);
+    }
+    
+    .page-item .page-link {
+        min-width: 44px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--space-2) var(--space-3);
+        font-size: var(--font-size-sm);
+        border-radius: var(--border-radius);
+        margin: 0;
+    }
+    
+    .page-item.active .page-link {
+        font-weight: var(--font-weight-bold);
+    }
+    
+    /* Pagination in card footer */
+    .card-footer .pagination {
+        margin-top: var(--space-3);
+    }
+    
+    /* Simple pagination for mobile */
+    .pagination.pagination-sm .page-link {
+        min-width: 36px;
+        min-height: 36px;
+    }
+}
+    
+    /* Labels full width */
+    .form-floating > label,
+    .form-group > label,
+    label {
+        display: block;
+        margin-bottom: var(--space-2);
+        font-weight: var(--font-weight-semibold);
+        color: var(--text-primary);
+    }
+    
+    /* Form controls full width and touch-friendly */
+    .form-control,
+    .form-select,
+    .form-control-sm,
+    .form-select-sm {
+        width: 100%;
+        min-height: 44px;
+        font-size: 1rem; /* Prevents iOS zoom */
+        padding: var(--space-3);
+    }
+    
+    /* Remove floating labels on mobile */
+    .form-floating > .form-control:focus ~ label,
+    .form-floating > .form-control:not(:placeholder-shown) ~ label {
+        transform: none;
+        position: static;
+    }
+    
+    /* Checkbox and radio - larger touch area */
+    .form-check {
+        min-height: 44px;
+        padding-top: var(--space-2);
+    }
+    
+    .form-check-input {
+        width: 20px;
+        height: 20px;
+        margin-top: 0;
+    }
+    
+    /* Help text smaller */
+    .form-text {
+        font-size: var(--font-size-xs);
+    }
+    
+    /* Form rows adjust */
+    .row .form-group {
+        margin-bottom: var(--space-3);
+    }
+    
+    /* Card forms */
+    .card .card-body {
+        padding: var(--space-4);
+    }
+    
+    /* Filter forms compact */
+    .filter-form .form-control,
+    .filter-form .form-select {
+        min-height: 40px;
+        font-size: var(--font-size-sm);
+    }
+}
+    
+    .table-responsive-mobile::-webkit-scrollbar {
+        height: 6px;
+    }
+    
+    .table-responsive-mobile::-webkit-scrollbar-track {
+        background: var(--bg-page);
+    }
+    
+    .table-responsive-mobile::-webkit-scrollbar-thumb {
+        background: var(--border-color);
+        border-radius: 3px;
+    }
+    
+    /* Table styling for mobile */
+    .modern-table {
+        min-width: 600px; /* Keep readable */
+        font-size: var(--font-size-sm);
+    }
+    
+    .modern-table thead th {
+        padding: var(--space-3) var(--space-4);
+        font-size: var(--font-size-xs);
+        white-space: nowrap;
+    }
+    
+    .modern-table tbody td {
+        padding: var(--space-3) var(--space-4);
+        font-size: var(--font-size-sm);
+    }
+    
+    /* Action buttons in table - compact */
+    .table-actions {
+        display: flex;
+        gap: var(--space-1);
+    }
+    
+    .table-actions .btn {
+        padding: var(--space-1) var(--space-2);
+        font-size: var(--font-size-xs);
+    }
+    
+    /* Sticky first column for better UX */
+    .modern-table thead th:first-child,
+    .modern-table tbody td:first-child {
+        position: sticky;
+        right: 0;
+        background: var(--bg-surface);
+        z-index: 1;
+        box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+    }
+}
+
 @media print {
     .no-print {
         display: none !important;

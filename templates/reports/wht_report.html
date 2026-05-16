@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+{% block title %}تقرير ضريبة الخصم والتحصيل{% endblock %}
+{% block header %}تقرير ضريبة الخصم والتحصيل (WHT){% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-percent me-2"></i> تقرير ضريبة الخصم والتحصيل</h5>
+    </div>
+    <div class="card-body">
+        <!-- Filters -->
+        <form method="get" class="row g-3 mb-4">
+            <div class="col-md-3">
+                <label class="form-label">من تاريخ</label>
+                <input type="date" name="from" class="form-control" value="{{ from_date }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">إلى تاريخ</label>
+                <input type="date" name="to" class="form-control" value="{{ to_date }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">مركز التكلفة</label>
+                <select name="cost_center" class="form-select">
+                    <option value="">كل المراكز</option>
+                    {% for cc in cost_centers %}
+                    <option value="{{ cc.id }}" {% if selected_cc == cc.id %}selected{% endif %}>
+                        {{ cc.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search me-1"></i> بحث
+                </button>
+            </div>
+        </form>
+
+        {% if report %}
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card bg-warning text-dark">
+                    <div class="card-body">
+                        <h6 class="card-title">WHT على المبيعات</h6>
+                        <h3 class="mb-0">{{ report.wht_on_sales|floatformat:2 }}</h3>
+                        <small>حساب 1122 - مدينة</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-secondary text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">WHT على المشتريات</h6>
+                        <h3 class="mb-0">{{ report.wht_on_purchases|floatformat:2 }}</h3>
+                        <small>حساب 2123 - دائنة</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card {% if report.is_receivable %}bg-success{% else %}bg-danger{% endif %} text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">{% if report.is_receivable %}صافي WHT (مستحق){% else %}صافي WHT (مVERS}{% endif %}</h6>
+                        <h3 class="mb-0">{{ report.net_wht|floatformat:2 }}</h3>
+                        <small>جنيه مصري</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Details Table -->
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>البند</th>
+                        <th>الحساب</th>
+                        <th class="text-center">المبلغ (ج.م)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <strong>ضريبة الخصم والتحصيل على المبيعات</strong>
+                            <br><small class="text-muted">المبالغ المخصومة من عملائك</small>
+                        </td>
+                        <td><code>1122 - ضريبة خصم وتحصيل - مدينة</code></td>
+                        <td class="text-center">{{ report.wht_on_sales|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <strong>ضريبة الخصم والتحصيل على المشتريات</strong>
+                            <br><small class="text-muted">المبالغ المخصومة من الموردين</small>
+                        </td>
+                        <td><code>2123 - ضريبة خصم وتحصيل - دائنة</code></td>
+                        <td class="text-center">{{ report.wht_on_purchases|floatformat:2 }}</td>
+                    </tr>
+                    <tr class="table-primary">
+                        <td><strong>صافي ضريبة الخصم والتحصيل</strong></td>
+                        <td>-</td>
+                        <td class="text-center"><strong>{{ report.net_wht|floatformat:2 }}</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Notes -->
+        <div class="alert alert-info mt-3">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>ملاحظات:</strong>
+            <ul class="mb-0 mt-2">
+                <li>صافي WHT = WHT على المبيعات - WHT على المشتريات</li>
+                <li>إذا كان الصافي <strong>موجب</strong> → مستحق من مصلحة الضرائب (يمكن تقديم إقرار وتحصيله)</li>
+                <li>إذا كان الصافي <strong>سالب</strong> → مستحق لمصلحة الضرائب (يجب سداده)</li>
+                <li>WHT على المبيعات = خصم 1% من العميل (حساب مدين)</li>
+                <li>WHT على المشتريات = خصم 1% من المورد (حساب دائن)</li>
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

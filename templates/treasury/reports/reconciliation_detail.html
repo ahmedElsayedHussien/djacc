@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}تقرير التسوية البنكية والمطابقة{% endblock %}
+{% block header %}تقرير التسوية البنكية والمطابقة{% endblock %}
+
+{% block content %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-8">
+                <label class="form-label fw-bold">اختر عملية التسوية</label>
+                <select name="reconciliation" class="form-select select2">
+                    <option value="">اختر من القائمة...</option>
+                    {% for r in reconciliations %}
+                    <option value="{{ r.id }}" {% if selected_recon == r.id %}selected{% endif %}>
+                        {{ r.bank_account.name }} - تاريخ الكشف: {{ r.statement_date }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-file-earmark-check me-2"></i>عرض التقرير</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if data %}
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm border-0 bg-light">
+            <div class="card-body text-center">
+                <h6 class="text-muted mb-2">الرصيد الدفتري (النظام)</h6>
+                <h3 class="fw-bold">{{ data.recon.book_balance|floatformat:2|intcomma }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm border-0 bg-info bg-opacity-10">
+            <div class="card-body text-center">
+                <h6 class="text-muted mb-2">الرصيد البنكي (الكشف)</h6>
+                <h3 class="fw-bold">{{ data.recon.statement_balance|floatformat:2|intcomma }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm border-0 {% if data.recon.difference == 0 %}bg-success text-white{% else %}bg-danger text-white{% endif %}">
+            <div class="card-body text-center">
+                <h6 class="mb-2">الفارق</h6>
+                <h3 class="fw-bold">{{ data.recon.difference|floatformat:2|intcomma }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0" style="border-radius: 15px;">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-exclamation-circle me-2 text-warning"></i>عمليات لم تتم تسويتها حتى تاريخ الكشف</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">التاريخ / الرقم</th>
+                        <th>البيان</th>
+                        <th class="text-center">إيداع (+)</th>
+                        <th class="text-center">سحب (-)</th>
+                        <th class="text-center">الحالة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in data.unreconciled %}
+                    <tr>
+                        <td class="ps-4">
+                            <span class="fw-bold">{{ t.date|date:'Y-m-d' }}</span><br>
+                            <small class="text-muted">{{ t.number }}</small>
+                        </td>
+                        <td>{{ t.description }}</td>
+                        <td class="text-center text-success">{% if t.transaction_type == 'deposit' or t.transaction_type == 'transfer_in' %}{{ t.amount|floatformat:2|intcomma }}{% else %}-{% endif %}</td>
+                        <td class="text-center text-danger">{% if t.transaction_type == 'withdrawal' or t.transaction_type == 'transfer_out' or t.transaction_type == 'charge' %}{{ t.amount|floatformat:2|intcomma }}{% else %}-{% endif %}</td>
+                        <td class="text-center"><span class="badge bg-secondary">غير مسواة</span></td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-4 text-success"><i class="bi bi-check-all me-2"></i>كافة الحركات تم تسويتها.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info text-center shadow-sm">الرجاء اختيار عملية تسوية لعرض تفاصيل المطابقة.</div>
+{% endif %}
+{% endblock %}

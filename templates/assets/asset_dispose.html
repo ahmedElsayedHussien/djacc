@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}استبعاد أصل ثابت{% endblock %}
+{% block header %}عملية استبعاد الأصل: {{ asset.name }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-danger text-white py-3">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-trash me-2"></i>تأكيد استبعاد الأصل</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    سيؤدي الاستبعاد إلى إغلاق حساب الأصل في الدفاتر وإثبات الأرباح أو الخسائر الرأسمالية.
+                </div>
+
+                <div class="mb-4">
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted d-block">كود الأصل:</small>
+                            <span class="fw-bold">{{ asset.code }}</span>
+                        </div>
+                        <div class="col-6 text-end">
+                            <small class="text-muted d-block">القيمة الدفترية الحالية:</small>
+                            <span class="fw-bold text-primary">{{ asset.book_value|floatformat:2|intcomma }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">تاريخ الاستبعاد</label>
+                        <input type="date" name="disposal_date" class="form-control" value="{% now 'Y-m-d' %}" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">قيمة البيع (إن وجدت)</label>
+                        <div class="input-group">
+                            <input type="number" name="disposal_value" class="form-control" value="0" step="0.01">
+                            <span class="input-group-text">ج.م</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">حساب التحصيل (المقابل)</label>
+                        <select name="offset_account_id" class="form-select select2" required>
+                            <option value="">--- اختر الحساب (خزينة/بنك) ---</option>
+                            {% for acc in offset_accounts %}
+                            <option value="{{ acc.pk }}">{{ acc.code }} — {{ acc.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'assets:asset-detail' asset.pk %}" class="btn btn-light">إلغاء</a>
+                        <button type="submit" class="btn btn-danger px-4">تأكيد الاستبعاد نهائياً</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

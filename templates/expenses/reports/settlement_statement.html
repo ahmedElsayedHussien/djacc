@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}كشف تسوية عهدة{% endblock %}
+{% block header %}كشف تسوية عهدة تفصيلي{% endblock %}
+
+{% block content %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-8">
+                <label class="form-label fw-bold">اختر طلب التسوية</label>
+                <select name="settlement" class="form-select select2">
+                    <option value="">اختر من القائمة...</option>
+                    {% for s in settlements %}
+                    <option value="{{ s.id }}" {% if selected_settlement == s.id %}selected{% endif %}>
+                        {{ s.custody.employee.username }} - {{ s.custody.number }} - تاريخ: {{ s.date }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-file-earmark-text me-2"></i>عرض كشف التسوية</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if data %}
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm border-0 bg-light">
+            <div class="card-body text-center">
+                <h6 class="text-muted mb-2">قيمة العهدة الأصلية</h6>
+                <h3 class="fw-bold text-dark">{{ data.settlement.custody.amount|floatformat:2|intcomma }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm border-0 bg-soft-info">
+            <div class="card-body text-center">
+                <h6 class="text-muted mb-2">إجمالي فواتير المصاريف</h6>
+                <h3 class="fw-bold text-info">{{ data.settlement.expenses_amount|floatformat:2|intcomma }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm border-0 bg-soft-success">
+            <div class="card-body text-center">
+                <h6 class="text-muted mb-2">المبلغ المرتجع للخزينة</h6>
+                <h3 class="fw-bold text-success">{{ data.settlement.returned_amount|floatformat:2|intcomma }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0" style="border-radius: 15px;">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-list-task me-2 text-primary"></i>تفاصيل فواتير التسوية</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">رقم المصروف</th>
+                        <th>التصنيف / البيان</th>
+                        <th class="text-end pe-4">الإجمالي</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for exp in data.expenses %}
+                    <tr>
+                        <td class="ps-4">{{ exp.number }}</td>
+                        <td>
+                            <span class="fw-bold">{{ exp.category.name }}</span><br>
+                            <small class="text-muted">{{ exp.description }}</small>
+                        </td>
+                        <td class="text-end pe-4 fw-bold">{{ exp.total|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3" class="text-center py-4 text-muted">لا توجد فواتير مدرجة في هذه التسوية.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

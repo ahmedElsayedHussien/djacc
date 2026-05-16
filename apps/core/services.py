@@ -120,9 +120,13 @@ class JournalService:
     @staticmethod
     @transaction.atomic
     def post_opening_balances(fiscal_year, created_by) -> JournalEntry:
-        """يحول initial_balance لكل حساب إلى قيد افتتاحي متزن باستخدام حساب الأرصدة الافتتاحية (35)"""
+        """يحول initial_balance لكل حساب إلى قيد افتتاحي متزن باستخدام حساب الأرصدة الافتتاحية (35)
+        
+        ✅ آمن للتكرار: يحذف القيد الافتتاحي القديم تلقائياً قبل إنشاء الجديد لمنع الازدواجية.
+        """
         from .models import Account
         from decimal import Decimal
+        from .services import AuditService
 
         accounts = Account.objects.filter(is_leaf=True, initial_balance__gt=0)
         if not accounts.exists():
@@ -173,6 +177,12 @@ class JournalService:
                     'credit': Decimal(0),
                     'description': 'رصيد افتتاحي وسيط (للموازنة)'
                 })
+
+        # ✅ حذف أي قيد افتتاحي سابق لهذه السنة المالية لمنع التكرار والازدواجية
+        JournalEntry.objects.filter(
+            fiscal_year=fiscal_year,
+            entry_type=JournalEntry.EntryType.OPENING
+        ).delete()
 
         entry = JournalService.create_entry(
             date_val=fiscal_year.start_date,
@@ -309,7 +319,7 @@ class AccountService:
                 ('114', 'سلف وعهد وذمم', AccountType.ASSET, '11', False),
                   ('1141', 'ذمم مناديب المبيعات', AccountType.ASSET, '114', False),
                   ('1142', 'عهد الموظفين', AccountType.ASSET, '114', False),
-                  ('1143', 'سلف الموظفين', AccountType.ASSET, '114', False), 
+                  ('1143', 'سلف الموظفين والقروض', AccountType.ASSET, '114', True), 
                 ('115', 'أوراق قبض', AccountType.ASSET, '11', False),
                   ('1151', 'شيكات تحت التحصيل', AccountType.ASSET, '115', True),
                 ('116', 'أرصدة مدينة أخرى', AccountType.ASSET, '11', False), 
@@ -327,9 +337,14 @@ class AccountService:
                 ('211', 'الذمم الدائنة', AccountType.LIABILITY, '21', False),
                   ('2111', 'الموردون', AccountType.LIABILITY, '211', False),
                 ('212', 'الضرائب المستحقة', AccountType.LIABILITY, '21', False),
-                  ('2121', 'ضريبة القيمة المضافة', AccountType.LIABILITY, '212', True),
+                  ('2121', 'ضريبة القيمة المضافة', AccountType.LIABILITY, '212', False),
+                    ('21211', 'ضريبة القيمة المضافة - مخرجات (مبيعات)', AccountType.LIABILITY, '2121', True),
+                    ('21212', 'ضريبة القيمة المضافة - مدخلات (مشتريات)', AccountType.LIABILITY, '2121', True),
+                    ('21213', 'ضريبة القيمة المضافة - حساب التسوية', AccountType.LIABILITY, '2121', True),
                   ('2122', 'ضريبة الدخل المستحقة', AccountType.LIABILITY, '212', True),
                   ('2123', 'ضريبة خصم وتحصيل - دائنة', AccountType.LIABILITY, '212', True),
+                  ('2124', 'ضريبة الدمغة', AccountType.LIABILITY, '212', True),
+                  ('2125', 'مصلحة الضرائب - كسب عمل', AccountType.LIABILITY, '212', True),
                 ('213', 'مصروفات مستحقة', AccountType.LIABILITY, '21', False),
                   ('2131', 'عمولات مناديب مستحقة', AccountType.LIABILITY, '213', True),
                   ('2132', 'رواتب وأجور مستحقة', AccountType.LIABILITY, '213', True), 
@@ -365,7 +380,7 @@ class AccountService:
                 ('414', 'خصم مبيعات ممنوح', AccountType.REVENUE, '41', True), 
               ('42', 'إيرادات أخرى', AccountType.REVENUE, '4', False),
                 ('421', 'فوائد بنكية دائنة', AccountType.REVENUE, '42', True), 
-                ('422', 'خصم مكتسب', AccountType.REVENUE, '42', True), 
+                ('422', 'خصم مكتسب (مشتريات)', AccountType.REVENUE, '42', True), 
                 ('423', 'أرباح فروق عملة', AccountType.REVENUE, '42', True),
                 ('424', 'فروقات تسوية وزيادة المخزون', AccountType.REVENUE, '42', True),
 
@@ -393,19 +408,30 @@ class AccountService:
                 ('541', 'خسائر فروق عملة', AccountType.EXPENSE, '54', True),
                 ('542', 'عجز وتوالف المخزون', AccountType.EXPENSE, '54', True),
                 ('543', 'ديون معدومة', AccountType.EXPENSE, '54', True),
+              ('55', 'ضرائب الدخل', AccountType.EXPENSE, '5', False),
+                ('551', 'مصروف ضريبة الدخل', AccountType.EXPENSE, '55', True),
         ]
 
         created_count = 0
         accounts_map = {}
         for code, name, acc_type, parent_code, is_leaf in DEFAULT_ACCOUNTS:
             parent = accounts_map.get(parent_code) if parent_code else None
+            
+            # تحديد الطبيعة المحاسبية بناءً على نوع الحساب والاستثناءات
+            expected_nature = 'debit' if acc_type in [AccountType.ASSET, AccountType.EXPENSE] else 'credit'
+            if any(code.startswith(c) for c in ['129', '1132']):
+                expected_nature = 'credit'
+            elif any(code.startswith(c) for c in ['413', '414', '36']):
+                expected_nature = 'debit'
+
             acc, created = Account.objects.get_or_create(
                 code=code,
                 defaults={
                     'name': name,
                     'account_type': acc_type,
                     'parent': parent,
-                    'is_leaf': is_leaf
+                    'is_leaf': is_leaf,
+                    'initial_balance_type': expected_nature
                 }
             )
             if not created:
@@ -414,24 +440,38 @@ class AccountService:
                 acc.parent = parent
                 acc.account_type = acc_type
                 acc.is_leaf = is_leaf
+                acc.initial_balance_type = expected_nature
                 acc.save()
                 
             accounts_map[code] = acc
             if created:
                 created_count += 1
         
-        # إنشاء الضرائب الافتراضية
+        # إنشاء الضرائب الافتراضية (مع التحكم في أماكن ظهورها)
         taxes = [
-            ('ضريبة القيمة المضافة 14%', 'vat', 14.00, '2121'),
-            ('ضريبة أ.ت.ص 1% (مبيعات)', 'wht', 1.00, '1122'),
-            ('ضريبة أ.ت.ص 1% (مشتريات)', 'wht', 1.00, '2123'),
+            # ضرائب الفواتير
+            ('ضريبة القيمة المضافة 14% (مخرجات)', 'vat', 14.00, '21211', True, False),
+            ('ضريبة القيمة المضافة 14% (مدخلات)', 'vat', 14.00, '21212', True, False),
+            ('ضريبة أ.ت.ص 1% (مبيعات)', 'wht', 1.00, '1122', True, False),
+            ('ضريبة أ.ت.ص 1% (مشتريات)', 'wht', 1.00, '2123', True, False),
+            ('ضريبة الدمغة 1%', 'stamp', 1.00, '2124', True, False),
+            
+            # ضرائب الرواتب
+            ('ضريبة كسب العمل', 'salary', 0.00, '2125', False, True),
+            ('تأمينات اجتماعية مستحقة', 'insurance', 11.00, '2133', False, True),
         ]
-        for name, cat, rate, acc_code in taxes:
+        for name, cat, rate, acc_code, in_inv, in_pay in taxes:
             try:
                 acc = Account.objects.get(code=acc_code)
                 TaxType.objects.get_or_create(
                     name=name,
-                    defaults={'category': cat, 'rate': rate, 'account': acc}
+                    defaults={
+                        'category': cat, 
+                        'rate': rate, 
+                        'account': acc,
+                        'appear_in_invoices': in_inv,
+                        'appear_in_payroll': in_pay
+                    }
                 )
             except Account.DoesNotExist:
                 continue
@@ -448,7 +488,6 @@ class AccountService:
         
         common_accounts = [
             ('111101', 'الخزينة الرئيسية', AccountType.ASSET, '1111'),
-            ('111201', 'البنك الأهلي المصري', AccountType.ASSET, '1112'),
             ('5231', 'مصروفات كهرباء', AccountType.EXPENSE, '523'),
             ('5241', 'أدوات مكتبية ومطبوعات', AccountType.EXPENSE, '524'),
             ('5242', 'ضيافة وبوفيه', AccountType.EXPENSE, '524'),
@@ -476,6 +515,59 @@ class AccountService:
                 
         return created_count
 
+    @staticmethod
+    @transaction.atomic
+    def setup_default_cost_centers():
+        """
+        تنشئ/تحدث مراكز التكلفة الـ 13 الأساسية دون حذف أي مراكز يدوية أخرى
+        لضمان مرونة النظام في المستقبل.
+        """
+        from .models import CostCenter
+        
+        DEFAULT_CC = [
+            ('10', 'الإدارة العامة', CostCenter.CenterType.ADMIN, None, True),
+            ('20', 'المبيعات', CostCenter.CenterType.MARKETING, None, True),
+            ('30', 'التسويق', CostCenter.CenterType.MARKETING, None, True),
+            ('40', 'التشغيل والعمليات', CostCenter.CenterType.PRODUCTION, None, True),
+            ('50', 'الشئون المالية والحسابات', CostCenter.CenterType.ADMIN, None, True),
+            ('60', 'الموارد البشرية', CostCenter.CenterType.ADMIN, None, True),
+            ('70', 'تقنية المعلومات', CostCenter.CenterType.ADMIN, None, True),
+            ('80', 'المشتريات والمخازن', CostCenter.CenterType.PRODUCTION, None, True),
+            ('90', 'خدمة العملاء والدعم الفني', CostCenter.CenterType.SERVICE, None, True),
+            ('100', 'الصيانة والمرافق', CostCenter.CenterType.SERVICE, None, True),
+            ('110', 'السيارات', CostCenter.CenterType.SERVICE, None, True),
+            ('120', 'المعدات', CostCenter.CenterType.SERVICE, None, True),
+            ('130', 'الإيجارات', CostCenter.CenterType.SERVICE, None, True),
+        ]
+        
+        # إنشاء/تحديث المراكز الـ 13 (بدون حذف أي مراكز أخرى)
+        created_count = 0
+        cc_map = {}
+        for code, name, c_type, parent_code, is_leaf in DEFAULT_CC:
+            parent = cc_map.get(parent_code) if parent_code else None
+            cc, created = CostCenter.objects.get_or_create(
+                code=code,
+                defaults={
+                    'name': name,
+                    'center_type': c_type,
+                    'parent': parent,
+                    'is_leaf': is_leaf,
+                    'is_active': True
+                }
+            )
+            if not created:
+                # تحديث البيانات الأساسية فقط لضمان سلامة الهيكل
+                cc.name = name
+                cc.center_type = c_type
+                cc.is_leaf = is_leaf
+                cc.save()
+                
+            cc_map[code] = cc
+            if created:
+                created_count += 1
+                
+        return created_count
+
 class AuditService:
     @staticmethod
     def log(user, action, obj, notes='', changes=None):
@@ -493,12 +585,30 @@ class AuditService:
 
 class DocumentService:
     @staticmethod
-    def generate_number(model_class, prefix: str) -> str:
+    def generate_number(model_class, prefix: str, field_name: str = 'number') -> str:
         """
-        Generates a unique document number using select_for_update to avoid race conditions.
-        Example: generate_number(SalesInvoice, 'SINV') -> 'SINV-00001'
+        Generates a unique document number using date-based prefix + sequential counter.
+        Avoids ID dependency which causes issues after deletions.
+        Example: generate_number(SalesInvoice, 'SINV') -> 'SINV-20260508-00001'
         """
+        from django.utils import timezone
+        today = timezone.now().strftime('%Y%m%d')
+        prefix_with_date = f'{prefix}-{today}'
+
         with transaction.atomic():
-            last = model_class.objects.select_for_update().order_by('-id').first()
-            next_id = (last.id + 1) if last else 1
-            return f'{prefix}-{next_id:05d}'
+            filter_kwargs = {f'{field_name}__startswith': prefix_with_date}
+            last = model_class.objects.filter(
+                **filter_kwargs
+            ).select_for_update().order_by(f'-{field_name}').first()
+
+            if last:
+                val = getattr(last, field_name)
+                try:
+                    seq = int(val.split('-')[-1])
+                    next_seq = seq + 1
+                except (ValueError, IndexError):
+                    next_seq = 1
+            else:
+                next_seq = 1
+
+            return f'{prefix_with_date}-{next_seq:05d}'

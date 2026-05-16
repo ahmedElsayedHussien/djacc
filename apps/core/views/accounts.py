@@ -13,9 +13,10 @@ class AccountInitializeView(LoginRequiredMixin, PermissionRequiredMixin, View):
     
     def post(self, request, *args, **kwargs):
         count = AccountService.initialize_default_chart()
-        # Also run sub-accounts
+        # Also run sub-accounts and cost centers
         sub_count = AccountService.setup_common_sub_accounts()
-        messages.success(request, f'تم إنشاء/تحديث {count + sub_count} حساب في شجرة الحسابات بنجاح.')
+        cc_count = AccountService.setup_default_cost_centers()
+        messages.success(request, f'تم إنشاء/تحديث {count + sub_count} حساب و {cc_count} مركز تكلفة بنجاح.')
         return redirect('core:account-list')
 
 class AccountListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
@@ -42,45 +43,79 @@ class AccountListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         ctx['account_types'] = AccountType.choices
         
-        # Calculate current balances for all accounts in the current view
-        # We'll use a dictionary for fast lookup in the template
-        accounts = ctx['accounts']
-        account_ids = [acc.id for acc in accounts]
+        # Fetch all accounts and their data to build an in-memory tree for fast roll-up
+        all_accounts_qs = Account.objects.all().values(
+            'id', 'parent_id', 'account_type', 'initial_balance', 'initial_balance_type', 'is_leaf'
+        )
         
-        movements = JournalLine.objects.filter(
-            account_id__in=account_ids,
+        # 1. Get raw movements for ALL accounts
+        all_movements = JournalLine.objects.filter(
             entry__is_posted=True
         ).values('account_id').annotate(
             total_debit=Sum('debit'),
             total_credit=Sum('credit')
         )
+        mov_map = {m['account_id']: {'d': m['total_debit'] or Decimal(0), 'c': m['total_credit'] or Decimal(0)} for m in all_movements}
         
-        movement_map = {m['account_id']: m for m in movements}
-        
-        # Identify accounts that already have an opening journal entry
+        # 2. Get accounts that have an opening entry
         from ..models import JournalEntry
-        accounts_with_opening = set(JournalLine.objects.filter(
-            account_id__in=account_ids,
+        opening_acc_ids = set(JournalLine.objects.filter(
             entry__entry_type=JournalEntry.EntryType.OPENING,
             entry__is_posted=True
         ).values_list('account_id', flat=True))
         
-        for acc in accounts:
-            m = movement_map.get(acc.id, {'total_debit': Decimal('0'), 'total_credit': Decimal('0')})
-            debit = m['total_debit'] or Decimal('0')
-            credit = m['total_credit'] or Decimal('0')
-            
-            # Add initial balance only if no opening entry exists
-            if acc.id not in accounts_with_opening:
-                if acc.initial_balance_type == 'debit':
-                    debit += acc.initial_balance
+        # 3. Compute base balances for all leaf nodes
+        leaf_bals = {}
+        acc_dict = {}
+        parent_map = {}
+        
+        for a in all_accounts_qs:
+            acc_dict[a['id']] = a
+            pid = a['parent_id']
+            if pid:
+                parent_map.setdefault(pid, []).append(a['id'])
+                
+            if a['is_leaf']:
+                debit = mov_map.get(a['id'], {}).get('d', Decimal(0))
+                credit = mov_map.get(a['id'], {}).get('c', Decimal(0))
+                
+                if a['id'] not in opening_acc_ids:
+                    if a['initial_balance_type'] == 'debit':
+                        debit += a['initial_balance']
+                    else:
+                        credit += a['initial_balance']
+                
+                if a['account_type'] in ['asset', 'expense']:
+                    bal = debit - credit
                 else:
-                    credit += acc.initial_balance
-            
-            if acc.account_type in ['asset', 'expense']:
-                acc.current_balance = debit - credit
+                    bal = credit - debit
+                leaf_bals[a['id']] = bal
+
+        # 4. Recursive function to get rolled-up balance
+        # We cache results to avoid recalculating branches
+        calc_cache = {}
+        def get_rolled_up_balance(acc_id):
+            if acc_id in calc_cache:
+                return calc_cache[acc_id]
+                
+            a = acc_dict.get(acc_id)
+            if not a:
+                return Decimal(0)
+                
+            if a['is_leaf']:
+                res = leaf_bals.get(acc_id, Decimal(0))
             else:
-                acc.current_balance = credit - debit
+                res = Decimal(0)
+                for cid in parent_map.get(acc_id, []):
+                    res += get_rolled_up_balance(cid)
+                    
+            calc_cache[acc_id] = res
+            return res
+            
+        # 5. Assign to the paginated accounts in the view
+        accounts = ctx['accounts']
+        for acc in accounts:
+            acc.current_balance = get_rolled_up_balance(acc.id)
         
         # Get active fiscal year for the "Generate Opening Entry" button
         from ..models import FiscalYear

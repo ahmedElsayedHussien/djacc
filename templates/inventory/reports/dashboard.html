@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}لوحة تقارير المخازن{% endblock %}
+{% block header %}لوحة تقارير وإحصائيات المخازن{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- First Row: Live Balances -->
+    <h4 class="mb-4 fw-bold text-primary"><i class="bi bi-broadcast me-2"></i>أولاً: تقارير الأرصدة اللحظية (Live Balances)</h4>
+    <div class="row g-4 mb-5">
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm report-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="icon-box bg-soft-primary text-primary me-3">
+                            <i class="bi bi-box-seam"></i>
+                        </div>
+                        <h5 class="card-title mb-0 fw-bold">جرد المخزون الحالي</h5>
+                    </div>
+                    <p class="text-muted small">عرض الكميات المتاحة حالياً لكل صنف في كل مخزن.</p>
+                    <a href="{% url 'reports:stock_status' %}" class="btn btn-sm btn-primary rounded-pill">فتح التقرير</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm report-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="icon-box bg-soft-success text-success me-3">
+                            <i class="bi bi-currency-dollar"></i>
+                        </div>
+                        <h5 class="card-title mb-0 fw-bold">تقييم المخزون المالي</h5>
+                    </div>
+                    <p class="text-muted small">معرفة قيمة البضاعة المملوكة للشركة لمطابقتها مع الأستاذ العام.</p>
+                    <a href="{% url 'reports:inventory_valuation' %}" class="btn btn-sm btn-success rounded-pill">فتح التقرير</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm report-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="icon-box bg-soft-danger text-danger me-3">
+                            <i class="bi bi-exclamation-octagon"></i>
+                        </div>
+                        <h5 class="card-title mb-0 fw-bold">نواقص المخزون</h5>
+                    </div>
+                    <p class="text-muted small">تنبيه بالأصناف التي أوشكت على النفاذ (تحت حد الطلب).</p>
+                    <a href="{% url 'reports:reorder_alert' %}" class="btn btn-sm btn-danger rounded-pill">فتح التقرير</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Second Row: Historical & Audit -->
+    <h4 class="mb-4 fw-bold text-secondary"><i class="bi bi-clock-history me-2"></i>ثانياً: تقارير الحركات والرقابة (Audit)</h4>
+    <div class="row g-4 mb-5">
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm report-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="icon-box bg-soft-info text-info me-3">
+                            <i class="bi bi-journal-text"></i>
+                        </div>
+                        <h5 class="card-title mb-0 fw-bold">كارت الصنف التفصيلي</h5>
+                    </div>
+                    <p class="text-muted small">تتبع كل حركة تمت على صنف معين خلال فترة زمنية.</p>
+                    <a href="{% url 'reports:item_ledger' %}" class="btn btn-sm btn-info text-white rounded-pill">فتح التقرير</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm report-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="icon-box bg-soft-warning text-warning me-3">
+                            <i class="bi bi-tools"></i>
+                        </div>
+                        <h5 class="card-title mb-0 fw-bold">التوالف والتسويات</h5>
+                    </div>
+                    <p class="text-muted small">مراقبة أداء أمناء المخازن ومعرفة الخسائر الناتجة عن التلفيات.</p>
+                    <a href="{% url 'reports:wastage_adjustments' %}" class="btn btn-sm btn-warning rounded-pill">فتح التقرير</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm report-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="icon-box bg-soft-dark text-dark me-3">
+                            <i class="bi bi-graph-up-arrow"></i>
+                        </div>
+                        <h5 class="card-title mb-0 fw-bold">معدل دوران المخزون</h5>
+                    </div>
+                    <p class="text-muted small">مؤشر يقيس سرعة بيع الشركة لمخزونها خلال العام.</p>
+                    <a href="{% url 'reports:inventory_turnover' %}" class="btn btn-sm btn-dark rounded-pill">فتح التقرير</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Third Row: Vans & Reps -->
+    <h4 class="mb-4 fw-bold text-warning"><i class="bi bi-truck me-2"></i>ثالثاً: تقارير المناديب والتوزيع</h4>
+    <div class="row g-4">
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm report-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="icon-box bg-soft-warning text-warning me-3">
+                            <i class="bi bi-truck-front"></i>
+                        </div>
+                        <h5 class="card-title mb-0 fw-bold">عهدة المندوب (السيارة)</h5>
+                    </div>
+                    <p class="text-muted small">جرد لحظي للبضاعة الموجودة في سيارة المندوب حالياً.</p>
+                    <a href="{% url 'reports:van_inventory' %}" class="btn btn-sm btn-warning rounded-pill">فتح التقرير</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .report-card { transition: transform 0.2s; border-radius: 15px; }
+    .report-card:hover { transform: translateY(-5px); }
+    .icon-box { 
+        width: 48px; 
+        height: 48px; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        border-radius: 12px; 
+        font-size: 20px;
+    }
+    .bg-soft-primary { background: #e7f1ff; }
+    .bg-soft-success { background: #e6fcf5; }
+    .bg-soft-danger { background: #fff5f5; }
+    .bg-soft-info { background: #e7fafc; }
+    .bg-soft-warning { background: #fff9db; }
+    .bg-soft-dark { background: #f8f9fa; }
+</style>
+
+{% endblock %}

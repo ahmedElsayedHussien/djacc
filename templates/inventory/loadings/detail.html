@@ -67,17 +67,20 @@
                             {% for line in order.lines.all %}
                             <tr>
                                 <td>{{ line.item.name }}</td>
-                                <td class="text-center fw-bold">{{ line.requested_qty }}</td>
+                                <td class="text-center fw-bold">{{ line.requested_qty|floatformat:0 }}</td>
+
                                 <td class="text-center">
                                     {% if line.approved_qty is not None %}
-                                        <span class="text-primary fw-bold">{{ line.approved_qty }}</span>
+                                        <span class="text-primary fw-bold">{{ line.approved_qty|floatformat:0 }}</span>
+
                                     {% else %}
                                         <span class="text-muted">---</span>
                                     {% endif %}
                                 </td>
                                 <td class="text-center">
                                     {% if line.issued_qty is not None %}
-                                        <span class="text-success fw-bold">{{ line.issued_qty }}</span>
+                                        <span class="text-success fw-bold">{{ line.issued_qty|floatformat:0 }}</span>
+
                                     {% else %}
                                         <span class="text-muted">---</span>
                                     {% endif %}

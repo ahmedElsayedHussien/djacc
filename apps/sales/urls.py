@@ -59,6 +59,8 @@ urlpatterns = [
     
     # Sectors
     path('sectors/', views.CustomerSectorListView.as_view(), name='sector-list'),
+    path('sectors/create/', views.CustomerSectorCreateView.as_view(), name='sector-create'),
+    path('sectors/<int:pk>/edit/', views.CustomerSectorUpdateView.as_view(), name='sector-edit'),
     
     # Price Lists
     path('price-lists/', views.PriceListListView.as_view(), name='pricelist-list'),
@@ -70,7 +72,8 @@ urlpatterns = [
     path('my-stock/', views.RepStockStatusView.as_view(), name='rep-stock'),
 
     # Reports
-    path('reports/', report_views.SalesDashboardView.as_view(), name='report-dashboard'),
+    path('reports/', report_views.SalesReportDashboardView.as_view(), name='report-dashboard'),
+
     path('reports/sales-by-item/', report_views.SalesByItemReportView.as_view(), name='report-by-item'),
     path('reports/sales-by-rep/', report_views.SalesByRepReportView.as_view(), name='report-by-rep'),
     path('reports/sales-by-customer/', report_views.SalesByCustomerReportView.as_view(), name='report-by-customer'),
@@ -78,4 +81,11 @@ urlpatterns = [
     path('reports/detailed/', report_views.DetailedSalesReportView.as_view(), name='report-detailed'),
     path('reports/target-comparison/', report_views.SalesTargetComparisonView.as_view(), name='report-target-comparison'),
     path('reports/aging/', report_views.SalesAgingReportView.as_view(), name='report-aging'),
+    path('reports/net-profitability/', report_views.NetSalesProfitabilityReportView.as_view(), name='report-net-profitability'),
+    path('reports/product-profitability/', report_views.ProductProfitabilityReportView.as_view(), name='report-product-profitability'),
+    path('reports/by-sector/', report_views.SalesBySectorReportView.as_view(), name='report-by-sector'),
+    path('reports/rep-performance-enhanced/', report_views.RepPerformanceEnhancedReportView.as_view(), name='report-rep-performance-enhanced'),
+    path('reports/aging-summary/', report_views.CustomerAgingSummaryReportView.as_view(), name='report-aging-summary'),
+    path('reports/quotation-analysis/', report_views.QuotationAnalysisReportView.as_view(), name='report-quotation-analysis'),
 ]
+

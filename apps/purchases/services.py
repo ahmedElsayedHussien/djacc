@@ -34,16 +34,45 @@ class SupplierService:
             initial_balance=validated_data.get('initial_balance', 0) or 0,
             initial_balance_type=validated_data.get('initial_balance_type', 'credit'),
         )
+        
+        # Generate supplier code if not provided
+        supplier_code = validated_data.get('code')
+        if not supplier_code:
+            supplier_code = SupplierService.generate_supplier_code()
+
         supplier_data = {k: v for k, v in validated_data.items() if k not in ('code', 'account', 'initial_balance', 'initial_balance_type')}
         return Supplier.objects.create(
             account=account, 
-            code=validated_data.get('code'),
+            code=supplier_code,
             **supplier_data
         )
 
     @staticmethod
+    def generate_supplier_code():
+        from .models import Supplier
+        last_supplier = Supplier.objects.filter(code__startswith='vend-').order_by('-code').first()
+        if last_supplier:
+            try:
+                last_num = int(last_supplier.code.split('-')[1])
+                next_num = last_num + 1
+            except (IndexError, ValueError):
+                next_num = Supplier.objects.count() + 1
+        else:
+            next_num = Supplier.objects.count() + 1
+        
+        code = f"vend-{next_num:06d}"
+        while Supplier.objects.filter(code=code).exists():
+            next_num += 1
+            code = f"vend-{next_num:06d}"
+        return code
+
+    @staticmethod
     @transaction.atomic
     def update_supplier(supplier: Supplier, validated_data: dict) -> Supplier:
+        # Lock the supplier and their linked account record
+        supplier = Supplier.objects.select_for_update().get(pk=supplier.pk)
+        supplier.account = Account.objects.select_for_update().get(pk=supplier.account.pk)
+        
         update_account = False
         if 'name' in validated_data and validated_data['name'] != supplier.name:
             supplier.account.name = validated_data['name']
@@ -71,12 +100,9 @@ class PurchaseService:
     @staticmethod
     @transaction.atomic
     def post_invoice(invoice: PurchaseInvoice, posted_by) -> JournalEntry:
-        """
-        Purchase Invoice Journal Entry:
-        DR  Inventory Account (per line)     → quantity * unit_cost + non-deductible taxes
-        DR  VAT (deductible)                 → tax_amount
-        CR  Supplier (Payable)               → invoice.total
-        """
+        # Lock the invoice record to prevent concurrent posting/editing
+        invoice = PurchaseInvoice.objects.select_for_update().get(pk=invoice.pk)
+        
         if invoice.status == PurchaseInvoice.Status.POSTED:
             raise ValueError("هذه الفاتورة مرحلة بالفعل")
 
@@ -96,31 +122,68 @@ class PurchaseService:
             if not acc:
                 raise ValueError(f"يرجى تحديد حساب المخزون للصنف {line.item.name} أو للمخزن {line.warehouse.name}")
             
-            line_amount = line.quantity * line.unit_cost
+            # Calculate net line amount (Price - Discount) to ensure balanced journal entry
+            # and accurate average cost calculation in inventory.
+            # Professional logic for Purchases: Capitalize Table/Customs, VAT on (Subtotal + Table)
+            line_net = line.quantity * line.unit_cost * (Decimal('1') - (Decimal(str(line.discount_percent)) / Decimal('100')))
+            
+            # Find Table Tax & Customs
+            table_tax_val = Decimal('0')
+            customs_val = Decimal('0')
+            taxes_to_process = []
+            if line.tax_type: taxes_to_process.append({'type': line.tax_type, 'rate': line.tax_percent})
+            if line.tax_type2: taxes_to_process.append({'type': line.tax_type2, 'rate': line.tax_percent2})
+            
+            for t in taxes_to_process:
+                rate = t['rate'] if t['rate'] is not None else t['type'].rate
+                if t['type'].category == 'table':
+                    table_tax_val += line_net * (Decimal(str(rate)) / Decimal('100'))
+                elif t['type'].category == 'customs':
+                    customs_val += line_net * (Decimal(str(rate)) / Decimal('100'))
+            
+            # Inventory Cost = Net + Table + Customs (Capitalization)
+            inv_cost = line_net + table_tax_val + customs_val
             if acc.id not in inv_account_totals:
-                inv_account_totals[acc.id] = {'account': acc, 'amount': 0}
-            inv_account_totals[acc.id]['amount'] += line_amount
+                inv_account_totals[acc.id] = {'account': acc, 'amount': Decimal('0')}
+            inv_account_totals[acc.id]['amount'] += inv_cost
+            
+            # Other taxes (VAT, WHT)
+            for t in taxes_to_process:
+                tx_type = t['type']
+                rate = t['rate'] if t['rate'] is not None else tx_type.rate
+                
+                if tx_type.category == 'vat':
+                    # VAT is on (Net + Table Tax)
+                    val = (line_net + table_tax_val) * (Decimal(str(rate)) / Decimal('100'))
+                elif tx_type.category in ['table', 'customs']:
+                    continue # Already capitalized
+                else:
+                    # Others like WHT are on Net
+                    val = line_net * (Decimal(str(rate)) / Decimal('100'))
+                
+                if val == 0: continue
+                
+                tax_acc = tx_type.account
+                if not tax_acc: continue
+                if tax_acc.id not in tax_account_totals:
+                    tax_account_totals[tax_acc.id] = {'account': tax_acc, 'amount': Decimal('0'), 'category': tx_type.category}
+                tax_account_totals[tax_acc.id]['amount'] += val
 
-            # Taxes
-            for tx_field in ['tax_type', 'tax_type2']:
-                tx_type = getattr(line, tx_field)
-                if tx_type:
-                    tx_rate = getattr(line, f"{tx_field.replace('_type', '')}_percent") or tx_type.rate
-                    tx_val = line_amount * (tx_rate / 100)
-                    
-                    if tx_type.category in ['table', 'customs']:
-                        # Capitalize: Add to inventory cost on the same account
-                        inv_account_totals[acc.id]['amount'] += tx_val
-                    else:
-                        # Record as separate tax account
-                        tax_acc = tx_type.account
-                        if not tax_acc: continue
-                        if tax_acc.id not in tax_account_totals:
-                            tax_account_totals[tax_acc.id] = {'account': tax_acc, 'amount': 0, 'category': tx_type.category}
-                        tax_account_totals[tax_acc.id]['amount'] += tx_val
+        # Adjust WHT to be credit in Purchases
+        for tax_id, info in tax_account_totals.items():
+            is_credit = (info['category'] in ['wht']) # WHT in purchases is a credit (deduction from supplier)
+            lines.append({
+                'account': info['account'],
+                'debit': 0 if is_credit else info['amount'],
+                'credit': info['amount'] if is_credit else 0,
+                'description': f"ضريبة {info['account'].name} - فاتورة {invoice.number}",
+                'cost_center': invoice.cost_center
+            })
 
         # 2. Construct Journal Lines
-        # CR Supplier
+        # In Purchases: Even for cash, we pass through the Supplier account (Credit)
+        # to maintain a full history of transactions in the supplier ledger.
+        # An automatic payment will be generated later if it's a cash invoice.
         lines.append({
             'account': invoice.supplier.account, 
             'debit': 0, 
@@ -164,6 +227,36 @@ class PurchaseService:
         invoice.status = PurchaseInvoice.Status.POSTED
         invoice.save()
         
+        # 3. Handle Auto-Payment for Cash Purchases
+        if invoice.payment_type == PurchaseInvoice.PaymentType.CASH:
+            from .models import SupplierPayment, PaymentAllocation
+            from apps.core.services import DocumentService
+            
+            # Determine payment method
+            pm = 'cash'
+            if invoice.payment_method == 'bank':
+                pm = 'bank'
+
+            payment = SupplierPayment.objects.create(
+                number=DocumentService.generate_number(SupplierPayment, 'PAY'),
+                date=invoice.date,
+                supplier=invoice.supplier,
+                amount=invoice.total,
+                payment_method=pm,
+                cash_box=invoice.cash_box,
+                bank_account=invoice.bank_account,
+                created_by=posted_by,
+                reference=f"Settlement for {invoice.number}",
+            )
+            # Create allocation
+            PaymentAllocation.objects.create(
+                payment=payment,
+                invoice=invoice,
+                amount=invoice.total
+            )
+            # Post the payment
+            PurchaseService.record_payment(payment, posted_by)
+
         # ✅ Fix: InventoryService increase_stock should also handle base quantities if needed, 
         # but let's ensure we use the right quantity here.
         InventoryService.increase_stock(invoice)
@@ -203,7 +296,7 @@ class PurchaseService:
                 item=line.item,
                 warehouse=line.warehouse,
                 movement_type=StockMovement.MovementType.ADJUSTMENT_OUT,
-                quantity=-line.base_quantity, # ✅ Fix #1: استخدام الكمية الأساسية
+                quantity=-(line.base_quantity or line.quantity), # ✅ Fix: Fallback if base_quantity is 0
                 unit_cost=line.unit_cost,
                 source=invoice,
                 reference=f'Reverse {invoice.number}'
@@ -370,7 +463,7 @@ class PurchaseService:
                 item=line.item,
                 warehouse=line.warehouse,
                 movement_type=StockMovement.MovementType.PURCHASE_RETURN,
-                quantity=-line.base_quantity, # ✅ Fix: استخدام الكمية الأساسية
+                quantity=-(line.base_quantity or line.quantity), # ✅ Fix: Fallback if base_quantity is 0
                 unit_cost=line.unit_cost,
                 source=purchase_return,
                 reference=purchase_return.number,

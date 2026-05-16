@@ -10,11 +10,7 @@
                 <form method="post" novalidate>
                     {% csrf_token %}
                     <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label">كود الصنف *</label>
-                            {{ form.code }}
-                        </div>
-                        <div class="col-md-8">
+                        <div class="col-md-12">
                             <label class="form-label">اسم الصنف *</label>
                             {{ form.name }}
                         </div>
@@ -29,41 +25,61 @@
 
                         <div class="col-12"><hr><h6>إعدادات الوحدات</h6></div>
                         
-                        <div class="col-md-4">
+                        <div class="col-md-12 mb-2">
                             <label class="form-label">الوحدة الأساسية (الأصغر) *</label>
                             {{ form.base_unit }}
+                            <div class="form-text small text-muted">هذه هي الوحدة التي سيتم بها حساب الكميات في المخازن والتقارير المالية.</div>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label">وحدة المبيعات (اختياري)</label>
-                            {{ form.sales_unit }}
+
+                        <div class="col-md-6">
+                            <div class="p-2 border rounded bg-light">
+                                <h7 class="fw-bold d-block mb-2 text-primary">وحدة المبيعات</h7>
+                                <label class="form-label small">الوحدة</label>
+                                {{ form.sales_unit }}
+                                <label class="form-label small mt-2">معامل التحويل</label>
+                                {{ form.conversion_factor }}
+                                <div class="form-text x-small text-muted">مثال: إذا كانت الوحدة الأساسية "قطعة" ووحدة البيع "دستة"، المعامل يكون 12.</div>
+                            </div>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label">معامل التحويل (1 مبيعات = كم أساسية؟)</label>
-                            {{ form.conversion_factor }}
+
+                        <div class="col-md-6">
+                            <div class="p-2 border rounded bg-light">
+                                <h7 class="fw-bold d-block mb-2 text-success">وحدة المشتريات</h7>
+                                <label class="form-label small">الوحدة</label>
+                                {{ form.purchase_unit }}
+                                <label class="form-label small mt-2">معامل التحويل</label>
+                                {{ form.purchase_conversion_factor }}
+                                <div class="form-text x-small text-muted">كم "وحدة أساسية" موجودة داخل وحدة الشراء هذه؟</div>
+                            </div>
                         </div>
 
                         <div class="col-12"><hr><h6>الإعدادات المالية والتكلفة</h6></div>
 
                         <div class="col-md-6">
-                            <label class="form-label">طريقة التكلفة</label>
-                            {{ form.costing_method }}
+                            <label class="form-label">السعر الافتراضي</label>
+                            {{ form.standard_price }}
+                            <div class="form-text small text-muted">سعر بيع "الوحدة الأساسية" الافتراضي.</div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">حد الطلب (الحد الأدنى)</label>
                             {{ form.minimum_stock }}
+                            <div class="form-text small text-muted">ينبهك النظام عندما تصل كمية الصنف لهذا المستوى.</div>
                         </div>
 
                         <div class="col-md-4">
                             <label class="form-label">حساب المخزون (أصول)</label>
                             {{ form.inventory_account }}
+                            <div class="form-text x-small text-muted">يُستخدم لتسجيل قيمة البضاعة في الميزانية.</div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">حساب التكلفة (مصروف)</label>
                             {{ form.cogs_account }}
+                            <div class="form-text x-small text-muted">يُستخدم عند بيع الصنف لحساب تكلفة المبيعات.</div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">حساب المبيعات (إيراد)</label>
                             {{ form.sales_account }}
+                            <div class="form-text x-small text-muted">حساب الإيرادات الذي ستُسجل فيه قيمة المبيعات.</div>
                         </div>
                     </div>
                     
@@ -76,4 +92,46 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const baseUnit = document.getElementById('id_base_unit');
+        const salesUnit = document.getElementById('id_sales_unit');
+        const purchaseUnit = document.getElementById('id_purchase_unit');
+        const salesFactor = document.getElementById('id_conversion_factor');
+        const purchaseFactor = document.getElementById('id_purchase_conversion_factor');
+
+        function updateUnits() {
+            if (!baseUnit.value) return;
+
+            // Sales Unit Logic
+            if (salesUnit.value === baseUnit.value) {
+                salesFactor.value = 1;
+                salesFactor.setAttribute('readonly', true);
+                salesFactor.style.backgroundColor = '#e9ecef';
+            } else {
+                salesFactor.removeAttribute('readonly');
+                salesFactor.style.backgroundColor = '';
+            }
+
+            // Purchase Unit Logic
+            if (purchaseUnit.value === baseUnit.value) {
+                purchaseFactor.value = 1;
+                purchaseFactor.setAttribute('readonly', true);
+                purchaseFactor.style.backgroundColor = '#e9ecef';
+            } else {
+                purchaseFactor.removeAttribute('readonly');
+                purchaseFactor.style.backgroundColor = '';
+            }
+        }
+
+        [baseUnit, salesUnit, purchaseUnit].forEach(el => {
+            el.addEventListener('change', updateUnits);
+        });
+
+        updateUnits();
+    });
+</script>
 {% endblock %}

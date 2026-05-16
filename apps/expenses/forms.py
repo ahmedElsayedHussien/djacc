@@ -1,5 +1,6 @@
 from django import forms
 from .models import Expense, ExpenseCategory, Custody
+from apps.treasury.models import CashBox
 from apps.core.models import Account
 
 class ExpenseCategoryForm(forms.ModelForm):
@@ -9,6 +10,10 @@ class ExpenseCategoryForm(forms.ModelForm):
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'account': forms.Select(attrs={'class': 'form-select'}),
+        }
+        labels = {
+            'name': 'اسم الفئة',
+            'account': 'الحساب المحاسبي المرتبط',
         }
 
     def __init__(self, *args, **kwargs):
@@ -46,6 +51,32 @@ class ExpenseForm(forms.ModelForm):
             'custody': forms.Select(attrs={'class': 'form-select'}),
             'attachment': forms.FileInput(attrs={'class': 'form-control'}),
         }
+        labels = {
+            'date': 'تاريخ المصروف',
+            'category': 'فئة المصروف',
+            'subtotal': 'المبلغ (قبل الضريبة)',
+            'tax_type': 'نوع الضريبة 1',
+            'tax_percent': 'نسبة الضريبة 1 %',
+            'tax_type2': 'نوع الضريبة 2',
+            'tax_percent2': 'نسبة الضريبة 2 %',
+            'description': 'الوصف / البيان',
+            'cost_center': 'مركز التكلفة',
+            'payment_method': 'طريقة الدفع',
+            'bank_account': 'الحساب البنكي',
+            'cash_box': 'الخزنة',
+            'custody': 'العهدة',
+            'attachment': 'المرفقات (صورة الفاتورة)',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['cash_box'].queryset = CashBox.objects.exclude(
+            salesrepresentative__isnull=False
+        ).filter(is_active=True).order_by('name')
+
+        from apps.core.models import CostCenter
+        if 'cost_center' in self.fields:
+            self.fields['cost_center'].queryset = CostCenter.objects.filter(is_active=True, is_leaf=True).order_by('code')
 
     def clean(self):
         cleaned = super().clean()
@@ -70,6 +101,14 @@ class CustodyForm(forms.ModelForm):
             'account': forms.Select(attrs={'class': 'form-select'}),
             'cash_box': forms.Select(attrs={'class': 'form-select'}),
         }
+        labels = {
+            'date': 'التاريخ',
+            'employee': 'الموظف (المستلم)',
+            'amount': 'قيمة العهدة',
+            'purpose': 'الغرض من العهدة',
+            'account': 'حساب العهدة (ذمة موظف)',
+            'cash_box': 'خزنة الصرف',
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -81,6 +120,11 @@ class CustodyForm(forms.ModelForm):
         self.fields['account'].queryset = Account.objects.filter(
             code__startswith=custody_parent, is_leaf=True
         )
+        
+        from apps.treasury.models import CashBox
+        self.fields['cash_box'].queryset = CashBox.objects.exclude(
+            salesrepresentative__isnull=False
+        ).filter(is_active=True).order_by('name')
     
     def clean_employee(self):
         employee = self.cleaned_data.get('employee')
@@ -107,6 +151,19 @@ class CustodySettlementForm(forms.ModelForm):
             'cash_box': forms.Select(attrs={'class': 'form-select'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
         }
+        labels = {
+            'date': 'تاريخ التسوية',
+            'returned_amount': 'المبلغ المرتجع نقداً',
+            'cash_box': 'الخزنة المستلمة',
+            'notes': 'ملاحظات',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.treasury.models import CashBox
+        self.fields['cash_box'].queryset = CashBox.objects.exclude(
+            salesrepresentative__isnull=False
+        ).filter(is_active=True).order_by('name')
 
     def clean(self):
         cleaned = super().clean()

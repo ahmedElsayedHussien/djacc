@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}تشغيل الإهلاك الدوري{% endblock %}
+{% block header %}إدارة إهلاك الأصول الثابتة{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-clock-history me-2 text-primary"></i>سجل عمليات الإهلاك الأخيرة</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4">التاريخ</th>
+                                <th>الأصل</th>
+                                <th class="text-end">المبلغ</th>
+                                <th class="text-center pe-4">القيد المحاسبي</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in object_list %}
+                            <tr>
+                                <td class="ps-4">{{ log.date|date:"Y-m-d" }}</td>
+                                <td>{{ log.asset.name }}</td>
+                                <td class="text-end fw-bold text-danger">{{ log.amount|floatformat:2|intcomma }}</td>
+                                <td class="text-center pe-4">
+                                    {% if log.journal_entry %}
+                                    <a href="#" class="badge bg-soft-info text-info text-decoration-none">#{{ log.journal_entry.number }}</a>
+                                    {% else %}
+                                    <span class="badge bg-light text-muted">بدون قيد</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">لا توجد عمليات إهلاك مسجلة حالياً.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0 bg-primary text-white mb-4" style="border-radius: 15px;">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-gear-wide-connected fs-1 mb-3"></i>
+                <h4 class="fw-bold mb-3">تشغيل إهلاك الشهر</h4>
+                <p class="opacity-75 mb-4">سيقوم النظام بحساب الإهلاك لكافة الأصول النشطة بناءً على معدلاتها المحددة وتاريخ آخر إهلاك.</p>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-light btn-lg w-100 fw-bold text-primary shadow-sm" onclick="return confirm('هل أنت متأكد من رغبتك في تشغيل عملية الإهلاك الآن؟ سيتم إنشاء قيود محاسبية تلقائية.')">
+                        <i class="bi bi-play-fill me-2"></i>بدء التشغيل الآن
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-body">
+                <h6 class="fw-bold text-dark mb-3"><i class="bi bi-info-circle me-2 text-info"></i>معلومات تقنية</h6>
+                <ul class="small text-muted mb-0 ps-3">
+                    <li class="mb-2">يعتمد النظام طريقة القسط الثابت (Straight Line) الموزع شهرياً.</li>
+                    <li class="mb-2">يتم إنشاء قيد استحقاق إهلاك (من حساب مصروف إهلاك إلى حساب مجمع إهلاك).</li>
+                    <li>لا يمكن تكرار الإهلاك لنفس الأصل في نفس الشهر.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

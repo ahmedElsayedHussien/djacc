@@ -35,7 +35,7 @@
                     <tr><th>القيد المحاسبي:</th>
                         <td>
                             {% if invoice.journal_entry %}
-                            <a href="/admin/core/journalentry/{{ invoice.journal_entry.pk }}/change/">{{ invoice.journal_entry.number }}</a>
+                            <a href="{% url 'core:journal-detail' invoice.journal_entry.pk %}">{{ invoice.journal_entry.number }}</a>
                             {% else %}
                             -
                             {% endif %}

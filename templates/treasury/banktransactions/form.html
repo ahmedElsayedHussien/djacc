@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block title %}تسجيل حركة بنكية{% endblock %}
+{% block header %}تسجيل حركة بنكية جديدة{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6">{{ form.date|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.bank_account|as_crispy_field }}</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">{{ form.transaction_type|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.amount|as_crispy_field }}</div>
+                    </div>
+                    {{ form.description|as_crispy_field }}
+                    {{ form.reference|as_crispy_field }}
+
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg px-5">حفظ كمسودة</button>
+                        <a href="{% url 'treasury:banktransaction-list' %}" class="btn btn-outline-secondary btn-lg px-5">إلغاء</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div class="alert alert-info mt-4">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>ملاحظة:</strong> تسجيل الحركة هنا يحفظها كمسودة. يجب عليك <strong>ترحيل</strong> الحركة لاحقاً لإنشاء القيد المحاسبي وتأثيرها على الأرصدة.
+        </div>
+    </div>
+</div>
+{% endblock %}

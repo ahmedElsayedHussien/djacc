@@ -84,13 +84,18 @@ class CostCenterForm(forms.ModelForm):
         model = CostCenter
         fields = ['code', 'name', 'center_type', 'parent', 'is_leaf', 'description', 'is_active']
         widgets = {
-            'code':        forms.TextInput(attrs={'class': 'form-control'}),
-            'name':        forms.TextInput(attrs={'class': 'form-control'}),
+            'code':        forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'مثال: 101'}),
+            'name':        forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'مثال: فرع القاهرة / قسم المبيعات'}),
             'center_type': forms.Select(attrs={'class': 'form-select'}),
             'parent':      forms.Select(attrs={'class': 'form-select'}),
             'is_leaf':     forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
             'is_active':   forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+        help_texts = {
+            'name': 'أجب عن سؤال: "مَن الذي استفاد بهذا الصرف؟" (فرع، قسم، إدارة).',
+            'is_leaf': 'يجب تفعيل هذا الخيار إذا كنت تريد تحميل مصروفات أو إيرادات مباشرة على هذا المركز.',
+            'center_type': 'يستخدم لتجميع مراكز التكلفة المتشابهة في تقارير الأرباح والخسائر.',
         }
 
     def __init__(self, *args, **kwargs):
@@ -116,7 +121,12 @@ class TaxTypeForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['account'].queryset = Account.objects.filter(is_leaf=True).order_by('code')
+        # Show only leaf accounts that are related to taxes (Asset-side 1122 or Liability-side 212)
+        from django.db.models import Q
+        self.fields['account'].queryset = Account.objects.filter(
+            Q(code__startswith='1122') | Q(code__startswith='212'),
+            is_leaf=True
+        ).order_by('code')
 
 class JournalEntryForm(forms.ModelForm):
     class Meta:
@@ -145,6 +155,9 @@ class JournalLineForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['account'].queryset = Account.objects.filter(
             is_leaf=True, is_active=True
+        ).order_by('code')
+        self.fields['cost_center'].queryset = CostCenter.objects.filter(
+            is_active=True, is_leaf=True
         ).order_by('code')
 
 JournalLineFormSet = forms.inlineformset_factory(

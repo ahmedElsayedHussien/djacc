@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}تفاصيل الحركة البنكية{% endblock %}
+{% block header %}حركة بنكية: {{ transaction.number }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-7">
+        <div class="card mb-4 shadow-sm border-0">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-info-circle me-2"></i>البيانات الأساسية</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm table-borderless">
+                    <tr><th class="w-25 text-muted">التاريخ:</th><td class="fw-bold">{{ transaction.date|date:'Y-m-d' }}</td></tr>
+                    <tr><th class="text-muted">الحساب البنكي:</th><td class="fw-bold text-primary">{{ transaction.bank_account }}</td></tr>
+                    <tr><th class="text-muted">النوع:</th><td><span class="badge bg-info text-dark fs-6">{{ transaction.get_transaction_type_display }}</span></td></tr>
+                    <tr><th class="text-muted">المبلغ:</th><td class="h4 fw-bold text-success">{{ transaction.amount }}</td></tr>
+                    <tr><th class="text-muted">الحالة:</th>
+                        <td>
+                            {% if transaction.journal_entry %}
+                            <span class="badge bg-success px-3 py-2"><i class="bi bi-check-circle me-1"></i>مرحل</span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark px-3 py-2"><i class="bi bi-clock me-1"></i>مسودة</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr><th class="text-muted">المرجع:</th><td>{{ transaction.reference|default:"-" }}</td></tr>
+                    <tr><th class="text-muted">سجلت بواسطة:</th><td>{{ transaction.created_by.get_full_name|default:transaction.created_by.username }}</td></tr>
+                </table>
+                <hr>
+                <div class="mt-3">
+                    <h6 class="text-muted mb-2">الوصف:</h6>
+                    <p class="border p-3 rounded bg-light">{{ transaction.description|linebreaksbr }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-5">
+        <div class="card mb-4 shadow-sm border-0">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-journal-check me-2"></i>التوجيه المحاسبي</h5>
+            </div>
+            <div class="card-body">
+                {% if transaction.journal_entry %}
+                <div class="alert alert-success">
+                    <p class="mb-1">تم ترحيل هذه الحركة بنجاح.</p>
+                    <strong>رقم القيد: </strong>
+                    <a href="{% url 'core:journal-detail' transaction.journal_entry.pk %}" class="fw-bold">{{ transaction.journal_entry.number }}</a>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    هذه الحركة لم ترحل بعد ولن تظهر في كشوف الحسابات.
+                </div>
+                <form method="post" action="{% url 'treasury:banktransaction-post' transaction.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success btn-lg w-100 py-3 shadow-sm" onclick="return confirm('تأكيد ترحيل الحركة لدفتر الأستاذ؟');">
+                        <i class="bi bi-send-check me-2"></i> ترحيل الآن
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        
+        <a href="{% url 'treasury:banktransaction-list' %}" class="btn btn-outline-secondary w-100">
+            <i class="bi bi-arrow-right me-1"></i> العودة للقائمة
+        </a>
+    </div>
+</div>
+{% endblock %}

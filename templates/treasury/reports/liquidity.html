@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}الموقف النقدي والسيولة اللحظية{% endblock %}
+{% block header %}تقرير الموقف النقدي والسيولة اللحظية{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Currency Totals -->
+    <div class="row g-4 mb-4">
+        {% for curr, total in report.total_by_currency.items %}
+        <div class="col-md-4">
+            <div class="card bg-primary text-white shadow-sm border-0">
+                <div class="card-body py-4 text-center">
+                    <h6 class="text-white-50 mb-2">إجمالي السيولة ({{ curr }})</h6>
+                    <h2 class="fw-bold mb-0">{{ total|floatformat:2|intcomma }}</h2>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Cash Boxes Table -->
+    <div class="card shadow-sm border-0 mb-4" style="border-radius: 15px;">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-wallet2 me-2 text-primary"></i>أرصدة الخزن النقدية</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">كود / اسم الخزينة</th>
+                            <th>المسؤول عنها</th>
+                            <th class="text-center">العملة</th>
+                            <th class="text-end pe-4">الرصيد الحالي</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in report.cash_boxes %}
+                        <tr>
+                            <td class="ps-4">
+                                <span class="fw-bold text-dark">{{ row.obj.name }}</span><br>
+                                <small class="text-muted">{{ row.obj.code }}</small>
+                            </td>
+                            <td>{{ row.obj.responsible_user.username }}</td>
+                            <td class="text-center"><span class="badge bg-soft-info text-info">{{ row.obj.currency }}</span></td>
+                            <td class="text-end pe-4 fw-bold fs-5">{{ row.balance|floatformat:2|intcomma }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bank Accounts Table -->
+    <div class="card shadow-sm border-0" style="border-radius: 15px;">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-bank me-2 text-success"></i>أرصدة الحسابات البنكية</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">البنك / اسم الحساب</th>
+                            <th>رقم الحساب / IBAN</th>
+                            <th class="text-center">العملة</th>
+                            <th class="text-end pe-4">الرصيد الحالي</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in report.bank_accounts %}
+                        <tr>
+                            <td class="ps-4">
+                                <span class="fw-bold text-dark">{{ row.obj.bank_name }}</span><br>
+                                <small class="text-muted">{{ row.obj.name }}</small>
+                            </td>
+                            <td>
+                                <small class="d-block">{{ row.obj.account_number }}</small>
+                                <small class="text-muted">{{ row.obj.iban|default:"" }}</small>
+                            </td>
+                            <td class="text-center"><span class="badge bg-soft-info text-info">{{ row.obj.currency }}</span></td>
+                            <td class="text-end pe-4 fw-bold fs-5 text-success">{{ row.balance|floatformat:2|intcomma }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}تقرير ضرائب المصروفات{% endblock %}
+{% block header %}تقرير ضرائب المصروفات الفترية (Input Tax){% endblock %}
+
+{% block content %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label fw-bold">من تاريخ</label>
+                <input type="date" name="from" class="form-control" value="{{ from_date }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">إلى تاريخ</label>
+                <input type="date" name="to" class="form-control" value="{{ to_date }}">
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-dark w-100"><i class="bi bi-funnel me-2"></i>عرض الضرائب</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0" style="border-radius: 15px;">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">التاريخ / الرقم</th>
+                        <th>التصنيف / البيان</th>
+                        <th class="text-center">نوع الضريبة</th>
+                        <th class="text-end">المبلغ الأساسي</th>
+                        <th class="text-end pe-4">قيمة الضريبة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for exp in report %}
+                    <tr>
+                        <td class="ps-4">
+                            <span class="fw-bold">{{ exp.date|date:'Y-m-d' }}</span><br>
+                            <small class="text-muted">{{ exp.number }}</small>
+                        </td>
+                        <td>
+                            <span class="badge bg-soft-info text-info">{{ exp.category.name }}</span><br>
+                            <small class="text-muted">{{ exp.description|truncatewords:10 }}</small>
+                        </td>
+                        <td class="text-center">
+                            {{ exp.tax_type.name|default:"-" }}
+                            {% if exp.tax_type2 %}<br><small class="text-muted">{{ exp.tax_type2.name }}</small>{% endif %}
+                        </td>
+                        <td class="text-end">{{ exp.subtotal|floatformat:2|intcomma }}</td>
+                        <td class="text-end pe-4 fw-bold text-danger">{{ exp.tax_amount|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-4 text-muted">لا توجد حركات ضريبية في هذه الفترة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

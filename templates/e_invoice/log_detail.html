@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% block title %}تفاصيل العملية #{{ log.pk }}{% endblock %}
+{% block header %}تفاصيل سجل الضرائب{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white py-3">
+                <h6 class="mb-0 fw-bold">معلومات الوثيقة</h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between px-0">
+                        <span class="text-muted">الوثيقة الأصلية:</span>
+                        <a href="{{ log.content_object.get_absolute_url|default:'#' }}" class="fw-bold text-decoration-none">
+                            {{ log.content_object.number|default:log.internal_id }}
+                        </a>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between px-0">
+                        <span class="text-muted">Submission ID:</span>
+                        <small class="text-muted">{{ log.submission_id|default:"---" }}</small>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between px-0">
+                        <span class="text-muted">الحالة:</span>
+                        <span class="badge {% if log.status == 'valid' %}bg-success{% elif log.status == 'invalid' %}bg-danger{% elif log.status == 'submitted' %}bg-info{% else %}bg-warning{% endif %}">
+                            {{ log.get_status_display }}
+                        </span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between px-0">
+                        <span class="text-muted">UUID:</span>
+                        <small class="text-break text-primary">{{ log.uuid|default:"---" }}</small>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between px-0">
+                        <span class="text-muted">تاريخ الإرسال:</span>
+                        <span>{{ log.submitted_at|date:"H:i Y-m-d"|default:"---" }}</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        {% if log.qr_code %}
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white py-3">
+                <h6 class="mb-0 fw-bold">QR Code المقبول</h6>
+            </div>
+            <div class="card-body text-center">
+                <img src="{{ log.qr_code.url }}" alt="QR Code" class="img-fluid border p-2" style="max-width: 180px;">
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-8">
+        {% if log.error_message %}
+        <div class="alert alert-danger shadow-sm mb-4 border-0 border-start border-4 border-danger">
+            <h6 class="fw-bold text-danger"><i class="bi bi-exclamation-octagon-fill me-2"></i>رسالة الخطأ التفصيلية:</h6>
+            <p class="mb-0 fs-5">{{ log.error_message }}</p>
+        </div>
+        {% endif %}
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-code-square me-2"></i>محتوى الطلب (XML Preview)</h6>
+                <span class="badge bg-light text-dark">أول 500 حرف</span>
+            </div>
+            <div class="card-body bg-dark">
+                <pre class="text-success mb-0" style="max-height: 150px; overflow-y: auto;"><code>{{ log.raw_request.xml_preview|default:"لا يوجد محتوى محفوظ" }}</code></pre>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-terminal me-2"></i>استجابة الـ API (JSON)</h6>
+                <button class="btn btn-sm btn-outline-secondary" onclick="copyResponse()">
+                    <i class="bi bi-clipboard"></i> نسخ الاستجابة
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <pre id="rawResponse" class="bg-light p-4 mb-0" style="max-height: 400px; overflow-y: auto; font-size: 0.85rem;"><code>{{ response_json }}</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-4">
+    <a href="{% url 'e_invoice:dashboard' %}" class="btn btn-secondary">العودة للوحة التحكم</a>
+</div>
+
+<script>
+function copyResponse() {
+    const text = document.getElementById('rawResponse').innerText;
+    navigator.clipboard.writeText(text).then(() => {
+        alert('تم نسخ الاستجابة');
+    });
+}
+</script>
+{% endblock %}

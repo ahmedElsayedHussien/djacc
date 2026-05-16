@@ -62,6 +62,17 @@
                     </tr>
                     {% endfor %}
                 </tbody>
+                <tfoot class="table-dark">
+                    <tr>
+                        <td colspan="2" class="text-end fw-bold">الإجماليات:</td>
+                        <td>{{ totals.op_debit|floatformat:2 }}</td>
+                        <td>{{ totals.op_credit|floatformat:2 }}</td>
+                        <td>{{ totals.mov_debit|floatformat:2 }}</td>
+                        <td>{{ totals.mov_credit|floatformat:2 }}</td>
+                        <td class="{% if totals.cl_debit != totals.cl_credit %}text-warning{% endif %}">{{ totals.cl_debit|floatformat:2 }}</td>
+                        <td class="{% if totals.cl_debit != totals.cl_credit %}text-warning{% endif %}">{{ totals.cl_credit|floatformat:2 }}</td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div>

@@ -71,11 +71,15 @@ class AssetCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
         ctx = super().get_context_data(**kwargs)
         # ح/35 = أرصدة افتتاحية (الأكثر شيوعاً للترحيل من نظام قديم)
         ctx['offset_accounts'] = Account.objects.filter(is_leaf=True).order_by('code')
+        ctx['default_offset_account'] = Account.objects.filter(name__contains='افتتاحية').first()
         return ctx
 
     @transaction.atomic
     def form_valid(self, form):
-        asset = form.save()
+        from apps.core.services import DocumentService
+        asset = form.save(commit=False)
+        asset.code = DocumentService.generate_number(Asset, 'AST', field_name='code')
+        asset.save()
 
         offset_account_id = self.request.POST.get('offset_account_id')
         if not offset_account_id:
@@ -137,10 +141,18 @@ class RunDepreciationView(LoginRequiredMixin, PermissionRequiredMixin, ListView)
         messages.success(request, f'تم تنفيذ الإهلاك لـ {count} أصل بنجاح.')
         return redirect('assets:asset-list')
 
-class AssetDisposeView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class AssetDisposeView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    model = Asset
+    template_name = 'assets/asset_dispose.html'
+    context_object_name = 'asset'
     permission_required = 'assets.change_asset'
-    template_name = 'assets/asset_dispose.html' # We'll need this template or just a post
     
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        from apps.core.models import Account
+        ctx['offset_accounts'] = Account.objects.filter(is_leaf=True).order_by('code')
+        return ctx
+
     def post(self, request, pk):
         asset = get_object_or_404(Asset, pk=pk)
         disposal_date = request.POST.get('disposal_date', timezone.now().date().isoformat())
@@ -149,7 +161,7 @@ class AssetDisposeView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
 
         if not offset_account_id:
             messages.error(request, 'يجب تحديد حساب التحصيل (البنك/الصندوق).')
-            return redirect('assets:asset-list')
+            return redirect('assets:asset-detail', pk=pk)
 
         try:
             offset_account = Account.objects.get(pk=offset_account_id)
@@ -165,4 +177,24 @@ class AssetDisposeView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
             messages.error(request, f'خطأ أثناء الاستبعاد: {e}')
             
         return redirect('assets:asset-list')
+
+class AssetDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    model = Asset
+    template_name = 'assets/asset_detail.html'
+    context_object_name = 'asset'
+    permission_required = 'assets.view_asset'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        from apps.core.models import Account
+        ctx['logs'] = self.object.depreciation_logs.select_related('journal_entry').order_by('-date')
+        ctx['offset_accounts'] = Account.objects.filter(is_leaf=True).order_by('code')
+        return ctx
+
+class AssetUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = Asset
+    form_class = AssetForm
+    template_name = 'assets/asset_form.html'
+    success_url = reverse_lazy('assets:asset-list')
+    permission_required = 'assets.change_asset'
 

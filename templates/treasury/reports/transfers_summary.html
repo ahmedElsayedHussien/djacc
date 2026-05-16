@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}ملخص التحويلات المالية الداخلية{% endblock %}
+{% block header %}ملخص التحويلات المالية الداخلية{% endblock %}
+
+{% block content %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label fw-bold">من تاريخ</label>
+                <input type="date" name="from" class="form-control" value="{{ from_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">إلى تاريخ</label>
+                <input type="date" name="to" class="form-control" value="{{ to_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search me-2"></i>تحديث التقرير</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0" style="border-radius: 15px;">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">التاريخ / الرقم</th>
+                        <th>من (المصدر)</th>
+                        <th>إلى (الوجهة)</th>
+                        <th class="text-center">المبلغ</th>
+                        <th>المسؤول</th>
+                        <th class="text-center">الحالة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in report %}
+                    <tr>
+                        <td class="ps-4">
+                            <span class="fw-bold">{{ t.date|date:'Y-m-d' }}</span><br>
+                            <small class="text-muted">{{ t.number }}</small>
+                        </td>
+                        <td>{{ t.from_cash_box|default:t.from_bank }}</td>
+                        <td>{{ t.to_cash_box|default:t.to_bank }}</td>
+                        <td class="text-center fw-bold">{{ t.amount|floatformat:2|intcomma }}</td>
+                        <td>{{ t.received_by.username|default:"-" }}</td>
+                        <td class="text-center">
+                            <span class="badge bg-success">مكتمل</span>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">لا توجد تحويلات في هذه الفترة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

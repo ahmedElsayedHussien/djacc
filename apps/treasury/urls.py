@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views
+from . import views, report_views
 
 app_name = 'treasury'
 
@@ -9,6 +9,7 @@ urlpatterns = [
     path('cashboxes/create/', views.CashBoxCreateView.as_view(), name='cashbox-create'),
     path('cashboxes/<int:pk>/', views.CashBoxDetailView.as_view(), name='cashbox-detail'),
     path('cashboxes/<int:pk>/update/', views.CashBoxUpdateView.as_view(), name='cashbox-update'),
+    path('reports/movements/', views.CashBoxMovementReportView.as_view(), name='movement-report'),
 
     path('banks/', views.BankAccountListView.as_view(), name='bank-list'),
     path('banks/create/', views.BankAccountCreateView.as_view(), name='bank-create'),
@@ -28,4 +29,18 @@ urlpatterns = [
     path('bank-reconciliations/<int:pk>/', views.BankReconciliationDetailView.as_view(), name='bankreconciliation-detail'),
     path('bank-reconciliations/<int:pk>/update/', views.BankReconciliationUpdateView.as_view(), name='bankreconciliation-update'),
     path('bank-reconciliations/<int:pk>/match/', views.BankReconciliationMatchView.as_view(), name='bankreconciliation-match'),
+
+    # Bank Transactions
+    path('bank-transactions/', views.BankTransactionListView.as_view(), name='banktransaction-list'),
+    path('bank-transactions/create/', views.BankTransactionCreateView.as_view(), name='banktransaction-create'),
+    path('bank-transactions/<int:pk>/', views.BankTransactionDetailView.as_view(), name='banktransaction-detail'),
+    path('bank-transactions/<int:pk>/post/', views.BankTransactionPostView.as_view(), name='banktransaction-post'),
+
+    # Advanced Reports
+    path('reports/dashboard/', report_views.TreasuryReportDashboardView.as_view(), name='report-dashboard'),
+    path('reports/liquidity/', report_views.LiveLiquidityReportView.as_view(), name='report-liquidity'),
+    path('reports/in-transit/', report_views.CashInTransitReportView.as_view(), name='report-in-transit'),
+    path('reports/transfers-summary/', report_views.InternalTransfersReportView.as_view(), name='report-transfers-summary'),
+    path('reports/reconciliation-detail/', report_views.BankReconciliationReportView.as_view(), name='report-reconciliation-detail'),
+    path('reports/charges-interest/', report_views.BankChargesInterestReportView.as_view(), name='report-charges-interest'),
 ]

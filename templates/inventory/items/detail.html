@@ -31,8 +31,8 @@
                 </div>
                 <hr>
                 <div class="row mb-3">
-                    <div class="col-sm-3 text-muted fw-bold">طريقة التسعير</div>
-                    <div class="col-sm-9">{{ item.get_costing_method_display }}</div>
+                    <div class="col-sm-3 text-muted fw-bold">السعر الافتراضي</div>
+                    <div class="col-sm-9 text-primary fw-bold">{{ item.standard_price }}</div>
                 </div>
                 <div class="row mb-3">
                     <div class="col-sm-3 text-muted fw-bold">الحد الأدنى للمخزون</div>
@@ -63,7 +63,7 @@
                         <tr>
                             <td class="fw-bold">وحدة الشراء</td>
                             <td>{{ item.purchase_unit.name|default:"-" }}</td>
-                            <td>-</td>
+                            <td>{{ item.purchase_conversion_factor }}</td>
                         </tr>
                         <tr>
                             <td class="fw-bold">وحدة المبيعات</td>

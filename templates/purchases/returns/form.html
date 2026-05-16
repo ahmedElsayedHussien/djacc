@@ -29,6 +29,7 @@
                             <thead>
                                 <tr>
                                     <th>الصنف</th>
+                                    <th>الوحدة</th>
                                     <th>المستودع</th>
                                     <th>الكمية</th>
                                     <th>التكلفة</th>
@@ -40,6 +41,7 @@
                                 {% for l_form in lines %}
                                 <tr class="line-form">
                                     <td>{{ l_form.id }}{{ l_form.item|as_crispy_field }}</td>
+                                    <td>{{ l_form.unit|as_crispy_field }}</td>
                                     <td>{{ l_form.warehouse|as_crispy_field }}</td>
                                     <td>{{ l_form.quantity|as_crispy_field }}</td>
                                     <td>{{ l_form.unit_cost|as_crispy_field }}</td>

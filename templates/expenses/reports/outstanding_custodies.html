@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}أرصدة عهد الموظفين المفتوحة{% endblock %}
+{% block header %}أرصدة عهد الموظفين المفتوحة{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="card shadow-sm border-0" style="border-radius: 15px;">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-wallet2 me-2 text-warning"></i>ذمم الموظفين (العهد المفتوحة)</h5>
+            <span class="badge bg-warning text-dark">{{ report|length }} موظف لديه عهدة</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">الموظف</th>
+                            <th class="text-center">تاريخ الاستلام</th>
+                            <th class="text-end">القيمة الأصلية</th>
+                            <th class="text-end">إجمالي التسويات</th>
+                            <th class="text-end pe-4">الرصيد المتبقي</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in report %}
+                        <tr>
+                            <td class="ps-4">
+                                <span class="fw-bold text-dark">{{ row.employee.get_full_name|default:row.employee.username }}</span><br>
+                                <small class="text-muted">{{ row.number }}</small>
+                            </td>
+                            <td class="text-center">{{ row.date|date:'Y-m-d' }}</td>
+                            <td class="text-end fw-bold">{{ row.amount|floatformat:2|intcomma }}</td>
+                            <td class="text-end text-success">{{ row.settled_amount|floatformat:2|intcomma }}</td>
+                            <td class="text-end pe-4 fw-bold fs-5 text-danger">{{ row.remaining_balance|floatformat:2|intcomma }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                <i class="bi bi-check-circle fs-1 d-block mb-3 text-success"></i>
+                                لا توجد عهد مفتوحة حالياً. كافة الذمم مسواة.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

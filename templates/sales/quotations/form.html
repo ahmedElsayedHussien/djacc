@@ -18,6 +18,11 @@
                 <h5 class="card-title mb-0">البيانات الأساسية للعرض</h5>
             </div>
             <div class="card-body">
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {{ form.non_field_errors }}
+                </div>
+                {% endif %}
                 <div class="row g-3">
                     <div class="col-md-8">
                         <label class="form-label">اسم العرض (الترويج)</label>
@@ -69,12 +74,21 @@
                         <thead class="table-light">
                             <tr>
                                 <th style="width: 60%;">الصنف</th>
-                                <th style="width: 30%;">نسبة الخصم الإضافية %</th>
+                                <th style="width: 30%;">نسبة الخصم %</th>
                                 <th style="width: 10%;">حذف</th>
                             </tr>
                         </thead>
                         <tbody>
                             {{ lines.management_form }}
+                            {% if lines.non_form_errors %}
+                            <tr>
+                                <td colspan="3">
+                                    <div class="alert alert-danger mb-0">
+                                        {{ lines.non_form_errors }}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endif %}
                             {% for line_form in lines %}
                             <tr class="line-row">
                                 {% for hidden in line_form.hidden_fields %}
@@ -85,8 +99,8 @@
                                     {{ line_form.item.errors }}
                                 </td>
                                 <td>
-                                    {{ line_form.extra_discount_percent }}
-                                    {{ line_form.extra_discount_percent.errors }}
+                                    {{ line_form.discount_percent }}
+                                    {{ line_form.discount_percent.errors }}
                                 </td>
                                 <td>
                                     {% if line_form.instance.pk %}

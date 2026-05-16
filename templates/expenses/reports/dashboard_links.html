@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+
+{% block title %}مركز تقارير المصروفات والعهد{% endblock %}
+{% block header %}مركز تقارير المصروفات والعهد{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-card {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border: none;
+        border-radius: 16px;
+    }
+    .report-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 20px rgba(0,0,0,0.1) !important;
+    }
+    .icon-shape {
+        width: 60px;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 14px;
+        margin-bottom: 1.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- تحليل المصروفات -->
+    <h5 class="mb-4 fw-bold text-dark"><i class="bi bi-pie-chart me-2 text-primary"></i>تحليل وتصنيف المصروفات</h5>
+    <div class="row g-4 mb-5">
+        <div class="col-md-4">
+            <a href="{% url 'expenses:report-by-category' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm border-start border-primary border-4">
+                    <div class="card-body">
+                        <div class="icon-shape bg-primary bg-opacity-10 text-primary">
+                            <i class="bi bi-tags fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">المصروفات حسب التصنيفات</h6>
+                        <p class="text-muted small mb-0">تحليل الإنفاق حسب نوع المصروف (ضيافة، صيانة، إلخ).</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'expenses:report-by-cost-center' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm border-start border-info border-4">
+                    <div class="card-body">
+                        <div class="icon-shape bg-info bg-opacity-10 text-info">
+                            <i class="bi bi-diagram-3 fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">المصروفات حسب مراكز التكلفة</h6>
+                        <p class="text-muted small mb-0">توزيع التكاليف على الأقسام والفروع والمشاريع.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'expenses:report-tax' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm">
+                    <div class="card-body">
+                        <div class="icon-shape bg-dark bg-opacity-10 text-dark">
+                            <i class="bi bi-receipt fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">تقرير ضرائب المصروفات الفترية</h6>
+                        <p class="text-muted small mb-0">حصر ضريبة القيمة المضافة المدفوعة على المشتريات الخدمية.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- إدارة العهد -->
+    <h5 class="mb-4 fw-bold text-dark"><i class="bi bi-person-badge me-2 text-warning"></i>رقابة وإدارة عهد الموظفين</h5>
+    <div class="row g-4 mb-5">
+        <div class="col-md-4">
+            <a href="{% url 'expenses:report-outstanding-custodies' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm border-start border-warning border-4">
+                    <div class="card-body">
+                        <div class="icon-shape bg-warning bg-opacity-10 text-warning">
+                            <i class="bi bi-wallet2 fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">أرصدة عهد الموظفين المفتوحة</h6>
+                        <p class="text-muted small mb-0">متابعة المبالغ المتبقية في ذمة الموظفين حالياً.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'expenses:report-aged-custodies' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm border-start border-danger border-4">
+                    <div class="card-body">
+                        <div class="icon-shape bg-danger bg-opacity-10 text-danger">
+                            <i class="bi bi-alarm fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">تقرير عهد الموظفين المتأخرة</h6>
+                        <p class="text-muted small mb-0">تنبيه بالعهد التي تجاوزت فترة التسوية المسموحة.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'expenses:report-settlement-statement' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm">
+                    <div class="card-body">
+                        <div class="icon-shape bg-success bg-opacity-10 text-success">
+                            <i class="bi bi-file-earmark-check fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">كشف تسوية عهدة تفصيلي</h6>
+                        <p class="text-muted small mb-0">عرض تفصيلي لمصاريف عهدة معينة عند تسويتها.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- طرق الصرف والتدقيق -->
+    <h5 class="mb-4 fw-bold text-dark"><i class="bi bi-shield-check me-2 text-secondary"></i>التدقيق وطرق الصرف</h5>
+    <div class="row g-4">
+        <div class="col-md-4">
+            <a href="{% url 'expenses:report-by-payment-method' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm">
+                    <div class="card-body">
+                        <div class="icon-shape bg-secondary bg-opacity-10 text-secondary">
+                            <i class="bi bi-credit-card fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">المصروفات حسب طريقة الدفع</h6>
+                        <p class="text-muted small mb-0">تحليل وسيلة الصرف (نقدي، بنكي، أو من العهدة).</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

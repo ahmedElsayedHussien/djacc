@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% block title %}تقرير ضريبة القيمة المضافة{% endblock %}
+{% block header %}تقرير ضريبة القيمة المضافة (VAT){% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-receipt me-2"></i> تقرير ضريبة القيمة المضافة</h5>
+    </div>
+    <div class="card-body">
+        <!-- Filters -->
+        <form method="get" class="row g-3 mb-4">
+            <div class="col-md-3">
+                <label class="form-label">من تاريخ</label>
+                <input type="date" name="from" class="form-control" value="{{ from_date }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">إلى تاريخ</label>
+                <input type="date" name="to" class="form-control" value="{{ to_date }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">مركز التكلفة</label>
+                <select name="cost_center" class="form-select">
+                    <option value="">كل المراكز</option>
+                    {% for cc in cost_centers %}
+                    <option value="{{ cc.id }}" {% if selected_cc == cc.id %}selected{% endif %}>
+                        {{ cc.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search me-1"></i> بحث
+                </button>
+            </div>
+        </form>
+
+        {% if report %}
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">ضريبة المبيعات (Output VAT)</h6>
+                        <h3 class="mb-0">{{ report.output_vat|floatformat:2 }}</h3>
+                        <small>{{ report.output_vat_count }} عملية</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">ضريبة المشتريات (Input VAT)</h6>
+                        <h3 class="mb-0">{{ report.input_vat|floatformat:2 }}</h3>
+                        <small>{{ report.input_vat_count }} عملية</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card {% if report.is_payable %}bg-danger{% else %}bg-success{% endif %} text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">{% if report.is_payable %}صافي الضريبة المستحقة{% else %}صافي الضريبة للاسترداد{% endif %}</h6>
+                        <h3 class="mb-0">{{ report.net_vat|floatformat:2 }}</h3>
+                        <small>جنيه مصري</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Details Table -->
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>البند</th>
+                        <th class="text-center">المبلغ (ج.م)</th>
+                        <th class="text-center">عدد العمليات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <strong>ضريبة القيمة المضافة على المبيعات</strong>
+                            <br><small class="text-muted">Output VAT - ضريبة القيمة المضافة</small>
+                        </td>
+                        <td class="text-center">{{ report.output_vat|floatformat:2 }}</td>
+                        <td class="text-center">{{ report.output_vat_count }}</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <strong>ضريبة القيمة المضافة على المشتريات</strong>
+                            <br><small class="text-muted">Input VAT - ضريبة القيمة المُدخلة</small>
+                        </td>
+                        <td class="text-center">{{ report.input_vat|floatformat:2 }}</td>
+                        <td class="text-center">{{ report.input_vat_count }}</td>
+                    </tr>
+                    <tr class="table-primary">
+                        <td><strong>صافي ضريبة القيمة المضافة</strong></td>
+                        <td class="text-center"><strong>{{ report.net_vat|floatformat:2 }}</strong></td>
+                        <td class="text-center">-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Notes -->
+        <div class="alert alert-info mt-3">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>ملاحظات:</strong>
+            <ul class="mb-0 mt-2">
+                <li>صافي VAT = ضريبة المبيعات - ضريبة المشتريات</li>
+                <li>إذا كان الصافي <strong>موجب</strong> → مستحق للضرائب (必须 دفع)</li>
+                <li>إذا كان الصافي <strong>سالب</strong> → يتم استرداده من الضرائب</li>
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

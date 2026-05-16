@@ -74,3 +74,30 @@ class CashTransferForm(forms.ModelForm):
             self.add_error('amount', 'يجب أن يكون المبلغ أكبر من صفر')
             
         return cleaned_data
+
+from .models import BankTransaction, BankReconciliation
+
+class BankTransactionForm(forms.ModelForm):
+    class Meta:
+        model = BankTransaction
+        fields = ['date', 'bank_account', 'transaction_type', 'amount', 'description', 'reference']
+        widgets = {
+            'date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'bank_account': forms.Select(attrs={'class': 'form-select'}),
+            'transaction_type': forms.Select(attrs={'class': 'form-select'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+            'reference': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+
+class BankReconciliationForm(forms.ModelForm):
+    class Meta:
+        model = BankReconciliation
+        fields = ['bank_account', 'statement_date', 'statement_balance', 'book_balance', 'notes']
+        widgets = {
+            'bank_account': forms.Select(attrs={'class': 'form-select'}),
+            'statement_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'statement_balance': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'book_balance': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+        }

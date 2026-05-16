@@ -9,11 +9,7 @@
         <form method="post" novalidate>
           {% csrf_token %}
           <div class="row g-3">
-            <div class="col-md-4">
-              <label class="form-label">كود المورد</label>
-              {{ form.code }}
-            </div>
-            <div class="col-md-8">
+            <div class="col-md-12">
               <label class="form-label">اسم المورد *</label>
               {{ form.name }}
             </div>

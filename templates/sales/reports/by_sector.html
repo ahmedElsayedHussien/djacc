@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}المبيعات حسب قطاعات العملاء{% endblock %}
+{% block header %}تحليل مبيعات القطاعات{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">من تاريخ</label>
+                    <input type="date" name="from" class="form-control" value="{{ from_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">إلى تاريخ</label>
+                    <input type="date" name="to" class="form-control" value="{{ to_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-filter me-2"></i>عرض التقرير</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0" style="border-radius: 15px;">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">قطاع العميل</th>
+                            <th class="text-center">عدد الفواتير</th>
+                            <th class="text-end">إجمالي مبيعات القطاع</th>
+                            <th class="text-end">إجمالي المحصل</th>
+                            <th class="text-end pe-4">المتبقي (ديون)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in report %}
+                        <tr>
+                            <td class="ps-4 fw-bold text-dark">{{ row.customer__sector__name|default:"غير مصنف" }}</td>
+                            <td class="text-center">{{ row.invoice_count }}</td>
+                            <td class="text-end fw-bold text-primary">{{ row.total_sales|floatformat:2|intcomma }}</td>
+                            <td class="text-end text-success">{{ row.paid_amount|floatformat:2|intcomma }}</td>
+                            <td class="text-end pe-4 fw-bold text-danger">{{ row.balance|floatformat:2|intcomma }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center py-5 text-muted">لا توجد بيانات للفترة المحددة</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% if report.paginator.num_pages > 1 %}
+        {% include 'partials/pagination.html' with page_obj=report is_paginated=True %}
+    {% endif %}
+</div>
+{% endblock %}
+

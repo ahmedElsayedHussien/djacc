@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}إعدادات منظومة الضرائب{% endblock %}
+{% block header %}إعدادات الفاتورة الإلكترونية{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 fw-bold text-primary">
+                    <i class="bi bi-gear-wide-connected me-2"></i>
+                    {% if "CompanySettings" in request.path %}بيانات الشركة{% elif "Certificate" in request.path %}إضافة شهادة رقمية{% else %}إعدادات الربط (API){% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    {{ form|crispy }}
+                    <div class="d-grid gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary py-2">
+                            <i class="bi bi-save me-1"></i> حفظ الإعدادات
+                        </button>
+                        <a href="{% url 'e_invoice:dashboard' %}" class="btn btn-outline-secondary">
+                            إلغاء والعودة
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        {% if "config" in request.path %}
+        <div class="alert alert-info mt-4 border-0 shadow-sm">
+            <h6 class="fw-bold"><i class="bi bi-lightbulb me-2"></i>تنبيه هام:</h6>
+            <p class="small mb-0">تأكد من اختيار البيئة الصحيحة (Production أو Test). إذا كنت تقوم بالتجربة لأول مرة، استخدم بيئة الـ Test الموفرة من مصلحة الضرائب.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

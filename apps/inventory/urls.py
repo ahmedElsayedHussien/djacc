@@ -22,7 +22,11 @@ urlpatterns = [
     # Transfers
     path('transfers/', views.WarehouseTransferListView.as_view(), name='transfer-list'),
     path('transfers/create/', views.WarehouseTransferCreateView.as_view(), name='transfer-create'),
+    path('transfers/<int:pk>/', views.WarehouseTransferDetailView.as_view(), name='transfer-detail'),
+    path('transfers/<int:pk>/edit/', views.WarehouseTransferUpdateView.as_view(), name='transfer-edit'),
     path('transfers/<int:pk>/post/', views.WarehouseTransferPostView.as_view(), name='transfer-post'),
+    path('transfers/<int:pk>/reverse/', views.WarehouseTransferReverseView.as_view(), name='transfer-reverse'),
+
 
     # Loadings
     path('loadings/', views.LoadingOrderListView.as_view(), name='loading-list'),
@@ -42,4 +46,8 @@ urlpatterns = [
     path('vouchers/<int:pk>/reverse/', views.StockVoucherReverseView.as_view(), name='voucher-reverse'),
     # API
     path('api/item/<int:pk>/', views.ItemDetailsAPIView.as_view(), name='api-item-details'),
+    
+    # Reports
+    path('reports/dashboard/', views.InventoryReportDashboardView.as_view(), name='report-dashboard'),
 ]
+

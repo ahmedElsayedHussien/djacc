@@ -46,6 +46,10 @@ class CustomerForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        from apps.core.models import TaxType
+        self.fields['default_tax1'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
+        self.fields['default_tax2'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
+
         if self.instance and self.instance.pk and self.instance.account_id:
             self.fields['initial_balance'].initial = self.instance.account.initial_balance
             self.fields['initial_balance_type'].initial = self.instance.account.initial_balance_type
@@ -89,6 +93,12 @@ class SalesInvoiceForm(forms.ModelForm):
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.core.models import CostCenter
+        if 'cost_center' in self.fields:
+            self.fields['cost_center'].queryset = CostCenter.objects.filter(is_active=True, is_leaf=True).order_by('code')
+
 class SalesInvoiceLineForm(forms.ModelForm):
     class Meta:
         model = SalesInvoiceLine
@@ -106,6 +116,12 @@ class SalesInvoiceLineForm(forms.ModelForm):
             'tax_percent2': forms.HiddenInput(attrs={'class': 'tax-rate2'}),
             'total': forms.HiddenInput(attrs={'class': 'total-input'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.core.models import TaxType
+        self.fields['tax_type'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
+        self.fields['tax_type2'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
 
 SalesInvoiceLineFormSet = inlineformset_factory(
     SalesInvoice, SalesInvoiceLine,
@@ -174,19 +190,45 @@ class QuotationForm(forms.ModelForm):
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
         }
 
+    def clean(self):
+        cleaned_data = super().clean()
+        sector = cleaned_data.get('sector')
+        start_date = cleaned_data.get('start_date')
+        end_date = cleaned_data.get('end_date')
+        status = cleaned_data.get('status')
+        is_active = cleaned_data.get('is_active')
+
+        if sector and start_date and end_date:
+            if start_date > end_date:
+                self.add_error('end_date', "تاريخ الانتهاء يجب أن يكون بعد أو يساوي تاريخ البدء.")
+            
+            if status not in ['expired', 'cancelled'] and is_active:
+                from apps.sales.models import Quotation
+                
+                # Check for overlapping active quotations for the same sector
+                overlapping_qs = Quotation.objects.filter(
+                    sector=sector,
+                    status__in=['draft', 'active', 'invoiced'],
+                    is_active=True,
+                    start_date__lte=end_date,
+                    end_date__gte=start_date
+                )
+                
+                if self.instance and self.instance.pk:
+                    overlapping_qs = overlapping_qs.exclude(pk=self.instance.pk)
+                    
+                if overlapping_qs.exists():
+                    raise forms.ValidationError("لا يمكن إنشاء عرض لنفس القطاع في نفس الفترة الزمنية لوجود عرض آخر ساري ومفعل لهذا القطاع.")
+                    
+        return cleaned_data
+
 class QuotationLineForm(forms.ModelForm):
     class Meta:
         model = QuotationLine
-        fields = ['item', 'unit', 'quantity', 'unit_price', 'discount_percent', 'extra_discount_percent', 'tax_type', 'total']
+        fields = ['item', 'discount_percent']
         widgets = {
             'item': forms.Select(attrs={'class': 'form-select'}),
-            'unit': forms.Select(attrs={'class': 'form-select'}),
-            'quantity': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
-            'unit_price': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
             'discount_percent': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
-            'extra_discount_percent': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
-            'tax_type': forms.Select(attrs={'class': 'form-select'}),
-            'total': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
         }
 
 class QuotationLineFormSet(forms.BaseInlineFormSet):
@@ -243,9 +285,28 @@ class SalesReturnLineForm(forms.ModelForm):
             'cogs_account': forms.Select(attrs={'class': 'form-select'}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.core.models import TaxType
+        self.fields['tax_type'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
+        if 'tax_type2' in self.fields:
+            self.fields['tax_type2'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
+
+class SalesReturnLineFormSet(forms.BaseInlineFormSet):
+    pass
+
 SalesReturnLineFormSet = inlineformset_factory(
     SalesReturn, SalesReturnLine,
     form=SalesReturnLineForm,
     extra=1,
     can_delete=True
 )
+
+class CustomerSectorForm(forms.ModelForm):
+    class Meta:
+        model = CustomerSector
+        fields = ['name', 'description']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+        }
