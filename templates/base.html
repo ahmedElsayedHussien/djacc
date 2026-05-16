@@ -23,7 +23,7 @@
         <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
         
         <!-- Sidebar -->
-        <nav id="sidebar" class="sidebar d-md-block collapse">
+        <nav id="sidebar" class="sidebar">
             <button class="sidebar-close-btn" type="button" onclick="toggleSidebar()">
                 <i class="bi bi-x-lg"></i>
             </button>
@@ -361,12 +361,22 @@
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const backdrop = document.getElementById('sidebarBackdrop');
-            sidebar.classList.toggle('show');
-            backdrop.classList.toggle('show');
+            const isShowing = sidebar.classList.contains('show');
+            
+            if (isShowing) {
+                sidebar.classList.remove('show');
+                backdrop.classList.remove('show');
+                document.body.style.overflow = '';
+            } else {
+                sidebar.classList.add('show');
+                backdrop.classList.add('show');
+                document.body.style.overflow = 'hidden';
+            }
         }
         
         // Close sidebar when clicking backdrop
-        document.getElementById('sidebarBackdrop').addEventListener('click', function() {
+        document.getElementById('sidebarBackdrop').addEventListener('click', function(e) {
+            e.preventDefault();
             toggleSidebar();
         });
         
