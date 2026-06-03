@@ -10,7 +10,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMix
 from django.http import HttpResponse
 from django.utils import timezone
 from django.core.paginator import Paginator
-from django.db.models import Sum, Q
+from django.db.models import Sum, Q, F
 from django.core.exceptions import PermissionDenied
 
 from .services import ReportService
@@ -848,6 +848,11 @@ class SalesRepDashboardView(LoginRequiredMixin, PermissionRequiredMixin, Templat
     permission_required = 'sales.view_salesrepresentative'
     template_name = 'reports/rep_dashboard.html'
 
+    def get_template_names(self):
+        if self.request.GET.get('print') == 'thermal':
+            return ['reports/rep_stock_thermal_print.html']
+        return super().get_template_names()
+
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return super().dispatch(request, *args, **kwargs)
@@ -963,6 +968,24 @@ class SalesRepDashboardView(LoginRequiredMixin, PermissionRequiredMixin, Templat
             recent_settlements = RepDailySettlement.objects.filter(sales_rep=rep).order_by('-date', '-id')[:10]
             context['recent_settlements'] = recent_settlements
 
+            # Outstanding Credit Invoices
+            credit_invoices = SalesInvoice.objects.filter(
+                sales_rep=rep,
+                status=SalesInvoice.Status.POSTED,
+                payment_type=SalesInvoice.PaymentType.CREDIT
+            ).select_related('customer').order_by('due_date')
+
+            outstanding_invoices = []
+            for inv in credit_invoices:
+                balance = inv.total - inv.paid_amount
+                if balance > 0:
+                    inv.balance_due = balance
+                    outstanding_invoices.append(inv)
+                    
+            context['outstanding_invoices'] = outstanding_invoices
+            context['debug_credit_count'] = credit_invoices.count()
+            context['debug_total_credit'] = SalesInvoice.objects.filter(payment_type=SalesInvoice.PaymentType.CREDIT, status=SalesInvoice.Status.POSTED).count()
+            
             # --- Tab: Invoices & Returns Filter ---
             inv_start_date_str = self.request.GET.get('inv_start_date')
             inv_end_date_str = self.request.GET.get('inv_end_date')

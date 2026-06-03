@@ -258,7 +258,8 @@ class SalesAgingReportView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
         # Categorize by age
         aging_data = []
         for inv in invoices:
-            age = (today - inv.date).days
+            due_date = inv.due_date if inv.due_date else inv.date
+            age = (today - due_date).days
             bucket = '90+'
             if age <= 30: bucket = '0-30'
             elif age <= 60: bucket = '31-60'

@@ -1,0 +1,20 @@
+<div class="list-group list-group-flush" id="pending-tasks-list" hx-get="{% url 'inventory:pending-tasks' %}" hx-trigger="every 15s">
+    <a href="{% url 'inventory:loading-list' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center px-0">
+        <div>
+            <i class="bi bi-truck me-2 text-primary"></i> طلبات تحميل بانتظار الاعتماد
+        </div>
+        <span class="badge rounded-pill bg-primary">{{ pending_loadings }}</span>
+    </a>
+    <a href="{% url 'inventory:voucher-list' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center px-0">
+        <div>
+            <i class="bi bi-file-earmark-text me-2 text-warning"></i> أذون مخزنية (مسودة)
+        </div>
+        <span class="badge rounded-pill bg-warning text-dark">{{ draft_vouchers }}</span>
+    </a>
+    <a href="{% url 'inventory:transfer-list' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center px-0">
+        <div>
+            <i class="bi bi-arrow-left-right me-2 text-info"></i> تحويلات بانتظار التنفيذ
+        </div>
+        <span class="badge rounded-pill bg-info text-white">{{ pending_transfers }}</span>
+    </a>
+</div>

@@ -73,6 +73,18 @@ class InventoryDashboardView(LoginRequiredMixin, PermRequiredMixin, TemplateView
 
         return ctx
 
+class PendingTasksView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
+    template_name = 'inventory/partials/pending_tasks.html'
+    permission_required = 'inventory.view_stockmovement'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['pending_loadings'] = LoadingOrder.objects.filter(status=LoadingOrder.Status.PENDING).count()
+        ctx['draft_vouchers'] = StockVoucher.objects.filter(status=StockVoucher.Status.DRAFT).count()
+        ctx['pending_transfers'] = WarehouseTransfer.objects.filter(status=WarehouseTransfer.Status.DRAFT).count()
+        return ctx
+
+
 class ItemListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = Item
     template_name = 'inventory/items/list.html'
@@ -564,10 +576,28 @@ class ItemDetailsAPIView(LoginRequiredMixin, PermRequiredMixin, View):
             if ledger:
                 available_qty = float(ledger.quantity_on_hand)
 
+        price = item.standard_price
+        customer_id = request.GET.get('customer_id')
+        if customer_id:
+            from apps.sales.models import Customer, PriceList, PriceListItem
+            customer = Customer.objects.filter(id=customer_id).first()
+            if customer:
+                price_list = customer.price_list
+                if not price_list:
+                    price_list = PriceList.objects.filter(is_default=True, is_active=True).first()
+                if price_list:
+                    pli = PriceListItem.objects.filter(
+                        price_list=price_list,
+                        item=item,
+                        min_qty__lte=1
+                    ).order_by('-min_qty').first()
+                    if pli:
+                        price = pli.unit_price
+
         return JsonResponse({
             'units': units,
             'default_unit_id': item.sales_unit_id or item.base_unit_id,
-            'standard_price': float(item.standard_price),
+            'standard_price': float(price),
             'available_qty': available_qty
         })
 

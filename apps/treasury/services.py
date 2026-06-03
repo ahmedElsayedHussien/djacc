@@ -325,8 +325,6 @@ class TreasuryService:
         عكس عملية تحويل (إصدار و/أو استلام)
         """
         transfer = CashTransfer.objects.select_for_update().get(pk=transfer.pk)
-        if not transfer.issue_entry and not transfer.receive_entry:
-            raise ValueError("هذا التحويل لم يتم ترحيله بعد")
 
         if transfer.status == CashTransfer.Status.CANCELLED:
             raise ValueError("هذا التحويل تم إلغاؤه/عكسه مسبقاً")

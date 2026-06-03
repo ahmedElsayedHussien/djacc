@@ -224,7 +224,14 @@ class JournalService:
         ✅ آمن للتكرار: يحذف القيد الافتتاحي القديم تلقائياً قبل إنشاء الجديد لمنع الازدواجية.
         """
 
-        accounts = Account.objects.filter(is_leaf=True).exclude(initial_balance=0)
+        # استثناء حسابات المخزون (113x) لأن أرصدتها الافتتاحية تُدار حصرياً
+        # عبر أذون الإضافة المخزنية التي تنشئ قيودها الافتتاحية تلقائياً
+        inventory_parent = getattr(settings, 'DEFAULT_INVENTORY_ACCOUNT', '1131')
+        accounts = Account.objects.filter(is_leaf=True).exclude(
+            initial_balance=0
+        ).exclude(
+            code__startswith=inventory_parent[:3]  # Exclude 113x accounts
+        )
         if not accounts.exists():
             return None
             
@@ -274,11 +281,13 @@ class JournalService:
                     'description': 'رصيد افتتاحي وسيط (للموازنة)'
                 })
 
-        # أرشفة أي قيد افتتاحي سابق بدلاً من حذفه (الحفاظ على سجل التدقيق)
+        # أرشفة قيود افتتاحية سابقة صادرة من هذه الدالة فقط (بدون مستند مصدر)
+        # ✅ حماية قيود المخزون الافتتاحية (المرتبطة بأذون مخزنية) من الأرشفة
         old_entries = JournalEntry.objects.filter(
             fiscal_year=fiscal_year,
             entry_type=JournalEntry.EntryType.OPENING,
-            is_reversed=False
+            is_reversed=False,
+            content_type__isnull=True  # فقط القيود بدون مستند مصدر (أي الصادرة من هذه الدالة)
         )
         for old_entry in old_entries:
             old_entry.is_reversed = True

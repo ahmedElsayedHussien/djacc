@@ -122,6 +122,42 @@
         display: block;
     }
 
+    /* ── Mobile Optimizations ── */
+    @media (max-width: 575.98px) {
+        .rep-action-btn {
+            padding: 0.6rem 0.5rem;
+        }
+        .rep-action-btn span {
+            font-size: 0.8rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+            text-align: center;
+        }
+        .rep-action-btn i {
+            font-size: 1.4rem;
+        }
+        .glass-card {
+            border-radius: 14px;
+        }
+        .metric-badge {
+            font-size: 0.7rem;
+        }
+    }
+
+    .mobile-tabs-scroll {
+        flex-wrap: nowrap !important;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        white-space: nowrap;
+        padding-bottom: 4px;
+        scrollbar-width: none; /* Firefox */
+    }
+    .mobile-tabs-scroll::-webkit-scrollbar {
+        display: none; /* Chrome, Safari */
+    }
+
     @media print {
         .no-print {
             display: none !important;
@@ -211,18 +247,18 @@
                     </div>
                 </div>
 
-                <div class="d-flex align-items-center gap-3">
-                    <div class="bg-light-subtle px-3 py-2 rounded-4 text-center border">
-                        <span class="text-muted d-block small mb-0">عمولة المبيعات</span>
-                        <strong class="text-primary fs-5">{{ selected_rep.commission_rate }}%</strong>
+                <div class="d-flex align-items-center flex-wrap gap-2 justify-content-center mt-3 mt-md-0">
+                    <div class="bg-light-subtle px-3 py-2 rounded-4 text-center border flex-grow-1">
+                        <span class="text-muted d-block small mb-0">العمولة</span>
+                        <strong class="text-primary fs-6">{{ selected_rep.commission_rate }}%</strong>
                     </div>
-                    <div class="bg-light-subtle px-3 py-2 rounded-4 text-center border">
-                        <span class="text-muted d-block small mb-0">المخزن المرتبط (السيارة)</span>
-                        <strong class="text-dark small"><i class="bi bi-truck me-1"></i>{{ selected_rep.warehouse.name }}</strong>
+                    <div class="bg-light-subtle px-3 py-2 rounded-4 text-center border flex-grow-1">
+                        <span class="text-muted d-block small mb-0">المخزن</span>
+                        <strong class="text-dark small"><i class="bi bi-truck me-1"></i>{{ selected_rep.warehouse.name|truncatechars:15 }}</strong>
                     </div>
-                    <div class="bg-light-subtle px-3 py-2 rounded-4 text-center border">
-                        <span class="text-muted d-block small mb-0">الخزينة المرتبطة</span>
-                        <strong class="text-dark small"><i class="bi bi-safe2 me-1"></i>{{ selected_rep.cash_box.name }}</strong>
+                    <div class="bg-light-subtle px-3 py-2 rounded-4 text-center border flex-grow-1">
+                        <span class="text-muted d-block small mb-0">الخزينة</span>
+                        <strong class="text-dark small"><i class="bi bi-safe2 me-1"></i>{{ selected_rep.cash_box.name|truncatechars:15 }}</strong>
                     </div>
                 </div>
             </div>
@@ -247,6 +283,7 @@
         </div>
 
         <!-- Van inventory value -->
+        {% if not is_representative %}
         <div class="col">
             <div class="card glass-card h-100 shadow-sm border-0 border-top border-success border-3">
                 <div class="card-body d-flex align-items-center gap-3">
@@ -260,6 +297,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
         <!-- Month Sales -->
         <div class="col">
@@ -328,33 +366,33 @@
             <h6 class="fw-bold text-dark mb-3"><i class="bi bi-lightning-charge text-warning me-2"></i>روابط الوصول السريع والعمليات الحالية</h6>
             <div class="row g-3 {% if is_representative %}row-cols-2 row-cols-md-4{% else %}row-cols-2 row-cols-md-3 row-cols-xl-5{% endif %} justify-content-center">
                 <div class="col">
-                    <a href="{% url 'sales:invoice-create' %}?rep={{ selected_rep.id }}" class="btn btn-outline-primary w-100 h-100 rep-action-btn">
+                    <a href="{% url 'sales:invoice-create' %}?rep={{ selected_rep.id }}" class="btn btn-primary text-white w-100 h-100 rep-action-btn shadow-sm border-0">
                         <i class="bi bi-file-earmark-plus"></i>
                         <span>عمل فاتورة جديدة</span>
                     </a>
                 </div>
                 <div class="col">
-                    <a href="{% url 'sales:receipt-create' %}?rep={{ selected_rep.id }}" class="btn btn-outline-success w-100 h-100 rep-action-btn">
+                    <a href="{% url 'sales:receipt-create' %}?rep={{ selected_rep.id }}" class="btn btn-success text-white w-100 h-100 rep-action-btn shadow-sm border-0">
                         <i class="bi bi-cash-stack"></i>
                         <span>تحصيل مبلغ من عميل</span>
                     </a>
                 </div>
                 <div class="col">
-                    <a href="{% url 'inventory:loading-create' %}?sales_rep={{ selected_rep.id }}" class="btn btn-outline-info w-100 h-100 rep-action-btn">
+                    <a href="{% url 'inventory:loading-create' %}?sales_rep={{ selected_rep.id }}" class="btn btn-info text-white w-100 h-100 rep-action-btn shadow-sm border-0">
                         <i class="bi bi-box-seam"></i>
                         <span>طلب تحميل بضاعة</span>
                     </a>
                 </div>
                 {% if not is_representative %}
                 <div class="col">
-                    <a href="{% url 'sales:settlement-create' %}?rep={{ selected_rep.id }}" class="btn btn-outline-warning w-100 h-100 rep-action-btn">
+                    <a href="{% url 'sales:settlement-create' %}?rep={{ selected_rep.id }}" class="btn btn-warning text-dark w-100 h-100 rep-action-btn shadow-sm border-0">
                         <i class="bi bi-calendar-check"></i>
                         <span>تسوية الإيراد اليومي</span>
                     </a>
                 </div>
                 {% endif %}
                 <div class="col">
-                    <a href="{% url 'sales:return-create' %}?rep={{ selected_rep.id }}" class="btn btn-outline-danger w-100 h-100 rep-action-btn">
+                    <a href="{% url 'sales:return-create' %}?rep={{ selected_rep.id }}" class="btn btn-danger text-white w-100 h-100 rep-action-btn shadow-sm border-0">
                         <i class="bi bi-arrow-counterclockwise"></i>
                         <span>تحرير مرتجع مبيعات</span>
                     </a>
@@ -365,8 +403,8 @@
 
     <!-- 5. Main Dashboard Tabs Section -->
     <div class="card glass-card shadow-sm border-0 mb-5">
-        <div class="card-header bg-transparent border-light pt-3 pb-2 px-4 no-print">
-            <ul class="nav nav-pills card-header-pills" id="repTabs" role="tablist">
+        <div class="card-header bg-transparent border-light pt-3 pb-2 px-3 px-md-4 no-print">
+            <ul class="nav nav-pills card-header-pills mobile-tabs-scroll" id="repTabs" role="tablist">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link {% if active_tab == 'stock' %}active{% endif %}" id="stock-tab" data-bs-toggle="tab" data-bs-target="#stockTabContent" type="button" role="tab" aria-controls="stockTabContent" aria-selected="true">
                         <i class="bi bi-truck me-2"></i>جرد بضاعة السيارة
@@ -387,6 +425,11 @@
                         <i class="bi bi-receipt me-2"></i>الفواتير والمرتجعات
                     </button>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link {% if active_tab == 'credit' %}active{% endif %}" id="credit-tab" data-bs-toggle="tab" data-bs-target="#creditTabContent" type="button" role="tab" aria-controls="creditTabContent" aria-selected="false">
+                        <i class="bi bi-clock-history me-2"></i>المديونية الآجلة
+                    </button>
+                </li>
             </ul>
         </div>
         <div class="card-body p-4">
@@ -396,9 +439,9 @@
                 <div class="tab-pane fade {% if active_tab == 'stock' %}show active{% endif %}" id="stockTabContent" role="tabpanel" aria-labelledby="stock-tab">
                     <div class="d-flex align-items-center justify-content-between mb-3">
                         <h6 class="fw-bold text-dark mb-0"><i class="bi bi-clipboard2-check text-success me-2"></i>تفاصيل الجرد الفعلي لبضاعة السيارة</h6>
-                        <button onclick="window.print()" class="btn btn-sm btn-outline-secondary rounded-pill shadow-sm no-print">
-                            <i class="bi bi-printer me-2"></i>طباعة التقرير
-                        </button>
+                        <a href="?{% if selected_rep and not is_representative %}rep={{ selected_rep.id }}&{% endif %}print=thermal" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill shadow-sm no-print">
+                            <i class="bi bi-printer me-2"></i>طباعة حرارية للجرد
+                        </a>
                     </div>
 
                     <div class="table-responsive">
@@ -410,8 +453,10 @@
                                     <th scope="col">التصنيف</th>
                                     <th scope="col" class="text-center">الكمية المتوفرة بالسيارة</th>
                                     <th scope="col" class="text-center">الوحدة الأساسية</th>
+                                    {% if not is_representative %}
                                     <th scope="col" class="text-end">متوسط التكلفة</th>
                                     <th scope="col" class="text-end">القيمة الإجمالية</th>
+                                    {% endif %}
                                     <th scope="col" class="text-center no-print">حالة المخزون</th>
                                 </tr>
                             </thead>
@@ -428,8 +473,10 @@
                                     <td><span class="badge bg-light text-dark-emphasis border">{{ item_ledger.item.category.name }}</span></td>
                                     <td class="text-center fw-bold text-primary">{{ item_ledger.quantity_on_hand|floatformat:2 }}</td>
                                     <td class="text-center text-muted small">{{ item_ledger.item.base_unit.name }}</td>
+                                    {% if not is_representative %}
                                     <td class="text-end">{{ item_ledger.average_cost|floatformat:2 }} ج.م</td>
                                     <td class="text-end fw-bold text-dark">{{ item_ledger.total_value|floatformat:2 }} ج.م</td>
+                                    {% endif %}
                                     <td class="text-center no-print">
                                         {% if item_ledger.quantity_on_hand <= 0 %}
                                         <span class="badge bg-danger bg-opacity-10 text-danger metric-badge">منتهي</span>
@@ -449,7 +496,7 @@
                                 </tr>
                                 {% endfor %}
                             </tbody>
-                            {% if van_items %}
+                            {% if van_items and not is_representative %}
                             <tfoot>
                                 <tr class="table-light fw-bold">
                                     <td colspan="6" class="text-end text-dark">المجموع الإجمالي لقيمة البضاعة:</td>
@@ -464,16 +511,16 @@
 
                 <!-- Tab 2: Cash Box Transactions -->
                 <div class="tab-pane fade" id="safeTabContent" role="tabpanel" aria-labelledby="safe-tab">
-                    <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3 mb-3">
                         <div>
                             <h6 class="fw-bold text-dark mb-1"><i class="bi bi-receipt-cutoff text-info me-2"></i>كشف حركات عهدة الخزينة (كشف يومي)</h6>
                             <p class="text-muted small mb-0">الحركات المالية المسجلة ليوم: <strong>{{ selected_date|date:"Y-m-d" }}</strong></p>
                         </div>
-                        <div class="d-flex gap-2 flex-wrap">
-                            <span class="badge bg-secondary bg-opacity-10 text-secondary py-2 px-3 rounded-pill fw-bold" style="font-size: 0.85rem;">
-                                <i class="bi bi-arrow-left-circle me-1"></i> رصيد اليوم السابق ليوم البحث: <strong>{{ cash_box_statement.opening_balance|floatformat:2 }} ج.م</strong>
+                        <div class="d-flex flex-column flex-sm-row gap-2 w-100 w-lg-auto">
+                            <span class="badge bg-secondary bg-opacity-10 text-secondary py-2 px-3 rounded-pill fw-bold w-100 text-end text-sm-center" style="font-size: 0.85rem;">
+                                <i class="bi bi-arrow-left-circle me-1"></i> رصيد اليوم السابق: <strong>{{ cash_box_statement.opening_balance|floatformat:2 }} ج.م</strong>
                             </span>
-                            <span class="badge bg-success bg-opacity-10 text-success py-2 px-3 rounded-pill fw-bold" style="font-size: 0.85rem;">
+                            <span class="badge bg-success bg-opacity-10 text-success py-2 px-3 rounded-pill fw-bold w-100 text-end text-sm-center" style="font-size: 0.85rem;">
                                 <i class="bi bi-check-circle me-1"></i> رصيد نهاية اليوم: <strong>{{ cash_box_statement.closing_balance|floatformat:2 }} ج.م</strong>
                             </span>
                         </div>
@@ -598,6 +645,12 @@
                                                             ترحيل
                                                         </button>
                                                     </form>
+                                                    <form method="post" action="{% url 'sales:invoice-reverse' inv.pk %}" class="d-inline ms-1 no-print">
+                                                        {% csrf_token %}
+                                                        <button type="submit" class="btn btn-xs btn-outline-danger rounded-pill px-2 py-0" style="font-size: 0.65rem;" onclick="return confirm('تأكيد إلغاء الفاتورة {{ inv.number }}؟');">
+                                                            إلغاء
+                                                        </button>
+                                                    </form>
                                                     {% endif %}
                                                 </td>
                                             </tr>
@@ -653,8 +706,8 @@
                                                     </form>
                                                     <form method="post" action="{% url 'sales:return-delete' ret.pk %}" class="d-inline ms-1 no-print">
                                                         {% csrf_token %}
-                                                        <button type="submit" class="btn btn-xs btn-outline-danger rounded-pill px-2 py-0" style="font-size: 0.65rem;" onclick="return confirm('تأكيد حذف المرتجع {{ ret.number }} بشكل نهائي؟ لا يمكن التراجع عن هذا الإجراء.');">
-                                                            حذف
+                                                        <button type="submit" class="btn btn-xs btn-outline-danger rounded-pill px-2 py-0" style="font-size: 0.65rem;" onclick="return confirm('تأكيد إلغاء المرتجع {{ ret.number }}؟');">
+                                                            إلغاء
                                                         </button>
                                                     </form>
                                                     {% endif %}
@@ -751,9 +804,8 @@
                         </div>
                     </div>
                 </div>
-                    </div>
-                </div>
 
+                
                 <!-- Tab 4: Invoices & Returns -->
                 <div class="tab-pane fade {% if active_tab == 'invoices' %}show active{% endif %}" id="invoicesTabContent" role="tabpanel" aria-labelledby="invoices-tab">
                     <div class="d-flex align-items-center justify-content-between mb-3 no-print">
@@ -818,6 +870,12 @@
                                                 </td>
                                                 <td class="text-center no-print">
                                                     <a href="{% url 'sales:invoice-detail' inv.pk %}" class="btn btn-sm btn-outline-info rounded-pill py-0" style="font-size: 0.75rem;">عرض</a>
+                                                    {% if inv.status == 'draft' %}
+                                                    <form method="post" action="{% url 'sales:invoice-reverse' inv.pk %}" class="d-inline ms-1">
+                                                        {% csrf_token %}
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill py-0" style="font-size: 0.75rem;" onclick="return confirm('تأكيد إلغاء الفاتورة {{ inv.number }}؟');">إلغاء</button>
+                                                    </form>
+                                                    {% endif %}
                                                 </td>
                                             </tr>
                                             {% empty %}
@@ -866,6 +924,12 @@
                                                 </td>
                                                 <td class="text-center no-print">
                                                     <a href="{% url 'sales:return-detail' ret.pk %}" class="btn btn-sm btn-outline-info rounded-pill py-0" style="font-size: 0.75rem;">عرض</a>
+                                                    {% if ret.status == 'draft' %}
+                                                    <form method="post" action="{% url 'sales:return-delete' ret.pk %}" class="d-inline ms-1">
+                                                        {% csrf_token %}
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill py-0" style="font-size: 0.75rem;" onclick="return confirm('تأكيد إلغاء المرتجع {{ ret.number }}؟');">إلغاء</button>
+                                                    </form>
+                                                    {% endif %}
                                                 </td>
                                             </tr>
                                             {% empty %}
@@ -877,6 +941,57 @@
                                     </table>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 5: Outstanding Credit -->
+                <div class="tab-pane fade {% if active_tab == 'credit' %}show active{% endif %}" id="creditTabContent" role="tabpanel" aria-labelledby="credit-tab">
+                    <div class="d-flex align-items-center justify-content-between mb-4">
+                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-clock-history text-primary me-2"></i>العملاء ذوي المديونيات الآجلة</h6>
+                    </div>
+                    
+                    <div class="card shadow-sm border-0 rounded-4">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th class="small">رقم الفاتورة</th>
+                                        <th class="small">العميل</th>
+                                        <th class="small">تاريخ الفاتورة</th>
+                                        <th class="small">تاريخ الاستحقاق</th>
+                                        <th class="small text-center">إجمالي الفاتورة</th>
+                                        <th class="small text-center text-success">المدفوع</th>
+                                        <th class="small text-center text-danger">المتبقي</th>
+                                        <th class="small text-center no-print">إجراء</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for inv in outstanding_invoices %}
+                                    <tr>
+                                        <td class="small fw-semibold"><a href="{% url 'sales:invoice-detail' inv.id %}" class="text-decoration-none">{{ inv.number }}</a></td>
+                                        <td class="small fw-bold">{{ inv.customer.name }}</td>
+                                        <td class="small text-muted">{{ inv.date|date:"Y-m-d" }}</td>
+                                        <td class="small text-danger fw-bold">{{ inv.due_date|date:"Y-m-d" }}</td>
+                                        <td class="text-center small">{{ inv.total|floatformat:2 }}</td>
+                                        <td class="text-center small text-success">{{ inv.paid_amount|floatformat:2 }}</td>
+                                        <td class="text-center fw-bold text-danger">{{ inv.balance_due|floatformat:2 }} ج.م</td>
+                                        <td class="text-center no-print">
+                                            <a href="{% url 'sales:receipt-create' %}?customer={{ inv.customer.id }}&amount={{ inv.balance_due|floatformat:0 }}&rep={{ selected_rep.id }}&invoice={{ inv.id }}" class="btn btn-sm btn-outline-success rounded-pill py-0" style="font-size: 0.75rem;">
+                                                <i class="bi bi-cash-coin me-1"></i>تحصيل
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="8" class="text-center py-5 text-muted">
+                                            <i class="bi bi-check-circle fs-1 text-success d-block mb-3"></i>
+                                            لا توجد فواتير آجلة مستحقة الدفع حالياً.
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>

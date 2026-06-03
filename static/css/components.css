@@ -143,7 +143,7 @@ body {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
-    border: var(--border-width) solid transparent;
+    border: var(--border-width) solid var(--bs-btn-border-color, transparent);
     cursor: pointer;
     text-decoration: none;
     line-height: var(--line-height-normal);
@@ -238,14 +238,33 @@ body {
     color: var(--text-white);
 }
 
-.btn-light {
-    background-color: var(--bg-page);
-    color: var(--text-primary);
-    border-color: var(--border-color);
+.btn-outline-secondary {
+    --bs-btn-color: var(--text-primary);
+    --bs-btn-border-color: var(--color-secondary);
+    --bs-btn-hover-color: var(--text-white);
+    --bs-btn-hover-bg: var(--color-secondary);
+    --bs-btn-hover-border-color: var(--color-secondary);
+    --bs-btn-active-bg: var(--color-secondary);
+    border-width: 2px !important;
+    border-color: var(--color-secondary) !important;
+    font-weight: 700 !important;
 }
 
-.btn-light:hover {
-    background-color: var(--border-color);
+.btn-light {
+    --bs-btn-color: var(--color-primary);
+    --bs-btn-bg: var(--color-primary-soft);
+    --bs-btn-border-color: var(--color-primary-light);
+    --bs-btn-hover-color: var(--text-white);
+    --bs-btn-hover-bg: var(--color-primary);
+    --bs-btn-hover-border-color: var(--color-primary);
+    border-width: 2px !important;
+    border-color: var(--color-primary-light) !important;
+    font-weight: 700 !important;
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-warning, .btn-info, .btn-success, .btn-primary {
+    font-weight: 700 !important;
 }
 
 /* ── النماذج (Forms) ────────────────────────────────────── */

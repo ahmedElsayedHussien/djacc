@@ -87,6 +87,10 @@ class InventoryService:
         """
         if quantity == 0:
             raise ValueError("لا يمكن تسجيل حركة مخزنية بكمية صفرية") # ✅ Fix: منع الحركات الصفرية برفع خطأ بدلاً من إرجاع None
+            
+        if not warehouse.is_active:
+            raise ValueError(f"لا يمكن تنفيذ حركة مخزنية على المخزن ({warehouse.name}) لأنه غير نشط.")
+            
         # Get or create ledger with lock
         ledger, created = ItemLedger.objects.select_for_update().get_or_create(
             item=item, 
@@ -795,11 +799,13 @@ class StockVoucherService:
                 qty = -base_qty
                 
                 # ✅ Fix #2: جلب التكلفة داخل record_movement بعد القفل مباشرة لتجنب السباق (Race Condition)
+                # Use OPENING movement type for opening balance vouchers (rare: reverse opening)
+                mv_type_out = StockMovement.MovementType.OPENING if voucher.offset_account and voucher.offset_account.code == '35' else StockMovement.MovementType.ADJUSTMENT_OUT
                 movement = InventoryService.record_movement(
                     date_val=voucher.date,
                     item=line.item,
                     warehouse=voucher.warehouse,
-                    movement_type=StockMovement.MovementType.ADJUSTMENT_OUT,
+                    movement_type=mv_type_out,
                     quantity=qty,
                     unit_cost=None, # auto-calculate cost after lock
                     reference=voucher.number,
@@ -825,9 +831,15 @@ class StockVoucherService:
 
             else:
                 # Receipt: Positive quantity, cost is already in the line
-                # ✅ Fix #6: منع إضافة مخزون بتكلفة صفرية (إلا إذا كانت عينات مقصودة)
-                if line.unit_cost <= 0:
-                    raise ValueError(f'يجب إدخال تكلفة موجبة للصنف: {line.item.name} في إذن الإضافة.')
+                # منع إضافة مخزون بتكلفة صفرية للرصيد الافتتاحي فقط، وحسابها آلياً للتسويات
+                if line.unit_cost is None or line.unit_cost <= 0:
+                    if voucher.offset_account and voucher.offset_account.code == '35':
+                        raise ValueError(f'يجب إدخال تكلفة موجبة للصنف: {line.item.name} في إذن الإضافة الافتتاحي.')
+                    else:
+                        # إذا كان إذن إضافة تسوية، اسحب متوسط التكلفة الحالي
+                        line.unit_cost = line.item.average_cost
+                        if line.unit_cost is None or line.unit_cost < 0:
+                            line.unit_cost = 0
 
                 qty = base_qty
                 cost = line.unit_cost
@@ -835,11 +847,13 @@ class StockVoucherService:
                 line.save()
                 
                 # Record Inventory Movement
+                # Use OPENING movement type for opening balance vouchers
+                mv_type = StockMovement.MovementType.OPENING if voucher.offset_account and voucher.offset_account.code == '35' else StockMovement.MovementType.ADJUSTMENT_IN
                 InventoryService.record_movement(
                     date_val=voucher.date,
                     item=line.item,
                     warehouse=voucher.warehouse,
-                    movement_type=StockMovement.MovementType.ADJUSTMENT_IN,
+                    movement_type=mv_type,
                     quantity=qty,
                     unit_cost=cost,
                     reference=voucher.number,
@@ -860,9 +874,10 @@ class StockVoucherService:
 
         # Create Journal Entry if there are lines
         if journal_lines:
+            entry_type = JournalEntry.EntryType.OPENING if voucher.offset_account and voucher.offset_account.code == '35' else JournalEntry.EntryType.INVENTORY
             entry = JournalService.create_entry(
                 date_val=voucher.date,
-                entry_type=JournalEntry.EntryType.INVENTORY,
+                entry_type=entry_type,
                 description=f'قيد {voucher.get_voucher_type_display()} رقم {voucher.number}',
                 lines=journal_lines,
                 source_document=voucher,

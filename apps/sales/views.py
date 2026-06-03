@@ -10,7 +10,7 @@ from django.core.exceptions import PermissionDenied
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 from django.db import transaction
-from django.db.models import Sum, Q
+from django.db.models import Sum, Q, F, ExpressionWrapper, DecimalField
 from django.db.models.functions import Coalesce
 from django.views import View
 from django.conf import settings
@@ -28,7 +28,8 @@ from apps.reports.services import ReportService
 from .models import (
     Customer, CustomerSector, SalesInvoice, SalesInvoiceLine, 
     CustomerReceipt, SalesRepresentative, SalesReturn, SalesReturnLine, Quotation, 
-    QuotationLine, PriceList, PriceListItem, RepDailySettlement, RepSettlementInvoice
+    QuotationLine, PriceList, PriceListItem, RepDailySettlement, RepSettlementInvoice,
+    ReceiptAllocation
 )
 from .forms import (
     CustomerForm, SalesInvoiceForm, SalesInvoiceLineFormSet, 
@@ -853,6 +854,15 @@ class SalesInvoiceUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
 class SalesInvoiceReverseView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'sales.change_salesinvoice'
     
+    def has_permission(self):
+        if super().has_permission():
+            return True
+        if hasattr(self.request.user, 'salesrepresentative'):
+            invoice = get_object_or_404(SalesInvoice, pk=self.kwargs.get('pk'))
+            if invoice.sales_rep == self.request.user.salesrepresentative and invoice.status == SalesInvoice.Status.DRAFT:
+                return True
+        return False
+        
     def post(self, request, pk):
         invoice = get_object_or_404(SalesInvoice.objects.select_for_update(), pk=pk)
         if invoice.status == SalesInvoice.Status.DRAFT:
@@ -921,10 +931,27 @@ class CustomerReceiptCreateView(LoginRequiredMixin, PermRequiredMixin, CreateVie
     success_url = reverse_lazy('sales:receipt-list')
     permission_required = 'sales.add_customerreceipt'
 
+    def get_success_url(self):
+        if hasattr(self.request.user, 'salesrepresentative'):
+            return str(reverse_lazy('reports:rep_dashboard')) + "?tab=credit"
+        return str(self.success_url)
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         return kwargs
+
+    def get_initial(self):
+        initial = super().get_initial()
+        customer_id = self.request.GET.get('customer')
+        amount = self.request.GET.get('amount')
+        
+        if customer_id:
+            initial['customer'] = customer_id
+        if amount:
+            initial['amount'] = amount
+            
+        return initial
 
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
@@ -933,6 +960,12 @@ class CustomerReceiptCreateView(LoginRequiredMixin, PermRequiredMixin, CreateVie
             if 'cash_box' in form.fields:
                 form.fields['cash_box'].initial = rep.cash_box
                 form.fields['cash_box'].empty_label = None
+                
+        if self.request.GET.get('customer') and 'customer' in form.fields:
+            form.fields['customer'].widget.attrs.update({
+                'style': 'pointer-events: none; background-color: #e9ecef;',
+                'tabindex': '-1'
+            })
         return form
 
     def form_valid(self, form):
@@ -941,9 +974,34 @@ class CustomerReceiptCreateView(LoginRequiredMixin, PermRequiredMixin, CreateVie
             form.instance.created_by = self.request.user
             self.object = form.save()
             
+            # Process allocations from request.POST
+            for key, value in self.request.POST.items():
+                if key.startswith('allocation_') and value:
+                    try:
+                        invoice_id = int(key.split('_')[1])
+                        allocated_amount = Decimal(value)
+                        if allocated_amount > 0:
+                            # Verify invoice belongs to the customer and is posted
+                            invoice = SalesInvoice.objects.select_for_update().get(
+                                pk=invoice_id, 
+                                customer=self.object.customer,
+                                status=SalesInvoice.Status.POSTED
+                            )
+                            # Create allocation
+                            ReceiptAllocation.objects.create(
+                                receipt=self.object,
+                                invoice=invoice,
+                                amount=allocated_amount
+                            )
+                            # Update invoice paid amount
+                            invoice.paid_amount += allocated_amount
+                            invoice.save(update_fields=['paid_amount'])
+                    except (ValueError, SalesInvoice.DoesNotExist, IndexError):
+                        pass
+
             SalesService.record_receipt(self.object, self.request.user)
             messages.success(self.request, f'تم تسجيل السند {self.object.number} وترحيله بنجاح')
-        return redirect('sales:receipt-detail', pk=self.object.pk)
+        return redirect(self.get_success_url())
 
 class CustomerReceiptDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = CustomerReceipt
@@ -1382,36 +1440,9 @@ class SalesReturnCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
                                 line_form.add_error('unit', str(e))
                                 has_error = True
                                 continue
-                                
-                            # Get original invoice line base quantity
-                            inv_line = SalesInvoiceLine.objects.filter(invoice_id=invoice_id, item=item).first()
-                            if not inv_line:
-                                line_form.add_error('item', f"هذا الصنف ({item.name}) غير موجود في الفاتورة الأصلية.")
-                                has_error = True
-                                continue
-                                
-                            # Sum already returned base quantity (excluding cancelled returns)
-                            returned_base = SalesReturnLine.objects.filter(
-                                sales_return__invoice_id=invoice_id,
-                                item=item
-                            ).exclude(sales_return__status='cancelled').aggregate(
-                                total=Coalesce(Sum('base_quantity'), Decimal('0'))
-                            )['total']
-                            
-                            max_base_allowed = inv_line.base_quantity - returned_base
-                            if entered_base_qty > max_base_allowed:
-                                # Convert max allowed base qty back to the return unit
-                                # standard: base quantity = unit quantity * factor
-                                factor = Decimal('1.0')
-                                if unit == item.sales_unit:
-                                    factor = item.conversion_factor
-                                elif unit == item.purchase_unit:
-                                    factor = item.purchase_conversion_factor
-                                    
-                                max_allowed_in_unit = max_base_allowed / factor
-                                line_form.add_error('quantity', f"الكمية تتجاوز الحد الأقصى المسموح بمرتجعه لهذه الفاتورة وهو {max_allowed_in_unit:.2f} {unit.name if unit else ''}.")
-                                has_error = True
-                                
+                                # Validations removed as per user request to allow returning items not in invoice
+                                # and quantities exceeding the original invoice amount.
+                                pass
                     if has_error:
                         return self.form_invalid(form)
 
@@ -1570,11 +1601,16 @@ class RepDetailsAPIView(LoginRequiredMixin, PermRequiredMixin, View):
 class CustomerInvoicesAPIView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'sales.view_salesinvoice'
     def get(self, request, customer_id):
-        # Fetch posted invoices for this customer
+        # Fetch posted invoices for this customer that have a remaining balance
         invoices = SalesInvoice.objects.filter(
             customer_id=customer_id,
             status=SalesInvoice.Status.POSTED
-        ).order_by('-date', '-id')
+        ).annotate(
+            remaining_balance=ExpressionWrapper(
+                F('total') - F('paid_amount'),
+                output_field=DecimalField()
+            )
+        ).filter(remaining_balance__gt=0).order_by('-date', '-id')
             
         data = [
             {
@@ -1584,7 +1620,8 @@ class CustomerInvoicesAPIView(LoginRequiredMixin, PermRequiredMixin, View):
                 'payment_type': inv.payment_type,
                 'payment_type_display': inv.get_payment_type_display(),
                 'cash_box_id': inv.cash_box_id,
-                'total': float(inv.total)
+                'total': float(inv.total),
+                'remaining_balance': float(inv.remaining_balance)
             }
             for inv in invoices
         ]

@@ -139,26 +139,7 @@
                     <h5 class="mb-0 fw-bold">مهام معلقة</h5>
                 </div>
                 <div class="card-body">
-                    <div class="list-group list-group-flush">
-                        <a href="{% url 'inventory:loading-list' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center px-0">
-                            <div>
-                                <i class="bi bi-truck me-2 text-primary"></i> طلبات تحميل بانتظار الاعتماد
-                            </div>
-                            <span class="badge rounded-pill bg-primary">{{ pending_loadings }}</span>
-                        </a>
-                        <a href="{% url 'inventory:voucher-list' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center px-0">
-                            <div>
-                                <i class="bi bi-file-earmark-text me-2 text-warning"></i> أذون مخزنية (مسودة)
-                            </div>
-                            <span class="badge rounded-pill bg-warning text-dark">{{ draft_vouchers }}</span>
-                        </a>
-                        <a href="{% url 'inventory:transfer-list' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center px-0">
-                            <div>
-                                <i class="bi bi-arrow-left-right me-2 text-info"></i> تحويلات بانتظار التنفيذ
-                            </div>
-                            <span class="badge rounded-pill bg-info text-white">{{ pending_transfers }}</span>
-                        </a>
-                    </div>
+                    {% include 'inventory/partials/pending_tasks.html' %}
                     
                     <div class="mt-4">
                         <h6 class="fw-bold mb-3">إجراءات سريعة</h6>

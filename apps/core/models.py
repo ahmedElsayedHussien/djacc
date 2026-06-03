@@ -8,6 +8,8 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 from decimal import Decimal
 
+from decimal import Decimal
+
 class AccountType(models.TextChoices):
     ASSET = 'asset', 'أصول'
     LIABILITY = 'liability', 'خصوم'
@@ -270,6 +272,16 @@ class JournalEntry(models.Model):
             if self.fiscal_year.is_closed:
                 raise ValidationError({'fiscal_year': 'لا يمكن إضافة قيود في سنة مالية مقفلة'})
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        from .utils import clear_balance_cache
+        clear_balance_cache()
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        from .utils import clear_balance_cache
+        clear_balance_cache()
+
     def __str__(self):
         return self.number
 
@@ -305,6 +317,13 @@ class JournalLine(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+        from .utils import clear_balance_cache
+        clear_balance_cache()
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        from .utils import clear_balance_cache
+        clear_balance_cache()
 
     class Meta:
         ordering = ['entry', 'id']

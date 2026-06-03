@@ -7,7 +7,7 @@
         <div class="card">
             <div class="card-body">
                 {% include 'partials/_form_errors.html' %}
-                <form method="post" novalidate>
+                <form id="receiptForm" method="post" novalidate>
                     {% csrf_token %}
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -56,8 +56,37 @@
                         </div>
                     </div>
                     
+                    <div class="row mt-4" id="allocations_container" style="display:none;">
+                        <div class="col-12">
+                            <h5 class="mb-3">تخصيص السداد للفواتير (الآجلة)</h5>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>رقم الفاتورة</th>
+                                            <th>التاريخ</th>
+                                            <th>إجمالي الفاتورة</th>
+                                            <th>الرصيد المتبقي</th>
+                                            <th style="width: 200px;">المبلغ المخصص</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="invoices_tbody">
+                                        <!-- Invoices will be populated here -->
+                                    </tbody>
+                                    <tfoot>
+                                        <tr>
+                                            <th colspan="4" class="text-start">إجمالي التخصيص:</th>
+                                            <th id="total_allocated_th" class="text-success fs-5">0.00</th>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                            <small class="text-muted d-block mt-1">يجب ألا يتجاوز إجمالي التخصيص قيمة السند في خانة (المبلغ).</small>
+                        </div>
+                    </div>
+
                     <div class="mt-4 d-flex gap-2">
-                        <button type="submit" class="btn btn-primary btn-lg">حفظ وترحيل</button>
+                        <button type="button" onclick="validateAndSubmit()" class="btn btn-primary btn-lg">حفظ وترحيل</button>
                         <a href="{% url 'sales:receipt-list' %}" class="btn btn-secondary btn-lg">إلغاء</a>
                     </div>
                 </form>
@@ -76,11 +105,137 @@
         document.getElementById('cheque_div').style.display = (val === 'cheque') ? 'block' : 'none';
     }
     
+    function fetchInvoices(customerId) {
+        const tbody = document.getElementById('invoices_tbody');
+        const container = document.getElementById('allocations_container');
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center">جاري التحميل...</td></tr>';
+        
+        if (!customerId) {
+            container.style.display = 'none';
+            return;
+        }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const autoInvoiceId = urlParams.get('invoice');
+        const autoAmount = urlParams.get('amount');
+
+        fetch(`/sales/api/customer/${customerId}/invoices/`)
+            .then(res => res.json())
+            .then(data => {
+                tbody.innerHTML = '';
+                if (data.invoices && data.invoices.length > 0) {
+                    let hasDisplayedInvoices = false;
+                    data.invoices.forEach(inv => {
+                        // If a specific invoice is targeted, hide the others
+                        if (autoInvoiceId && inv.id != autoInvoiceId) {
+                            return; // skip
+                        }
+                        
+                        hasDisplayedInvoices = true;
+                        let allocationValue = '';
+                        if (autoInvoiceId && autoInvoiceId == inv.id) {
+                            allocationValue = autoAmount;
+                        }
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>${inv.number}</td>
+                                <td>${inv.date}</td>
+                                <td>${inv.total.toFixed(2)}</td>
+                                <td class="text-danger fw-bold">${inv.remaining_balance.toFixed(2)}</td>
+                                <td>
+                                    <input type="number" step="0.01" min="0" max="${inv.remaining_balance}" 
+                                           name="allocation_${inv.id}" class="form-control form-control-sm allocation-input" 
+                                           value="${allocationValue}" oninput="calculateTotalAllocated()">
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    
+                    if (hasDisplayedInvoices) {
+                        container.style.display = 'block';
+                        calculateTotalAllocated();
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">لا توجد فواتير مطابقة.</td></tr>';
+                        container.style.display = 'block';
+                    }
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">لا توجد فواتير مفتوحة لهذا العميل.</td></tr>';
+                    container.style.display = 'block';
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">حدث خطأ أثناء جلب الفواتير.</td></tr>';
+            });
+    }
+
+    function calculateTotalAllocated() {
+        let total = 0;
+        document.querySelectorAll('.allocation-input').forEach(input => {
+            let val = parseFloat(input.value);
+            if (!isNaN(val) && val > 0) {
+                total += val;
+            }
+        });
+        document.getElementById('total_allocated_th').textContent = total.toFixed(2);
+        return total;
+    }
+
+    function validateAndSubmit() {
+        const receiptAmountInput = document.querySelector('input[name="amount"]');
+        const receiptAmount = parseFloat(receiptAmountInput.value) || 0;
+        const totalAllocated = calculateTotalAllocated();
+
+        if (totalAllocated > receiptAmount) {
+            alert(`خطأ: مجموع المبالغ المخصصة (${totalAllocated.toFixed(2)}) أكبر من إجمالي مبلغ السند (${receiptAmount.toFixed(2)}). الرجاء تصحيح التخصيص.`);
+            return;
+        }
+
+        // Check if any single input exceeds max
+        let hasError = false;
+        document.querySelectorAll('.allocation-input').forEach(input => {
+            let val = parseFloat(input.value);
+            let max = parseFloat(input.getAttribute('max'));
+            if (!isNaN(val) && val > max) {
+                alert(`المبلغ المخصص لا يمكن أن يتجاوز الرصيد المتبقي للفاتورة.`);
+                hasError = true;
+                input.focus();
+            }
+        });
+
+        if (!hasError) {
+            document.getElementById('receiptForm').submit();
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         const select = document.querySelector('select[name="payment_method"]');
         if (select) {
             toggleSource(select.value);
             select.addEventListener('change', (e) => toggleSource(e.target.value));
+        }
+
+        const customerSelect = document.querySelector('select[name="customer"]');
+        if (customerSelect) {
+            customerSelect.addEventListener('change', (e) => fetchInvoices(e.target.value));
+            // Trigger if already selected (e.g. on form error reload)
+            if (customerSelect.value) {
+                fetchInvoices(customerSelect.value);
+            }
+        }
+
+        // Sync top amount with auto-allocated invoice amount for better UX
+        const amountInput = document.querySelector('input[name="amount"]');
+        const urlParams = new URLSearchParams(window.location.search);
+        const autoInvoiceId = urlParams.get('invoice');
+        if (amountInput && autoInvoiceId) {
+            amountInput.addEventListener('input', function(e) {
+                const allocInput = document.querySelector(`input[name="allocation_${autoInvoiceId}"]`);
+                if (allocInput) {
+                    allocInput.value = this.value;
+                    calculateTotalAllocated();
+                }
+            });
         }
     });
 </script>

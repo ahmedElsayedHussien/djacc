@@ -66,6 +66,46 @@
             background: transparent !important;
             font-size: 10px !important;
         }
+        
+        /* ── الإجبار العنيف لإظهار الجدول وترويسته ── */
+        .table-responsive {
+            display: block !important;
+            width: 100% !important;
+            overflow: visible !important;
+            -webkit-overflow-scrolling: auto !important;
+        }
+        .table {
+            display: table !important;
+            width: 100% !important;
+            table-layout: fixed !important;
+            border-collapse: collapse !important;
+        }
+        .table thead, .table-light {
+            display: table-header-group !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        .table tbody {
+            display: table-row-group !important;
+        }
+        .table tr {
+            display: table-row !important;
+            page-break-inside: avoid !important;
+        }
+        .table th, .table td {
+            display: table-cell !important;
+            position: static !important; /* Remove sticky on print */
+            visibility: visible !important;
+            border: 1px solid #dee2e6 !important;
+            padding: 4px !important;
+        }
+        .table-light th, .table thead th {
+            background-color: #f8f9fa !important;
+            color: #000 !important;
+            font-weight: bold !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
     }
 </style>
 <div class="row">
@@ -233,14 +273,20 @@
                     <div class="alert alert-success py-2 text-center small mb-0">
                         <i class="bi bi-check-circle-fill"></i> تمت عملية الصرف بنجاح
                     </div>
-                    <button onclick="window.print()" class="btn btn-outline-secondary w-100 rounded-pill mt-2">طباعة إذن الصرف</button>
+                    {% endif %}
+                    
+                    {% if not request.user.salesrepresentative %}
+                    <button onclick="window.print()" class="btn btn-warning w-100 rounded-pill mt-3 mb-2 fw-bold text-white shadow-sm">
+                        <i class="bi bi-printer me-2"></i>
+                        {% if order.status == 'issued' %}طباعة إذن الصرف{% else %}طباعة طلب التحميل{% endif %}
+                    </button>
                     {% endif %}
                     
                     <hr>
                     {% if request.user.salesrepresentative %}
-                    <a href="{% url 'reports:rep_dashboard' %}" class="btn btn-light w-100 rounded-pill">عودة للوحة التحكم</a>
+                    <a href="{% url 'reports:rep_dashboard' %}" class="btn btn-outline-primary w-100 rounded-pill fw-bold shadow-sm">عودة للوحة التحكم</a>
                     {% else %}
-                    <a href="{% url 'inventory:loading-list' %}" class="btn btn-light w-100 rounded-pill">عودة للقائمة</a>
+                    <a href="{% url 'inventory:loading-list' %}" class="btn btn-outline-primary w-100 rounded-pill fw-bold shadow-sm">عودة للقائمة</a>
                     {% endif %}
                 </div>
             </div>

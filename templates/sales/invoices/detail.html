@@ -66,6 +66,14 @@
                         <i class="bi bi-printer"></i> طباعة الفاتورة
                     </a>
                 </div>
+                {% if perms.sales.change_salesinvoice or request.user.salesrepresentative and invoice.sales_rep == request.user.salesrepresentative %}
+                <form method="post" action="{% url 'sales:invoice-reverse' invoice.pk %}" class="mt-2">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger w-100" onclick="return confirm('هل أنت متأكد من إلغاء/عكس هذه الفاتورة؟ سيتم إرجاع المخزون وعكس القيود المحاسبية بالكامل.');">
+                        <i class="bi bi-arrow-counterclockwise"></i> إلغاء وعكس الفاتورة
+                    </button>
+                </form>
+                {% endif %}
                 {% endif %}
             </div>
         </div>

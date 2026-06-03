@@ -20,22 +20,31 @@ class ReportService:
         ميزان المراجعة بالمجاميع والأرصدة (Optimized)
         """
         # 1. Get accounts with OPENING entries to handle initial_balance logic
+        # ✅ استثناء القيود الملغية (is_reversed) لمنع الازدواجية عند إعادة توليد القيد الافتتاحي
         opening_entry_accounts = set(JournalLine.objects.filter(
             entry__entry_type=JournalEntry.EntryType.OPENING,
-            entry__is_posted=True
+            entry__is_posted=True,
+            entry__is_reversed=False
         ).values_list('account_id', flat=True))
 
-        # 2. Bulk aggregate movements before from_date
+        # 2. Bulk aggregate movements before from_date OR explicitly OPENING entries
+        # ✅ استثناء القيود الملغية لمنع تراكم أرصدة افتتاحية متعددة
+        from django.db.models import Q
         pre_movements = JournalLine.objects.filter(
             entry__is_posted=True,
-            entry__date__lt=from_date
+            entry__is_reversed=False
+        ).filter(
+            Q(entry__date__lt=from_date) | Q(entry__entry_type=JournalEntry.EntryType.OPENING)
         ).values('account_id').annotate(d=Sum('debit'), c=Sum('credit'))
         pre_map = {m['account_id']: (m['d'] or Decimal('0'), m['c'] or Decimal('0')) for m in pre_movements}
 
-        # 3. Bulk aggregate movements in period
+        # 3. Bulk aggregate movements in period (excluding OPENING and reversed entries)
         period_movements = JournalLine.objects.filter(
             entry__is_posted=True,
+            entry__is_reversed=False,
             entry__date__range=[from_date, to_date]
+        ).exclude(
+            entry__entry_type=JournalEntry.EntryType.OPENING
         ).values('account_id').annotate(d=Sum('debit'), c=Sum('credit'))
         period_map = {m['account_id']: (m['d'] or Decimal('0'), m['c'] or Decimal('0')) for m in period_movements}
 
@@ -879,7 +888,8 @@ class ReportService:
             }
             
             for inv in unpaid_invoices:
-                age = (today - inv.date).days
+                due_date = inv.due_date if inv.due_date else inv.date
+                age = (today - due_date).days
                 amount = inv.remaining
                 buckets['total'] += amount
                 if age <= 30: buckets['1_30'] += amount

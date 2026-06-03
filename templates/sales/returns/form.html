@@ -460,7 +460,9 @@
                 }
                 
                 if (fetchedPrice === 0) {
-                    const invResponse = await fetch(`/inventory/api/item/${itemSelect.value}/`);
+                    const customerId = customerSelect ? customerSelect.value : '';
+                    const url = `/inventory/api/item/${itemSelect.value}/` + (customerId ? `?customer_id=${customerId}` : '');
+                    const invResponse = await fetch(url);
                     if (invResponse.ok) {
                         const data = await invResponse.json();
                         if (data.standard_price) {

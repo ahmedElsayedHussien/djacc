@@ -1,5 +1,5 @@
 from django.views.generic import ListView, CreateView, UpdateView
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from apps.core.mixins import PermRequiredMixin
 from django.urls import reverse_lazy
 from django.contrib import messages
@@ -10,8 +10,9 @@ from ..forms import AccountForm, CostCenterForm
 from ..services import AccountService, AuditService
 from ..utils import get_account_balance, clear_balance_cache
 
-class AccountInitializeView(LoginRequiredMixin, PermRequiredMixin, View):
-    permission_required = 'core.add_account'
+class AccountInitializeView(LoginRequiredMixin, UserPassesTestMixin, View):
+    def test_func(self):
+        return self.request.user.is_superuser
     
     def post(self, request, *args, **kwargs):
         count = AccountService.initialize_default_chart()

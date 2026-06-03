@@ -373,6 +373,8 @@ class StockVoucherForm(forms.ModelForm):
             getattr(settings, 'INVENTORY_OPENING_BALANCE_ACCOUNT', '35'),
             getattr(settings, 'INVENTORY_ADJUSTMENT_IN_ACCOUNT', '424'),
             getattr(settings, 'INVENTORY_ADJUSTMENT_OUT_ACCOUNT', '542'),
+            getattr(settings, 'INVENTORY_INTERNAL_CONSUMPTION_ACCOUNT', '524'),
+            getattr(settings, 'INVENTORY_GIFTS_ACCOUNT', '525'),
         ]
         allowed_accounts = Account.objects.filter(
             code__in=exact_codes,
@@ -408,13 +410,7 @@ class StockVoucherForm(forms.ModelForm):
             if offset_account.code == '35' and voucher_type == 'issue':
                 raise forms.ValidationError({'offset_account': 'لا يمكن استخدام حساب الأرصدة الافتتاحية مع إذن الصرف. يرجى اختيار حساب آخر.'})
                 
-            # 2. التحقق من عدم تكرار الرصيد الافتتاحي في النظام بأكمله
-            if offset_account.code == '35':
-                qs = StockVoucher.objects.filter(offset_account__code='35')
-                if self.instance and self.instance.pk:
-                    qs = qs.exclude(pk=self.instance.pk)
-                if qs.exists():
-                    raise forms.ValidationError({'offset_account': 'لقد تم إدخال رصيد افتتاحي للمخزون بالفعل في النظام. لا يمكن إنشاء رصيد افتتاحي أكثر من مرة.'})
+
                     
         return cleaned_data
 
@@ -466,23 +462,43 @@ class BaseStockVoucherLineFormSet(forms.BaseInlineFormSet):
                 items.append(item)
         
         items = []
-        voucher_type = self.instance.voucher_type
+        voucher_type = self.data.get('voucher_type') or (self.instance.voucher_type if self.instance else '')
+        
+        offset_account_id = self.data.get('offset_account')
+        is_opening = False
+        if offset_account_id:
+            from apps.core.models import Account
+            acc = Account.objects.filter(id=offset_account_id).first()
+            if acc and acc.code == '35':
+                is_opening = True
         
         for form in self.forms:
             if self.can_delete and self._should_delete_form(form):
                 continue
             item = form.cleaned_data.get('item')
             unit_cost = form.cleaned_data.get('unit_cost')
+            quantity = form.cleaned_data.get('quantity', 0)
             
             if item:
                 if item in items:
                     form.add_error('item', 'هذا الصنف مكرر في الأسطر. يرجى تجميع الكميات في سطر واحد.')
                 items.append(item)
                 
-                # Check positive unit_cost for receipt vouchers
-                if voucher_type == 'receipt':
+                # Check positive unit_cost for receipt vouchers if it is an opening balance
+                if voucher_type == 'receipt' and is_opening:
                     if unit_cost is None or unit_cost <= 0:
-                        form.add_error('unit_cost', 'يجب إدخال تكلفة وحدة موجبة أكبر من صفر لإذن الإضافة.')
+                        form.add_error('unit_cost', 'يجب إدخال تكلفة وحدة أكبر من الصفر لإذن إضافة الرصيد الافتتاحي.')
+                
+                # Proactive stock check for issue vouchers
+                if voucher_type == 'issue':
+                    if quantity > 0:
+                        warehouse_id = self.data.get('warehouse')
+                        if warehouse_id:
+                            from .models import ItemLedger
+                            ledger = ItemLedger.objects.filter(item=item, warehouse_id=warehouse_id).first()
+                            available = ledger.quantity_on_hand if ledger else 0
+                            if quantity > available:
+                                form.add_error('quantity', f'الكمية المطلوبة ({quantity}) تتجاوز الرصيد المتاح ({available}).')
 
 StockVoucherLineFormSet = inlineformset_factory(
     StockVoucher, StockVoucherLine,

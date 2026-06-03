@@ -19,10 +19,10 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         GROUPS_CONFIG = {
             'سوبر ادمن': {'all': True},
-            'مدير حسابات': {'apps': ['core'], 'all_perms': True},
-            'حسابات': {'apps': ['core'], 'extra_perms': ['view_customersector', 'view_pricelist']},
+            'مدير حسابات': {'apps': ['core'], 'all_perms': True, 'extra_perms': ['view_customerreceipt']},
+            'حسابات': {'apps': ['core'], 'extra_perms': ['view_customersector', 'view_pricelist', 'view_customerreceipt']},
             'مدير مبيعات': {'apps': ['sales', 'core'], 'all_perms': True},
-            'مبيعات': {'apps': ['sales', 'core'], 'extra_perms': ['add_salesinvoice', 'add_salesreturn', 'add_customerreceipt', 'add_loadingorder', 'view_loadingorder', 'change_loadingorder', 'view_item']},
+            'مبيعات': {'apps': ['sales', 'core'], 'extra_perms': ['add_salesinvoice', 'add_salesreturn', 'add_customerreceipt', 'view_customerreceipt', 'add_loadingorder', 'view_loadingorder', 'change_loadingorder', 'view_item']},
             'مدير مخازن': {'apps': ['inventory'], 'all_perms': True},
             'مخازن': {'apps': ['inventory']},
             'مدير مشتريات': {'apps': ['purchases'], 'all_perms': True},

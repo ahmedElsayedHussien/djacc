@@ -170,6 +170,32 @@
                 {% endif %}
                 {% endif %}
 
+                {% if receipt.receiptallocation_set.exists %}
+                <div class="mb-4">
+                    <h6 class="text-muted small fw-bold">الفواتير المسددة بهذا السند:</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>رقم الفاتورة</th>
+                                    <th>التاريخ</th>
+                                    <th>المبلغ المخصص</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for allocation in receipt.receiptallocation_set.all %}
+                                <tr>
+                                    <td><a href="{% url 'sales:invoice-detail' allocation.invoice.pk %}">{{ allocation.invoice.number }}</a></td>
+                                    <td>{{ allocation.invoice.date|date:'Y-m-d' }}</td>
+                                    <td class="text-success fw-bold">{{ allocation.amount|floatformat:2 }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
+
                 {% if receipt.notes %}
                 <div class="mb-4">
                     <h6 class="text-muted small">ملاحظات/البيان:</h6>

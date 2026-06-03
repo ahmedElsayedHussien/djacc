@@ -1,5 +1,5 @@
 from django.views.generic import ListView, CreateView, UpdateView, DetailView
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin, UserPassesTestMixin
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
@@ -38,8 +38,9 @@ class FiscalYearCloseView(LoginRequiredMixin, PermissionRequiredMixin, View):
             messages.error(request, f'فشل الإقفال: {e}')
         return redirect('core:fiscalyear-list')
 
-class FiscalYearPostOpeningView(LoginRequiredMixin, PermissionRequiredMixin, View):
-    permission_required = 'core.change_fiscalyear'
+class FiscalYearPostOpeningView(LoginRequiredMixin, UserPassesTestMixin, View):
+    def test_func(self):
+        return self.request.user.is_superuser
     
     def post(self, request, pk):
         fiscal_year = get_object_or_404(FiscalYear, pk=pk)

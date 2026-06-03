@@ -469,12 +469,9 @@ class SalesReturnLine(models.Model):
         if self.unit_price < 0:
             raise ValidationError({'unit_price': 'سعر الوحدة لا يمكن أن يكون سالباً'})
         if hasattr(self, 'sales_return') and self.sales_return and getattr(self.sales_return, 'invoice', None):
-            original_line = self.sales_return.invoice.lines.filter(item=self.item).first()
-            if not original_line:
-                raise ValidationError({'item': 'هذا الصنف غير موجود في الفاتورة الأصلية'})
-            if self.quantity > original_line.quantity:
-                raise ValidationError({'quantity': 'كمية المرتجع لا يمكن أن تتجاوز الكمية في الفاتورة الأصلية'})
-
+            # User requested to allow returning items not in the invoice and quantities exceeding it.
+            # We just leave this block empty or remove the constraints.
+            pass
 class RepDailySettlement(models.Model):
     """
     تسوية يومية للمندوب — يسلم فيها:
@@ -537,13 +534,22 @@ class RepDailySettlement(models.Model):
         return abs(self.difference)
 
     def calculate_totals(self):
-        """يحسب مجموع الفواتير اليومية للمندوب"""
+        """يحسب مجموع الفواتير اليومية للمندوب (ناقص المرتجعات النقدية)"""
+        total = Decimal('0')
         if self.invoice_lines.exists():
             total = SalesInvoice.objects.filter(
                 id__in=self.invoice_lines.values_list('invoice_id', flat=True)
-            ).aggregate(t=Sum('total'))['t'] or 0
-            self.total_sales = total
-            self.difference  = total - self.cash_delivered
+            ).aggregate(t=Sum('total'))['t'] or Decimal('0')
+            
+        total_returns = SalesReturn.objects.filter(
+            sales_rep=self.sales_rep,
+            date=self.date,
+            payment_type='cash',
+            status=SalesReturn.Status.POSTED
+        ).aggregate(t=Sum('total'))['t'] or Decimal('0')
+        
+        self.total_sales = total - total_returns
+        self.difference  = self.total_sales - self.cash_delivered
         return self
 
     def save(self, *args, **kwargs):

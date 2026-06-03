@@ -1,6 +1,6 @@
 from django.db import models
 from django.views.generic import ListView, DetailView, View
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from apps.core.mixins import PermRequiredMixin
 from django.shortcuts import get_object_or_404, redirect
 from django.contrib import messages
@@ -40,8 +40,9 @@ class JournalEntryDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     context_object_name = 'entry'
     permission_required = 'core.view_journalentry'
 
-class JournalEntryReverseView(LoginRequiredMixin, PermRequiredMixin, View):
-    permission_required = 'core.change_journalentry'
+class JournalEntryReverseView(LoginRequiredMixin, UserPassesTestMixin, View):
+    def test_func(self):
+        return self.request.user.is_superuser
 
     def post(self, request, pk):
         entry = get_object_or_404(JournalEntry, pk=pk)

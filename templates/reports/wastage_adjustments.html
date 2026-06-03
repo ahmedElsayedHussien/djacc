@@ -45,7 +45,12 @@
                 <tbody>
                     {% for voucher in report %}
                     <tr>
-                        <td><code>{{ voucher.number }}</code></td>
+                        <td>
+                            <a href="{% url 'inventory:voucher-detail' voucher.pk %}" class="text-decoration-none">
+                                <code>{{ voucher.number }}</code>
+                                <i class="bi bi-box-arrow-up-right ms-1 small text-muted"></i>
+                            </a>
+                        </td>
                         <td>{{ voucher.date }}</td>
                         <td>
                             {% if voucher.voucher_type == 'issue' %}

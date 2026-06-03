@@ -252,7 +252,7 @@ class SalesService:
             'account': debit_account,
             'debit': invoice.total,
             'credit': 0,
-            'description': f"Sales Invoice {invoice.number} - {invoice.customer.name}",
+            'description': f"فاتورة مبيعات {invoice.number} - {invoice.customer.name}",
             'cost_center': invoice.cost_center
         })
 
@@ -396,10 +396,29 @@ class SalesService:
         if invoice.journal_entry.is_reversed:
             raise ValueError(f"هذه الفاتورة تم عكسها مسبقاً")
 
+        # Handle Receipt Allocations
+        allocations = invoice.receiptallocation_set.select_related('receipt').all()
+        if allocations.exists():
+            if invoice.payment_type == SalesInvoice.PaymentType.CASH:
+                for allocation in allocations:
+                    receipt = allocation.receipt
+                    if receipt.reference and receipt.reference.startswith(f"Settlement for {invoice.number}"):
+                        if receipt.journal_entry and not receipt.journal_entry.is_reversed:
+                            from django.utils import timezone
+                            JournalService.reverse_entry(receipt.journal_entry, timezone.now().date(), reversed_by)
+                        receipt.reference = f"{receipt.reference} (ملغي)"
+                        receipt.save(update_fields=['reference'])
+                        allocation.delete()
+                    else:
+                        raise ValueError("لا يمكن عكس الفاتورة لأن لها سندات قبض يدوية. يرجى إلغاء سندات القبض أولاً.")
+            else:
+                raise ValueError("لا يمكن عكس الفاتورة لأن لها سندات قبض مرتبطة بها. يرجى إلغاء سندات القبض أولاً.")
+
         # 1. Reverse the Journal Entry
+        from django.utils import timezone
         reversal_entry = JournalService.reverse_entry(
             invoice.journal_entry, 
-            date_val=date.today(), 
+            date_val=timezone.now().date(), 
             created_by=reversed_by
         )
 
@@ -434,22 +453,42 @@ class SalesService:
         # Determine Cost Center (Project) from the linked sales invoice
         cost_center = sales_return.invoice.cost_center if sales_return.invoice else None
         
-        # 1. Determine Credit Account (Customer vs CashBox)
-        credit_account = sales_return.customer.account
-        if sales_return.payment_type == 'cash':
-            if sales_return.cash_box:
-                credit_account = sales_return.cash_box.account
-            elif sales_return.invoice and sales_return.invoice.cash_box:
-                credit_account = sales_return.invoice.cash_box.account
-
-        # Credit: Refund Source
+        # 1. Always Credit Customer for Sales Returns (to track in AR)
         lines.append({
-            'account': credit_account,
+            'account': sales_return.customer.account,
             'debit': 0,
             'credit': sales_return.total,
-            'description': f"مرتجع كاش {sales_return.number}",
+            'description': f"مرتجع مبيعات رقم {sales_return.number}",
             'cost_center': cost_center
         })
+
+        # If it's a cash return, also create settlement lines in the same entry
+        if sales_return.payment_type == 'cash':
+            cash_account = None
+            if sales_return.cash_box:
+                cash_account = sales_return.cash_box.account
+            elif sales_return.invoice and sales_return.invoice.cash_box:
+                cash_account = sales_return.invoice.cash_box.account
+                
+            if cash_account:
+                # Debit Customer (giving them cash)
+                lines.append({
+                    'account': sales_return.customer.account,
+                    'debit': sales_return.total,
+                    'credit': 0,
+                    'description': f"سداد نقدي للمرتجع رقم {sales_return.number}",
+                    'cost_center': cost_center
+                })
+                # Credit Cash Box (money leaving)
+                lines.append({
+                    'account': cash_account,
+                    'debit': 0,
+                    'credit': sales_return.total,
+                    'description': f"صرف قيمة مرتجع رقم {sales_return.number}",
+                    'cost_center': cost_center
+                })
+            else:
+                raise ValueError("لا يمكن تحديد الخزينة لصرف المرتجع النقدي")
 
         for line in return_lines:
             # Compute net amount before tax (price after discount, before tax)

@@ -75,13 +75,23 @@
         const typeField = document.querySelector('[name="voucher_type"]');
         const offsetAccountField = document.querySelector('[name="offset_account"]');
         function toggleUnitCost() {
-            const isIssue = typeField.value === 'issue';
+            const isReceipt = typeField.value === 'receipt';
+            const selectedAccountText = offsetAccountField.options[offsetAccountField.selectedIndex]?.text || '';
+            const isOpening = selectedAccountText.startsWith('35 ') || selectedAccountText.startsWith('35 -');
+            
+            const showCost = isReceipt && isOpening;
+            
             const unitCostCells = document.querySelectorAll('.line-form td:nth-child(4)');
             const unitCostHeader = document.querySelector('th:nth-child(4)');
             
-            if (isIssue) {
+            if (!showCost) {
                 unitCostHeader.classList.add('hidden-col');
-                unitCostCells.forEach(td => td.classList.add('hidden-col'));
+                unitCostCells.forEach(td => {
+                    td.classList.add('hidden-col');
+                    // Clear the cost input if hidden so it doesn't get submitted
+                    const input = td.querySelector('input');
+                    if (input) input.value = '';
+                });
             } else {
                 unitCostHeader.classList.remove('hidden-col');
                 unitCostCells.forEach(td => td.classList.remove('hidden-col'));
@@ -116,6 +126,11 @@
             });
             toggleUnitCost(); // Initial state
             toggleOffsetAccountOptions(); // Initial state
+        }
+        if (offsetAccountField) {
+            offsetAccountField.addEventListener('change', function() {
+                toggleUnitCost();
+            });
         }
 
         // Fetch units based on item selection

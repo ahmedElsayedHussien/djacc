@@ -237,6 +237,7 @@ class SalesInvoiceForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
+        self.user = user
         super().__init__(*args, **kwargs)
         if 'date' in self.fields and not self.instance.pk:
             self.fields['date'].initial = date_type.today()
@@ -253,6 +254,11 @@ class SalesInvoiceForm(forms.ModelForm):
             if cc_sales:
                 self.fields['cost_center'].initial = cc_sales
 
+        if self.user and not self.user.is_superuser:
+            if 'due_date' in self.fields:
+                self.fields['due_date'].widget.attrs['readonly'] = True
+                self.fields['due_date'].widget.attrs['class'] += ' bg-light'
+
     def clean(self):
         cleaned = super().clean()
         inv_date = cleaned.get('date')
@@ -263,9 +269,30 @@ class SalesInvoiceForm(forms.ModelForm):
             today = date_type.today()
             if inv_date.year != today.year or inv_date.month != today.month:
                 self.add_error('date', 'غير مسموح بإنشاء فاتورة بتاريخ خارج حدود الشهر الحالي.')
+
+        payment_type = cleaned.get('payment_type')
+        customer = cleaned.get('customer')
+
+        # Auto-calculate and enforce due_date for non-admins
+        if getattr(self, 'user', None) and not self.user.is_superuser:
+            if payment_type == 'cash':
+                cleaned['due_date'] = inv_date
+            elif payment_type == 'credit' and customer and inv_date:
+                days = customer.payment_terms_days if customer.payment_terms_days is not None else 30
+                if customer.customer_type == 'cash':
+                    days = 20
+                cleaned['due_date'] = inv_date + timedelta(days=days)
+            due_date = cleaned.get('due_date')
                 
         if inv_date and due_date and due_date < inv_date:
             self.add_error('due_date', 'تاريخ الاستحقاق يجب أن يكون بعد أو يساوي تاريخ الفاتورة')
+            
+        if payment_type == 'credit':
+            cleaned['cash_box'] = None
+            self.instance.cash_box = None
+            if 'cash_box' in self._errors:
+                del self._errors['cash_box']
+                
         return cleaned
 
 class SalesInvoiceLineForm(forms.ModelForm):
