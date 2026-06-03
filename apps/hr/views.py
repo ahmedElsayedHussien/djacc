@@ -1,18 +1,31 @@
+import logging
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+from io import StringIO
+from django.core.management import call_command
 from django.views.generic import TemplateView, ListView, CreateView, UpdateView, DetailView
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
+from apps.core.mixins import PermRequiredMixin
 from django.urls import reverse_lazy
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
 from django.db import transaction
 from django.contrib import messages
-from .models import Employee, LeaveRequest, PayrollPeriod, EmployeeDocument, Loan, LeaveBalance, JobTitle, Department
+from .models import Employee, LeaveRequest, PayrollPeriod, EmployeeDocument, Loan, LeaveBalance, JobTitle, Department, EndOfService
 from .forms import EmployeeForm, PayrollPeriodForm, LeaveRequestForm, LoanForm, UserForm, JobTitleForm, DepartmentForm
+from .services import EOSService
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
+from django.contrib.sessions.models import Session
+from django.db.models import Sum
+from django.utils import timezone
+from apps.core.mixins import perm_required
+from apps.treasury.models import BankAccount, CashBox
+from apps.sales.models import SalesRepresentative
 
-class DepartmentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+logger = logging.getLogger(__name__)
+
+class DepartmentCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = Department
     form_class = DepartmentForm
     template_name = 'hr/departments/form.html'
@@ -23,7 +36,7 @@ class DepartmentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateVi
         messages.success(self.request, "تم إنشاء القسم بنجاح")
         return super().form_valid(form)
 
-class JobTitleCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class JobTitleCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = JobTitle
     form_class = JobTitleForm
     template_name = 'hr/job_titles/form.html'
@@ -34,7 +47,7 @@ class JobTitleCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView
         messages.success(self.request, "تم إنشاء المسمى الوظيفي بنجاح")
         return super().form_valid(form)
 
-class UserCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class UserCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = User
     form_class = UserForm
     template_name = 'hr/users/form.html'
@@ -46,6 +59,7 @@ class UserCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
         return super().form_valid(form)
 
 @login_required
+@perm_required('hr.view_employee', raise_exception=True)
 def get_user_info(request):
     user_id = request.GET.get('user_id')
     if user_id:
@@ -60,7 +74,7 @@ def get_user_info(request):
             return JsonResponse({'error': 'User not found'}, status=404)
     return JsonResponse({'error': 'No user_id provided'}, status=400)
 
-class HRDashboardView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class HRDashboardView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     permission_required = 'hr.view_employee'
     template_name = 'hr/dashboard.html'
     
@@ -81,11 +95,19 @@ class HRDashboardView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView)
         
         return context
 
+@login_required
+@perm_required('hr.add_department', raise_exception=True)
+def setup_hr_defaults_view(request):
+    out = StringIO()
+    call_command('setup_hr_defaults', stdout=out)
+    messages.success(request, 'تم تجهيز البيانات الأساسية: الإدارات، المسميات الوظيفية، وأنواع الإجازات.')
+    return redirect('hr:dashboard')
+
 # ==========================================
 # Employee Management Views
 # ==========================================
 
-class EmployeeListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class EmployeeListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = Employee
     template_name = 'hr/employees/list.html'
     context_object_name = 'employees'
@@ -93,13 +115,13 @@ class EmployeeListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     paginate_by = 25
 
     def get_queryset(self):
-        qs = super().get_queryset().select_related('department', 'job_title')
+        qs = super().get_queryset().select_related('department', 'job_title').exclude(user__is_superuser=True)
         q = self.request.GET.get('q')
         if q:
             qs = qs.filter(first_name__icontains=q) | qs.filter(last_name__icontains=q) | qs.filter(national_id__icontains=q)
         return qs
 
-class EmployeeCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class EmployeeCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = Employee
     form_class = EmployeeForm
     template_name = 'hr/employees/form.html'
@@ -122,7 +144,7 @@ class EmployeeCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView
         messages.success(self.request, f'تم إضافة الموظف {form.instance.first_name} {form.instance.last_name} بنجاح.')
         return super().form_valid(form)
 
-class EmployeeUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class EmployeeUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
     model = Employee
     form_class = EmployeeForm
     template_name = 'hr/employees/form.html'
@@ -145,7 +167,7 @@ class EmployeeUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView
         messages.success(self.request, f'تم تحديث بيانات الموظف {form.instance.first_name} بنجاح.')
         return super().form_valid(form)
 
-class EmployeeDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class EmployeeDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = Employee
     template_name = 'hr/employees/detail.html'
     context_object_name = 'employee'
@@ -169,14 +191,15 @@ from django.views import View
 from .forms import PayrollPeriodForm, LeaveBalanceForm
 from .services import PayrollService
 
-class PayrollPeriodListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class PayrollPeriodListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = PayrollPeriod
     template_name = 'hr/payroll/list.html'
     context_object_name = 'periods'
     permission_required = 'hr.view_payrollperiod'
+    paginate_by = 25
     ordering = ['-start_date']
 
-class PayrollPeriodCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class PayrollPeriodCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = PayrollPeriod
     form_class = PayrollPeriodForm
     template_name = 'hr/payroll/form.html'
@@ -187,7 +210,7 @@ class PayrollPeriodCreateView(LoginRequiredMixin, PermissionRequiredMixin, Creat
         messages.success(self.request, f'تم إنشاء فترة الرواتب: {form.instance.name}')
         return super().form_valid(form)
 
-class PayrollPeriodDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class PayrollPeriodDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = PayrollPeriod
     template_name = 'hr/payroll/detail.html'
     context_object_name = 'period'
@@ -197,22 +220,17 @@ class PayrollPeriodDetailView(LoginRequiredMixin, PermissionRequiredMixin, Detai
         context = super().get_context_data(**kwargs)
         context['payslips'] = self.object.payslips.select_related('employee', 'employee__job_title')
         
-        from apps.treasury.models import BankAccount, CashBox
-        from apps.sales.models import SalesRepresentative
-        
         rep_cashboxes = SalesRepresentative.objects.values_list('cash_box_id', flat=True)
         
         context['bank_accounts'] = BankAccount.objects.all()
         context['cash_boxes'] = CashBox.objects.exclude(id__in=rep_cashboxes)
 
-        # حساب المبالغ المقترحة للتوريد
-        from django.db.models import Sum
         context['suggested_ins'] = self.object.payslips.aggregate(total=Sum('social_insurance'))['total'] or 0
         context['suggested_tax'] = self.object.payslips.aggregate(total=Sum('income_tax'))['total'] or 0
         
         return context
 
-class GeneratePayslipsView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class GeneratePayslipsView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'hr.change_payrollperiod'
     
     def post(self, request, pk):
@@ -227,7 +245,7 @@ class GeneratePayslipsView(LoginRequiredMixin, PermissionRequiredMixin, View):
             messages.error(request, f'حدث خطأ: {e}')
         return redirect('hr:payroll-detail', pk=pk)
 
-class PostPayrollView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class PostPayrollView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'hr.change_payrollperiod'
     
     def post(self, request, pk):
@@ -239,7 +257,7 @@ class PostPayrollView(LoginRequiredMixin, PermissionRequiredMixin, View):
             messages.error(request, f'فشل الترحيل المحاسبي: {e}')
         return redirect('hr:payroll-detail', pk=pk)
 
-class ApprovePayrollView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class ApprovePayrollView(LoginRequiredMixin, PermRequiredMixin, View):
     """✅ Bug #6 Fix: خطوة الاعتماد المفقودة (DRAFT → APPROVED) قبل الترحيل المحاسبي."""
     permission_required = 'hr.change_payrollperiod'
 
@@ -254,7 +272,7 @@ class ApprovePayrollView(LoginRequiredMixin, PermissionRequiredMixin, View):
         return redirect('hr:payroll-detail', pk=pk)
 
 
-class PostInsuranceView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class PostInsuranceView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'hr.change_payrollperiod'
     
     def post(self, request, pk):
@@ -267,14 +285,12 @@ class PostInsuranceView(LoginRequiredMixin, PermissionRequiredMixin, View):
             messages.error(request, f'فشل إنشاء قيد التأمينات: {e}')
         return redirect('hr:payroll-detail', pk=pk)
 
-class PostPaymentView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class PostPaymentView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'hr.change_payrollperiod'
     
     def post(self, request, pk):
         period = get_object_or_404(PayrollPeriod, pk=pk)
-        from apps.treasury.models import BankAccount, CashBox
         
-        # Determine source of payment (Bank or Cash)
         source_type = request.POST.get('source_type')
         
         try:
@@ -291,13 +307,12 @@ class PostPaymentView(LoginRequiredMixin, PermissionRequiredMixin, View):
             messages.error(request, f'فشل إثبات الصرف: {e}')
         return redirect('hr:payroll-detail', pk=pk)
 
-class PostGovPaymentView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class PostGovPaymentView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'hr.change_payrollperiod'
     
     def post(self, request, pk):
         period = get_object_or_404(PayrollPeriod, pk=pk)
-        from apps.treasury.models import BankAccount, CashBox
-        
+
         source_type = request.POST.get('source_type')
         
         # Safe Decimal Conversion
@@ -306,11 +321,15 @@ class PostGovPaymentView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 return Decimal('0')
             try:
                 return Decimal(str(val).replace(',', ''))
-            except:
+            except (ValueError, TypeError, InvalidOperation):
                 return Decimal('0')
 
         ins_amount = safe_decimal(request.POST.get('ins_amount'))
         tax_amount = safe_decimal(request.POST.get('tax_amount'))
+        
+        if ins_amount < 0 or tax_amount < 0:
+            messages.error(request, 'لا يمكن إدخال قيم سالبة.')
+            return redirect('hr:payroll-detail', pk=pk)
         
         try:
             if source_type == 'bank':
@@ -333,11 +352,12 @@ from django.utils import timezone
 from django.db import transaction
 from .models import LeaveBalance, Loan
 
-class LeaveRequestListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class LeaveRequestListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = LeaveRequest
     template_name = 'hr/requests/leaves.html'
     context_object_name = 'requests'
     permission_required = 'hr.view_leaverequest'
+    paginate_by = 25
     ordering = ['-applied_on']
 
     def get_queryset(self):
@@ -347,7 +367,7 @@ class LeaveRequestListView(LoginRequiredMixin, PermissionRequiredMixin, ListView
             qs = qs.filter(status=status)
         return qs
 
-class ApproveLeaveView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class ApproveLeaveView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'hr.change_leaverequest'
     
     def post(self, request, pk):
@@ -383,7 +403,7 @@ class ApproveLeaveView(LoginRequiredMixin, PermissionRequiredMixin, View):
         messages.success(request, f'تم الموافقة على الإجازة للموظف {leave.employee} وخصم {leave.total_days} يوم من رصيده.')
         return redirect('hr:leave-list')
 
-class RejectLeaveView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class RejectLeaveView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'hr.change_leaverequest'
     
     def post(self, request, pk):
@@ -395,14 +415,15 @@ class RejectLeaveView(LoginRequiredMixin, PermissionRequiredMixin, View):
             messages.success(request, 'تم رفض الطلب.')
         return redirect('hr:leave-list')
 
-class LoanListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class LoanListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = Loan
     template_name = 'hr/requests/loans.html'
     context_object_name = 'loans'
     permission_required = 'hr.view_loan'
+    paginate_by = 25
     ordering = ['-request_date']
 
-class ApproveLoanView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class ApproveLoanView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'hr.change_loan'
     
     def post(self, request, pk):
@@ -413,7 +434,7 @@ class ApproveLoanView(LoginRequiredMixin, PermissionRequiredMixin, View):
             messages.success(request, 'تم الموافقة على السلفة واعتماد جدول الخصم.')
         return redirect('hr:loan-list')
 
-class RejectLoanView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class RejectLoanView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'hr.change_loan'
     
     def post(self, request, pk):
@@ -475,7 +496,7 @@ class ESSLeaveCreateView(ESSMixin, CreateView):
 from .models import Payslip, PayslipItem
 from .forms import PayslipForm, PayslipItemFormSet
 
-class PayslipUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class PayslipUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
     model = Payslip
     form_class = PayslipForm
     template_name = 'hr/payroll/payslip_form.html'
@@ -545,13 +566,16 @@ class ESSLoanCreateView(ESSMixin, CreateView):
 # ==========================================
 from .models import AttendanceRecord
 
-class DailyAttendanceView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class DailyAttendanceView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'hr.add_attendancerecord'
     template_name = 'hr/attendance/daily.html'
 
     def get(self, request):
         date_str = request.GET.get('date', date.today().isoformat())
-        target_date = date.fromisoformat(date_str)
+        try:
+            target_date = date.fromisoformat(date_str)
+        except ValueError:
+            target_date = date.today()
         
         employees = Employee.objects.filter(status='active').select_related('department', 'job_title')
         
@@ -569,7 +593,11 @@ class DailyAttendanceView(LoginRequiredMixin, PermissionRequiredMixin, View):
 
     def post(self, request):
         date_str = request.POST.get('date')
-        target_date = date.fromisoformat(date_str)
+        try:
+            target_date = date.fromisoformat(date_str)
+        except (ValueError, TypeError):
+            messages.error(request, 'تنسيق التاريخ غير صحيح.')
+            return redirect('hr:attendance-daily')
         
         employees = Employee.objects.filter(status='active')
         
@@ -593,7 +621,7 @@ class DailyAttendanceView(LoginRequiredMixin, PermissionRequiredMixin, View):
         messages.success(request, f'تم حفظ سجل الحضور ليوم {target_date} بنجاح.')
         return redirect(reverse_lazy('hr:attendance-daily') + f'?date={date_str}')
 
-class LeaveBalanceCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class LeaveBalanceCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = LeaveBalance
     form_class = LeaveBalanceForm
     template_name = 'hr/leaves/balance_form.html'
@@ -608,7 +636,7 @@ class LeaveBalanceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
     def get_success_url(self):
         return reverse_lazy('hr:employee-detail', kwargs={'pk': self.kwargs.get('emp_pk')})
 
-class LeaveBalanceUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class LeaveBalanceUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
     model = LeaveBalance
     form_class = LeaveBalanceForm
     template_name = 'hr/leaves/balance_form.html'
@@ -621,15 +649,15 @@ class LeaveBalanceUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Update
     def get_success_url(self):
         return reverse_lazy('hr:employee-detail', kwargs={'pk': self.object.employee.pk})
 
-from .models import EndOfService
 # Form will be added to forms.py next
-class EOSListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class EOSListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = EndOfService
     template_name = 'hr/eos/list.html'
     context_object_name = 'records'
     permission_required = 'hr.view_endofservice'
+    paginate_by = 25
 
-class EOSCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class EOSCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = EndOfService
     fields = ['employee', 'termination_date', 'reason', 'assets_returned', 'loans_settled', 'severance_pay', 'leave_encashment', 'total_settlement']
     template_name = 'hr/eos/form.html'
@@ -640,16 +668,86 @@ class EOSCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
         messages.success(self.request, f'تم إنشاء نموذج نهاية خدمة للموظف {form.instance.employee}')
         return super().form_valid(form)
 
-class PostEOSView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class PostEOSView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'hr.change_endofservice'
     
     def post(self, request, pk):
         record = get_object_or_404(EndOfService, pk=pk)
         try:
-            from .services import EOSService
             EOSService.process_settlement(record, request.user)
             messages.success(request, 'تم ترحيل تسوية نهاية الخدمة بنجاح.')
         except Exception as e:
             messages.error(request, f'فشل الترحيل: {e}')
         return redirect('hr:eos-list')
+
+
+from django.views.decorators.http import require_POST
+
+@login_required
+@require_POST
+def employee_reset_password(request, pk):
+    # تحقق من صلاحية التعديل على الموظف
+    if not request.user.has_perm('hr.change_employee'):
+        return JsonResponse({'success': False, 'error': 'غير مصرح لك بإجراء هذه العملية.'}, status=403)
+        
+    employee = get_object_or_404(Employee, pk=pk)
+    if not employee.user:
+        return JsonResponse({'success': False, 'error': 'هذا الموظف غير مرتبط بمستخدم نظام.'}, status=400)
+    if employee.user.is_superuser and not request.user.is_superuser:
+        return JsonResponse({'success': False, 'error': 'غير مصرح لك بتغيير كلمة مرور مدير النظام.'}, status=403)
+        
+    new_password = request.POST.get('new_password')
+    if not new_password or len(new_password) < 6:
+        return JsonResponse({'success': False, 'error': 'كلمة المرور يجب أن لا تقل عن 6 أحرف.'}, status=400)
+        
+    user = employee.user
+    user.set_password(new_password)
+    user.save()
+    
+    try:
+        active_sessions = Session.objects.filter(expire_date__gte=timezone.now())
+        for session in active_sessions:
+            data = session.get_decoded()
+            if data.get('_auth_user_id') == str(user.id):
+                session.delete()
+    except Exception:
+        logger.exception("فشل طرد الموظف من الجلسات النشطة")
+    
+    return JsonResponse({
+        'success': True, 
+        'message': f'تم إعادة تعيين كلمة مرور الموظف بنجاح إلى: {new_password}، وتم طرده فوراً من كافة الأجهزة والجلسات النشطة لضمان الأمان.'
+    })
+
+
+@login_required
+@require_POST
+def employee_create_user(request, pk):
+    # تحقق من صلاحية التعديل على الموظف
+    if not request.user.has_perm('hr.change_employee'):
+        return JsonResponse({'success': False, 'error': 'غير مصرح لك بإجراء هذه العملية.'}, status=403)
+        
+    employee = get_object_or_404(Employee, pk=pk)
+    if employee.user:
+        return JsonResponse({'success': False, 'error': 'الموظف مرتبط بالفعل بمستخدم نظام.'}, status=400)
+        
+    username = request.POST.get('username')
+    email = request.POST.get('email')
+    password = request.POST.get('password')
+    
+    if not username or not password:
+        return JsonResponse({'success': False, 'error': 'اسم المستخدم وكلمة المرور مطلوبان.'}, status=400)
+        
+    if User.objects.filter(username=username).exists():
+        return JsonResponse({'success': False, 'error': 'اسم المستخدم هذا مستخدم بالفعل.'}, status=400)
+        
+    with transaction.atomic():
+        # إنشاء المستخدم الجديد
+        user = User.objects.create_user(username=username, email=email, password=password)
+        employee.user = user
+        employee.save() # هذا سيقوم بتشغيل ميثود save المخصصة لإسناد المجموعات و is_staff تلقائياً!
+        
+    return JsonResponse({
+        'success': True, 
+        'message': 'تم إنشاء الحساب بنجاح وربطه بالموظف وتعيين الصلاحيات تلقائياً!'
+    })
 

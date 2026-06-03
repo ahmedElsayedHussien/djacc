@@ -1,26 +1,32 @@
-from django.views.generic import ListView, CreateView, UpdateView, DetailView
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.urls import reverse_lazy
+import logging
+from django.views.generic import TemplateView, ListView, CreateView, UpdateView, DetailView
+from django.contrib.auth.mixins import LoginRequiredMixin
+from apps.core.mixins import PermRequiredMixin
+from django.urls import reverse_lazy, reverse
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 from django.db import transaction
 from django.views import View
-from django.db import models as db_models
-from .models import Supplier, PurchaseInvoice, PurchaseInvoiceLine, SupplierPayment, PurchaseReturn, PurchaseReturnLine, PurchaseOrder
+from django.db.models import Sum, Count, Q, F
+from django.core.exceptions import ValidationError
+from decimal import Decimal
+from datetime import date
+from apps.core.tax_utils import calculate_line_taxes
+from apps.core.utils import get_account_balance
+from apps.core.models import SystemNotification
+from .models import Supplier, PurchaseInvoice, PurchaseInvoiceLine, SupplierPayment, PurchaseReturn, PurchaseReturnLine, PurchaseOrder, PaymentAllocation
 from .forms import SupplierForm, PurchaseInvoiceForm, PurchaseInvoiceLineFormSet, SupplierPaymentForm, PurchaseReturnForm, PurchaseReturnLineFormSet
 from .services import SupplierService, PurchaseService
-from django.db.models import Sum, Count, Q, F
-from django.utils import timezone
 
-class PurchaseDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
-    model = PurchaseInvoice
+logger = logging.getLogger(__name__)
+
+class PurchaseDashboardView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'purchases/dashboard.html'
     permission_required = 'purchases.view_purchaseinvoice'
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        now = timezone.now()
-        month_start = now.replace(day=1)
+        month_start = date.today().replace(day=1)
         
         # 1. Monthly Summary
         monthly_stats = PurchaseInvoice.objects.filter(
@@ -59,7 +65,7 @@ class PurchaseDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListVie
 
         return ctx
 
-class PurchaseReturnListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class PurchaseReturnListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = PurchaseReturn
     template_name = 'purchases/returns/list.html'
     context_object_name = 'returns'
@@ -67,7 +73,10 @@ class PurchaseReturnListView(LoginRequiredMixin, PermissionRequiredMixin, ListVi
     ordering = ['-date', '-id']
     paginate_by = 50
 
-class PurchaseReturnCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    def get_queryset(self):
+        return super().get_queryset().select_related('supplier')
+
+class PurchaseReturnCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = PurchaseReturn
     form_class = PurchaseReturnForm
     template_name = 'purchases/returns/form.html'
@@ -103,14 +112,11 @@ class PurchaseReturnCreateView(LoginRequiredMixin, PermissionRequiredMixin, Crea
                     tax_total_added = 0
                     tax_total_deducted = 0
                     
-                    from decimal import Decimal
                     for line in instances:
-                        # ✅ Fix: Quantity validation against original invoice
                         if self.object.invoice:
-                            from django.db.models import Sum
-                            original_line = self.object.invoice.lines.filter(item=line.item).first()
+                            original_line = self.object.invoice.lines.select_for_update().filter(item=line.item).first()
                             if not original_line:
-                                raise ValueError(f"الصنف {line.item.name} غير موجود في الفاتورة الأصلية")
+                                raise ValidationError(f"الصنف {line.item.name} غير موجود في الفاتورة الأصلية")
                             
                             previous_returned = PurchaseReturnLine.objects.filter(
                                 purchase_return__invoice=self.object.invoice,
@@ -120,32 +126,25 @@ class PurchaseReturnCreateView(LoginRequiredMixin, PermissionRequiredMixin, Crea
                             
                             available = original_line.quantity - previous_returned
                             if line.quantity > available:
-                                raise ValueError(
+                                raise ValidationError(
                                     f"الكمية المرتجعة للصنف {line.item.name} ({line.quantity}) "
                                     f"تتجاوز الكمية المتاحة للإرجاع ({available})"
                                 )
 
-                        line_subtotal = line.quantity * line.unit_cost
-                        line_discount = line_subtotal * (line.discount_percent / Decimal('100'))
+                        line_subtotal = Decimal(str(line.quantity * line.unit_cost))
+                        line_discount = line_subtotal * (Decimal(str(line.discount_percent)) / Decimal('100'))
                         net_line = line_subtotal - line_discount
                         
-                        tax1 = net_line * (line.tax_percent / Decimal('100'))
-                        if line.tax_type and line.tax_type.category in ['wht', 'salary', 'insurance']:
-                            tax_total_deducted += tax1
-                            tax1_signed = -tax1
-                        else:
-                            tax_total_added += tax1
-                            tax1_signed = tax1
-
-                        tax2 = net_line * (line.tax_percent2 / Decimal('100'))
-                        if line.tax_type2 and line.tax_type2.category in ['wht', 'salary', 'insurance']:
-                            tax_total_deducted += tax2
-                            tax2_signed = -tax2
-                        else:
-                            tax_total_added += tax2
-                            tax2_signed = tax2
+                        res = calculate_line_taxes(
+                            net_line,
+                            line.tax_type,
+                            line.tax_percent,
+                            line.tax_type2,
+                            line.tax_percent2,
+                            is_purchase_or_expense=True
+                        )
                         
-                        line.total = net_line + tax1_signed + tax2_signed
+                        line.total = net_line + res['tax1_signed'] + res['tax2_signed']
                         if hasattr(line, 'unit') and line.unit:
                             line.base_quantity = line.item.convert_to_base(line.quantity, line.unit)
                         else:
@@ -154,6 +153,8 @@ class PurchaseReturnCreateView(LoginRequiredMixin, PermissionRequiredMixin, Crea
                         
                         gross_total += line_subtotal
                         discount_total += line_discount
+                        tax_total_added += res['tax_total_added']
+                        tax_total_deducted += res['tax_total_deducted']
 
                     self.object.subtotal = gross_total
                     self.object.discount_amount = discount_total
@@ -162,32 +163,37 @@ class PurchaseReturnCreateView(LoginRequiredMixin, PermissionRequiredMixin, Crea
                     self.object.save()
                 else:
                     return self.form_invalid(form)
-            except ValueError as e:
+            except ValidationError as e:
                 messages.error(self.request, str(e))
+                logger.exception('Validation error in PurchaseReturnCreateView')
                 transaction.set_rollback(True)
                 return self.form_invalid(form)
         return redirect(self.success_url)
 
-class PurchaseReturnDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class PurchaseReturnDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = PurchaseReturn
     template_name = 'purchases/returns/detail.html'
     context_object_name = 'purchase_return'
     permission_required = 'purchases.view_purchasereturn'
 
-class PurchaseReturnPostView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    def get_queryset(self):
+        return super().get_queryset().select_related('supplier', 'invoice', 'cost_center').prefetch_related('lines__item', 'lines__unit')
+
+class PurchaseReturnPostView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'purchases.change_purchasereturn'
     
     def post(self, request, pk):
-        purchase_return = get_object_or_404(PurchaseReturn, pk=pk)
+        purchase_return = get_object_or_404(PurchaseReturn.objects.select_related('supplier'), pk=pk)
         try:
             PurchaseService.post_return(purchase_return, request.user)
             messages.success(request, f'تم ترحيل مرتجع المشتريات {purchase_return.number}')
         except Exception as e:
+            logger.exception('Error posting purchase return %s', purchase_return.number)
             messages.error(request, f'خطأ: {e}')
         return redirect('purchases:return-detail', pk=pk)
 
 
-class SupplierListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class SupplierListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = Supplier
     template_name = 'purchases/suppliers/list.html'
     context_object_name = 'suppliers'
@@ -201,7 +207,16 @@ class SupplierListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
             qs = qs.filter(name__icontains=q) | qs.filter(code__icontains=q)
         return qs
 
-class SupplierCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        suppliers = ctx.get(self.context_object_name)
+        if suppliers:
+            for s in suppliers:
+                if s.account_id:
+                    s._cached_balance = get_account_balance(s.account)
+        return ctx
+
+class SupplierCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = Supplier
     form_class = SupplierForm
     template_name = 'purchases/suppliers/form.html'
@@ -209,12 +224,17 @@ class SupplierCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView
     success_url = reverse_lazy('purchases:supplier-list')
 
     def form_valid(self, form):
-        supplier = SupplierService.create_supplier(form.cleaned_data)
-        messages.success(self.request,
-            f'تم إنشاء المورد "{supplier.name}" بكود {supplier.code} — كود الحساب: {supplier.account.code}')
-        return redirect(self.success_url)
+        try:
+            supplier = SupplierService.create_supplier(form.cleaned_data)
+            messages.success(self.request,
+                f'تم إنشاء المورد "{supplier.name}" بكود {supplier.code} — كود الحساب: {supplier.account.code}')
+            return redirect(self.success_url)
+        except Exception as e:
+            logger.exception('Error creating supplier')
+            messages.error(self.request, f'خطأ أثناء إنشاء المورد: {e}')
+            return self.form_invalid(form)
 
-class SupplierUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class SupplierUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
     model = Supplier
     form_class = SupplierForm
     template_name = 'purchases/suppliers/form.html'
@@ -222,24 +242,30 @@ class SupplierUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView
     success_url = reverse_lazy('purchases:supplier-list')
 
     def form_valid(self, form):
-        SupplierService.update_supplier(self.object, form.cleaned_data)
-        messages.success(self.request, 'تم تحديث بيانات المورد بنجاح')
-        return redirect(self.success_url)
+        try:
+            SupplierService.update_supplier(self.object, form.cleaned_data)
+            messages.success(self.request, 'تم تحديث بيانات المورد بنجاح')
+            return redirect(self.success_url)
+        except Exception as e:
+            logger.exception('Error updating supplier')
+            messages.error(self.request, f'خطأ أثناء تحديث المورد: {e}')
+            return self.form_invalid(form)
 
-class SupplierDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class SupplierDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = Supplier
     template_name = 'purchases/suppliers/detail.html'
     permission_required = 'purchases.view_supplier'
 
+    def get_queryset(self):
+        return super().get_queryset().select_related('account')
+
     def get_context_data(self, **kwargs):
-        from apps.core.utils import get_account_balance
-        from datetime import date
         ctx = super().get_context_data(**kwargs)
-        ctx['invoices'] = self.object.purchaseinvoice_set.order_by('-date')[:10]
+        ctx['invoices'] = self.object.purchaseinvoice_set.select_related('supplier').order_by('-date')[:10]
         ctx['balance'] = get_account_balance(self.object.account, as_of_date=date.today())
         return ctx
 
-class PurchaseInvoiceListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class PurchaseInvoiceListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = PurchaseInvoice
     template_name = 'purchases/invoices/list.html'
     context_object_name = 'invoices'
@@ -247,12 +273,20 @@ class PurchaseInvoiceListView(LoginRequiredMixin, PermissionRequiredMixin, ListV
     ordering = ['-date', '-id']
     paginate_by = 50
 
-class PurchaseInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    def get_queryset(self):
+        return super().get_queryset().select_related('supplier')
+
+class PurchaseInvoiceCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = PurchaseInvoice
     form_class = PurchaseInvoiceForm
     template_name = 'purchases/invoices/form.html'
     permission_required = 'purchases.add_purchaseinvoice'
     success_url = reverse_lazy('purchases:invoice-list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
 
     def get_context_data(self, **kwargs):
         data = super().get_context_data(**kwargs)
@@ -274,37 +308,26 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                 lines.instance = self.object
                 instances = lines.save(commit=False)
                 
-                # Calculate totals (Egyptian Tax Compliance)
-                gross_total = 0
-                discount_total = 0
-                tax_total_added = 0      # VAT, Table, Customs, Stamp
-                tax_total_deducted = 0   # WHT, Salary, Insurance
+                gross_total = Decimal('0')
+                discount_total = Decimal('0')
+                tax_total_added = Decimal('0')
+                tax_total_deducted = Decimal('0')
                 
-                from decimal import Decimal
                 for instance in instances:
-                    line_subtotal = instance.quantity * instance.unit_cost
-                    line_discount = line_subtotal * (instance.discount_percent / Decimal('100'))
+                    line_subtotal = Decimal(str(instance.quantity * instance.unit_cost))
+                    line_discount = line_subtotal * (Decimal(str(instance.discount_percent)) / Decimal('100'))
                     net_line = line_subtotal - line_discount
                     
-                    # Tax 1
-                    tax1 = net_line * (instance.tax_percent / Decimal('100'))
-                    if instance.tax_type and instance.tax_type.category in ['wht', 'salary', 'insurance']:
-                        tax_total_deducted += tax1
-                        tax1_signed = -tax1
-                    else:
-                        tax_total_added += tax1
-                        tax1_signed = tax1
-
-                    # Tax 2
-                    tax2 = net_line * (instance.tax_percent2 / Decimal('100'))
-                    if instance.tax_type2 and instance.tax_type2.category in ['wht', 'salary', 'insurance']:
-                        tax_total_deducted += tax2
-                        tax2_signed = -tax2
-                    else:
-                        tax_total_added += tax2
-                        tax2_signed = tax2
+                    res = calculate_line_taxes(
+                        net_line,
+                        instance.tax_type,
+                        instance.tax_percent,
+                        instance.tax_type2,
+                        instance.tax_percent2,
+                        is_purchase_or_expense=True
+                    )
                     
-                    instance.total = net_line + tax1_signed + tax2_signed
+                    instance.total = net_line + res['tax1_signed'] + res['tax2_signed']
                     # Calculate base quantity
                     if instance.unit:
                         instance.base_quantity = instance.item.convert_to_base(instance.quantity, instance.unit)
@@ -314,6 +337,8 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                     
                     gross_total += line_subtotal
                     discount_total += line_discount
+                    tax_total_added += res['tax_total_added']
+                    tax_total_deducted += res['tax_total_deducted']
 
                 self.object.subtotal = gross_total
                 self.object.discount_amount = discount_total
@@ -324,13 +349,16 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
                 return self.form_invalid(form)
         return redirect(self.success_url)
 
-class PurchaseInvoiceDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class PurchaseInvoiceDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = PurchaseInvoice
     template_name = 'purchases/invoices/detail.html'
     context_object_name = 'invoice'
     permission_required = 'purchases.view_purchaseinvoice'
 
-class PurchaseInvoicePostView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    def get_queryset(self):
+        return super().get_queryset().select_related('supplier', 'cost_center', 'purchase_order').prefetch_related('lines__item', 'lines__unit')
+
+class PurchaseInvoicePostView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'purchases.change_purchaseinvoice'
     
     def post(self, request, pk):
@@ -339,56 +367,102 @@ class PurchaseInvoicePostView(LoginRequiredMixin, PermissionRequiredMixin, View)
             PurchaseService.post_invoice(invoice, request.user)
             messages.success(request, f'تم ترحيل فاتورة المشتريات {invoice.number}')
         except Exception as e:
+            logger.exception('Error posting purchase invoice %s', invoice.number)
             messages.error(request, f'خطأ: {e}')
         return redirect('purchases:invoice-detail', pk=pk)
 
-class PurchaseInvoiceReverseView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class PurchaseInvoiceReverseView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'purchases.change_purchaseinvoice'
     
     def post(self, request, pk):
-        invoice = get_object_or_404(PurchaseInvoice, pk=pk)
-        if invoice.status == PurchaseInvoice.Status.DRAFT:
-            invoice.status = PurchaseInvoice.Status.CANCELLED
-            invoice.save()
-            messages.success(request, f"تم إلغاء الفاتورة {invoice.number} (مسودة)")
-        elif invoice.status == PurchaseInvoice.Status.POSTED:
-            try:
-                PurchaseService.reverse_invoice(invoice, request.user)
-                messages.success(request, f"تم عكس الفاتورة {invoice.number} وإنشاء قيد عكسي")
-            except Exception as e:
-                messages.error(request, f"خطأ أثناء العكس: {e}")
-        else:
-            messages.warning(request, "لا يمكن عكس هذه الفاتورة")
+        with transaction.atomic():
+            invoice = get_object_or_404(PurchaseInvoice.objects.select_for_update(), pk=pk)
+            if invoice.status == PurchaseInvoice.Status.DRAFT:
+                invoice.paid_amount = Decimal('0')
+                invoice.status = PurchaseInvoice.Status.CANCELLED
+                invoice.save()
+                messages.success(request, f"تم إلغاء الفاتورة {invoice.number} (مسودة)")
+                SystemNotification.notify_accountants(
+                    title="إلغاء فاتورة مشتريات",
+                    message=f"قام {request.user.username} بإلغاء فاتورة المشتريات رقم {invoice.number} للمورد {invoice.supplier.name} بقيمة {invoice.total:.2f} ج.م.",
+                    url=reverse('purchases:invoice-detail', args=[invoice.id])
+                )
+            elif invoice.status == PurchaseInvoice.Status.POSTED:
+                try:
+                    PurchaseService.reverse_invoice(invoice, request.user)
+                    messages.success(request, f"تم عكس الفاتورة {invoice.number} وإنشاء قيد عكسي")
+                    SystemNotification.notify_accountants(
+                        title="عكس فاتورة مشتريات",
+                        message=f"قام {request.user.username} بعكس فاتورة المشتريات رقم {invoice.number} للمورد {invoice.supplier.name} بقيمة {invoice.total:.2f} ج.م.",
+                        url=reverse('purchases:invoice-detail', args=[invoice.id])
+                    )
+                except Exception as e:
+                    logger.exception('Error reversing purchase invoice %s', invoice.number)
+                    messages.error(request, f"خطأ أثناء العكس: {e}")
+            else:
+                messages.warning(request, "لا يمكن عكس هذه الفاتورة")
             
         return redirect('purchases:invoice-detail', pk=pk)
 
-class SupplierPaymentListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class SupplierPaymentListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = SupplierPayment
     template_name = 'purchases/payments/list.html'
     context_object_name = 'payments'
     permission_required = 'purchases.view_supplierpayment'
     paginate_by = 50
 
-class SupplierPaymentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    def get_queryset(self):
+        return super().get_queryset().select_related('supplier')
+
+class SupplierPaymentCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = SupplierPayment
     form_class = SupplierPaymentForm
     template_name = 'purchases/payments/form.html'
     success_url = reverse_lazy('purchases:payment-list')
     permission_required = 'purchases.add_supplierpayment'
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
     def form_valid(self, form):
         with transaction.atomic():
             form.instance.created_by = self.request.user
             self.object = form.save()
-            
-            # This will now rollback if it fails
+
+            selected_invoices = form.cleaned_data.get('invoices', [])
+            if selected_invoices:
+                total_allocated = Decimal('0')
+                # Re-fetch with row lock to prevent race conditions
+                locked_invoices = PurchaseInvoice.objects.filter(
+                    pk__in=[inv.pk for inv in selected_invoices]
+                ).select_for_update()
+                for inv in locked_invoices:
+                    if total_allocated >= self.object.amount:
+                        break
+                    remaining = inv.total - inv.paid_amount
+                    alloc_amount = min(remaining, self.object.amount - total_allocated)
+                    if alloc_amount > 0:
+                        PaymentAllocation.objects.create(
+                            payment=self.object,
+                            invoice=inv,
+                            amount=alloc_amount,
+                        )
+                        inv.paid_amount += alloc_amount
+                        inv.save(update_fields=['paid_amount'])
+                        total_allocated += alloc_amount
+
             PurchaseService.record_payment(self.object, self.request.user)
             messages.success(self.request, f'تم تسجيل سند الصرف {self.object.number} وترحيله')
-            
+
         return redirect(self.success_url)
 
-class SupplierPaymentDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class SupplierPaymentDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = SupplierPayment
     template_name = 'purchases/payments/detail.html'
     context_object_name = 'payment'
     permission_required = 'purchases.view_supplierpayment'
+
+    def get_queryset(self):
+        return super().get_queryset().select_related('supplier', 'cash_box', 'bank_account')

@@ -13,15 +13,15 @@
             <div class="card-body">
                 <table class="table table-sm">
                     <tr><th>رقم العرض:</th><td>{{ quotation.number }}</td></tr>
-                    <tr><th>التاريخ:</th><td>{{ quotation.date|date:'Y-m-d' }}</td></tr>
-                    <tr><th>تاريخ الانتهاء:</th><td>{{ quotation.expiry_date|date:'Y-m-d'|default:"-" }}</td></tr>
+                    <tr><th>تاريخ البدء:</th><td>{{ quotation.start_date|date:'Y-m-d' }}</td></tr>
+                    <tr><th>تاريخ الانتهاء:</th><td>{{ quotation.end_date|date:'Y-m-d'|default:"-" }}</td></tr>
                     <tr><th>العميل:</th><td>{{ quotation.customer.name }}</td></tr>
                     <tr><th>المندوب:</th><td>{{ quotation.sales_rep.name|default:"-" }}</td></tr>
                     <tr><th>بواسطة:</th><td>{{ quotation.created_by.get_full_name|default:quotation.created_by.username }}</td></tr>
                 </table>
 
                 <div class="mt-4 d-grid gap-2">
-                    {% if quotation.status != 'invoiced' %}
+                    {% if quotation.status != 'invoiced' and perms.sales.add_salesinvoice %}
                     <form method="post" action="{% url 'sales:quotation-convert' quotation.pk %}">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-success w-100" onclick="return confirm('تأكيد تحويل عرض السعر إلى فاتورة مبيعات؟');">

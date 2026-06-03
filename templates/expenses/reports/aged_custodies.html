@@ -26,7 +26,7 @@
                         {% for row in report %}
                         <tr>
                             <td class="ps-4">
-                                <span class="fw-bold">{{ row.custody.employee.get_full_name|default:row.custody.employee.username }}</span><br>
+                                <span class="fw-bold">{{ row.custody.employee.full_name }}</span><br>
                                 <small class="text-muted">{{ row.custody.number }}</small>
                             </td>
                             <td class="text-center">{{ row.custody.date|date:'Y-m-d' }}</td>

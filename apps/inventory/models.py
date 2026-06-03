@@ -1,9 +1,15 @@
+import logging
 from django.db import models
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.urls import reverse
 from decimal import Decimal
 from django.conf import settings
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 class ItemCategory(models.Model):
     code = models.CharField(max_length=20, unique=True, verbose_name="كود التصنيف")
@@ -47,13 +53,24 @@ class Item(models.Model):
         return f"{self.code} - {self.name}"
     
     def clean(self):
-        from django.core.exceptions import ValidationError
-        # Rule: If units are the same, factor MUST be 1
         if self.sales_unit == self.base_unit and self.conversion_factor != 1:
-            self.conversion_factor = 1
-            
+            raise ValidationError({'conversion_factor': 'عند اختيار نفس الوحدة الأساسية لوحدة البيع، يجب أن يكون معامل التحويل 1'})
         if self.purchase_unit == self.base_unit and self.purchase_conversion_factor != 1:
-            self.purchase_conversion_factor = 1
+            raise ValidationError({'purchase_conversion_factor': 'عند اختيار نفس الوحدة الأساسية لوحدة الشراء، يجب أن يكون معامل التحويل 1'})
+        if self.conversion_factor <= 0:
+            raise ValidationError({'conversion_factor': 'معامل تحويل البيع يجب أن يكون أكبر من صفر'})
+        if self.purchase_conversion_factor <= 0:
+            raise ValidationError({'purchase_conversion_factor': 'معامل تحويل الشراء يجب أن يكون أكبر من صفر'})
+        if self.standard_price < 0:
+            raise ValidationError({'standard_price': 'السعر القياسي لا يمكن أن يكون سالباً'})
+        if self.minimum_stock < 0:
+            raise ValidationError({'minimum_stock': 'الحد الأدنى للمخزون لا يمكن أن يكون سالباً'})
+        if self.inventory_account and self.inventory_account.account_type != 'asset':
+            raise ValidationError({'inventory_account': 'حساب المخزون يجب أن يكون من نوع أصول'})
+        if self.cogs_account and self.cogs_account.account_type != 'expense':
+            raise ValidationError({'cogs_account': 'حساب التكلفة يجب أن يكون من نوع مصروف'})
+        if self.sales_account and self.sales_account.account_type != 'revenue':
+            raise ValidationError({'sales_account': 'حساب المبيعات يجب أن يكون من نوع إيراد'})
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -67,9 +84,10 @@ class Item(models.Model):
             return quantity * self.conversion_factor
         if unit == self.purchase_unit:
             return quantity * self.purchase_conversion_factor
-        
-        # ✅ Fix #8: منع التحويل الصامت في حالة استخدام وحدة غير معروفة للصنف
-        raise ValueError(f"الوحدة '{unit}' غير مرتبطة بالصنف '{self.name}'. لا يمكن إجراء التحويل.")
+
+        raise ValidationError(
+            f"الوحدة '{unit}' غير مرتبطة بالصنف '{self.name}'. لا يمكن إجراء التحويل."
+        )
 
 class Warehouse(models.Model):
     code = models.CharField(max_length=20, unique=True, verbose_name="كود المخزن")
@@ -77,9 +95,48 @@ class Warehouse(models.Model):
     gl_account = models.ForeignKey('core.Account', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="حساب المخزون (أستاذ عام)")
     location = models.TextField(blank=True, verbose_name="العنوان/الموقع")
     is_active = models.BooleanField(default=True, verbose_name="نشط")
+    is_returns = models.BooleanField(default=False, verbose_name="مستودع مرتجعات / توالف")
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.gl_account:
+            from django.db import transaction
+            from django.db.models import Max
+            from django.conf import settings
+            from apps.core.models import Account
+
+            with transaction.atomic():
+                parent_code = getattr(settings, 'DEFAULT_INVENTORY_ACCOUNT', '1131')
+                parent = Account.objects.select_for_update().filter(code=parent_code).first()
+                if not parent:
+                    parent = Account.objects.select_for_update().filter(code='113').first()
+                
+                if parent:
+                    if parent.is_leaf:
+                        parent.is_leaf = False
+                        parent.save(update_fields=['is_leaf'])
+                        
+                    last_code = Account.objects.filter(parent=parent).aggregate(Max('code'))['code__max']
+                    if last_code:
+                        try:
+                            next_seq = int(last_code[len(parent.code):]) + 1
+                        except (ValueError, TypeError):
+                            next_seq = Account.objects.filter(parent=parent).count() + 1
+                    else:
+                        next_seq = 1
+                        
+                    account_code = f'{parent.code}{next_seq:02d}'
+                    account = Account.objects.create(
+                        code=account_code,
+                        name=f'مخزن - {self.name}',
+                        account_type='asset',
+                        parent=parent,
+                        is_leaf=True,
+                    )
+                    self.gl_account = account
+        super().save(*args, **kwargs)
 
 class StockMovement(models.Model):
     """
@@ -104,7 +161,7 @@ class StockMovement(models.Model):
     warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT)
     movement_type = models.CharField(max_length=20, choices=MovementType.choices)
     quantity = models.DecimalField(max_digits=14, decimal_places=4)
-    unit_cost = models.DecimalField(max_digits=18, decimal_places=2)
+    unit_cost = models.DecimalField(max_digits=18, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
     total_cost = models.DecimalField(max_digits=18, decimal_places=2)
     reference = models.CharField(max_length=100, blank=True)
     
@@ -120,7 +177,6 @@ class StockMovement(models.Model):
         if not self.content_type:
             return None
         
-        from django.urls import reverse
         model_name = self.content_type.model
         
         try:
@@ -138,10 +194,14 @@ class StockMovement(models.Model):
                 return reverse('sales:return-detail', args=[self.object_id])
             elif model_name == 'purchasereturn':
                 return reverse('purchases:return-detail', args=[self.object_id])
-        except:
-            pass
+        except Exception:
+            logger.exception("Failed to resolve source URL for StockMovement %s", self.pk)
         return None
 
+
+    def clean(self):
+        if self.quantity == 0:
+            raise ValidationError({'quantity': 'الكمية لا يمكن أن تكون صفراً'})
 
     def __str__(self):
         return f"{self.item.name} - {self.movement_type} - {self.quantity}"
@@ -155,25 +215,41 @@ class ItemLedger(models.Model):
     last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = [('item', 'warehouse')]
+        constraints = [
+            models.UniqueConstraint(fields=['item', 'warehouse'], name='unique_item_warehouse')
+        ]
 
     @property
     def average_cost(self):
-        if self.quantity_on_hand == 0:
+        if self.quantity_on_hand <= 0:
             return Decimal('0')
-        # Ensure cost is always positive even if stock is negative
         cost = self.total_value / self.quantity_on_hand
-        return abs(cost).quantize(Decimal('0.00'))
+        return cost.quantize(Decimal('0.00'))
 
 class WarehouseTransfer(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = 'draft', 'مسودة'
+        POSTED = 'posted', 'مرحّل'
+        CANCELLED = 'cancelled', 'ملغي'
+
     """تحويل مخزني بين المستودعات"""
     number = models.CharField(max_length=50, unique=True, verbose_name="رقم التحويل")
     date = models.DateField(verbose_name="تاريخ التحويل")
     from_warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name='transfers_out', verbose_name="من مخزن")
     to_warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name='transfers_in', verbose_name="إلى مخزن")
-    status = models.CharField(max_length=20, choices=[('draft', 'مسودة'), ('posted', 'مرحّب'), ('cancelled', 'ملغي')], default='draft', verbose_name="الحالة")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT, verbose_name="الحالة")
     notes = models.TextField(blank=True, verbose_name="ملاحظات")
     
+    def clean(self):
+        if self.from_warehouse_id and self.to_warehouse_id and self.from_warehouse_id == self.to_warehouse_id:
+            raise ValidationError('المستودع المصدر والوجهة يجب أن يكونا مختلفين')
+        if self.date and self.date > timezone.now().date():
+            raise ValidationError({'date': 'تاريخ التحويل لا يمكن أن يكون في المستقبل'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.number}"
 
@@ -181,13 +257,30 @@ class WarehouseTransferLine(models.Model):
     """سطر تحويل مخزني"""
     transfer = models.ForeignKey(WarehouseTransfer, on_delete=models.CASCADE, related_name='lines', verbose_name="طلب التحويل")
     item = models.ForeignKey(Item, on_delete=models.PROTECT, verbose_name="الصنف")
-    quantity = models.DecimalField(max_digits=14, decimal_places=4, verbose_name="الكمية")
-    unit_cost = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True, verbose_name="تكلفة الوحدة")
+    quantity = models.DecimalField(max_digits=14, decimal_places=4, verbose_name="الكمية", validators=[MinValueValidator(Decimal('0.0001'))])
+    unit = models.ForeignKey('inventory.UnitOfMeasure', on_delete=models.PROTECT, null=True, blank=True, verbose_name="الوحدة")
+    base_quantity = models.DecimalField(max_digits=14, decimal_places=4, default=0, help_text="الكمية بالوحدة الأساسية", verbose_name="الكمية الأساسية", validators=[MinValueValidator(Decimal('0.00'))])
+    unit_cost = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True, verbose_name="تكلفة الوحدة", validators=[MinValueValidator(Decimal('0.00'))])
     notes = models.CharField(max_length=200, blank=True, verbose_name="ملاحظات")
+    
+    def clean(self):
+        if self.quantity <= 0:
+            raise ValidationError({'quantity': 'الكمية يجب أن تكون أكبر من صفر'})
+            
+    def save(self, *args, **kwargs):
+        if self.unit:
+            self.base_quantity = self.item.convert_to_base(self.quantity, self.unit)
+        else:
+            self.base_quantity = self.quantity
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return f"{self.item.name} - {self.quantity}"
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['transfer', 'item'], name='unique_transfer_item')
+        ]
 
 
 class LoadingOrder(models.Model):
@@ -212,20 +305,58 @@ class LoadingOrder(models.Model):
     journal_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, verbose_name="قيد اليومية")
     notes = models.TextField(blank=True, verbose_name="ملاحظات")
 
+    def clean(self):
+        if self.from_warehouse_id and self.to_warehouse_id and self.from_warehouse_id == self.to_warehouse_id:
+            raise ValidationError('المستودع المصدر والوجهة يجب أن يكونا مختلفين')
+        if self.date and self.date > timezone.now().date():
+            raise ValidationError({'date': 'تاريخ الطلب لا يمكن أن يكون في المستقبل'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.number} - {self.sales_rep.name}"
 
 class LoadingOrderLine(models.Model):
     """سطر طلب تحميل"""
     loading_order = models.ForeignKey(LoadingOrder, on_delete=models.CASCADE, related_name='lines')
-    item = models.ForeignKey(Item, on_delete=models.PROTECT)
-    requested_qty = models.DecimalField(max_digits=14, decimal_places=4)
-    approved_qty = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
-    issued_qty = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name='loading_order_lines')
+    requested_qty = models.DecimalField(max_digits=14, decimal_places=4, validators=[MinValueValidator(Decimal('0.0001'))])
+    unit = models.ForeignKey('inventory.UnitOfMeasure', on_delete=models.PROTECT, null=True, blank=True, verbose_name="الوحدة")
+    base_quantity = models.DecimalField(max_digits=14, decimal_places=4, default=0, help_text="الكمية بالوحدة الأساسية", verbose_name="الكمية الأساسية", validators=[MinValueValidator(Decimal('0.00'))])
+    approved_qty = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True, validators=[MinValueValidator(Decimal('0.00'))])
+    issued_qty = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True, validators=[MinValueValidator(Decimal('0.00'))])
     notes = models.CharField(max_length=200, blank=True)
+
+    def clean(self):
+        if self.requested_qty <= 0:
+            raise ValidationError({'requested_qty': 'الكمية المطلوبة يجب أن تكون أكبر من صفر'})
+        if self.approved_qty is not None:
+            if self.approved_qty < 0:
+                raise ValidationError({'approved_qty': 'الكمية المعتمدة لا يمكن أن تكون سالبة'})
+            if self.approved_qty > self.requested_qty:
+                raise ValidationError({'approved_qty': 'الكمية المعتمدة لا يمكن أن تتجاوز الكمية المطلوبة'})
+
+    def save(self, *args, **kwargs):
+        if self.unit:
+            self.base_quantity = self.item.convert_to_base(self.requested_qty, self.unit)
+        else:
+            self.base_quantity = self.requested_qty
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.item.name} ({self.requested_qty})"
+
+    @property
+    def available_qty(self):
+        ledger = ItemLedger.objects.filter(item=self.item, warehouse=self.loading_order.from_warehouse).first()
+        return ledger.quantity_on_hand if ledger else 0
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['loading_order', 'item'], name='unique_loading_item')
+        ]
 
 class StockVoucher(models.Model):
     """أذون الصرف والإضافة المخزنية"""
@@ -254,17 +385,45 @@ class StockVoucher(models.Model):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name="أنشئ بواسطة")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الإنشاء")
 
+    def clean(self):
+        if self.date and self.date > timezone.now().date():
+            raise ValidationError({'date': 'تاريخ الإذن لا يمكن أن يكون في المستقبل'})
+        if self.voucher_type == 'issue' and not self.offset_account:
+            raise ValidationError({'offset_account': 'إذن الصرف يتطلب حساباً مقابلاً'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.get_voucher_type_display()} - {self.number}"
 
 class StockVoucherLine(models.Model):
     voucher = models.ForeignKey(StockVoucher, on_delete=models.CASCADE, related_name='lines')
-    item = models.ForeignKey(Item, on_delete=models.PROTECT)
-    quantity = models.DecimalField(max_digits=14, decimal_places=4)
-    unit_cost = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True, help_text="سيتم حسابه تلقائياً عند الترحيل إذا كان إذن صرف")
-    total_cost = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name='stock_voucher_lines')
+    quantity = models.DecimalField(max_digits=14, decimal_places=4, validators=[MinValueValidator(Decimal('0.0001'))])
+    unit = models.ForeignKey('inventory.UnitOfMeasure', on_delete=models.PROTECT, null=True, blank=True, verbose_name="الوحدة")
+    base_quantity = models.DecimalField(max_digits=14, decimal_places=4, default=0, help_text="الكمية بالوحدة الأساسية", verbose_name="الكمية الأساسية", validators=[MinValueValidator(Decimal('0.00'))])
+    unit_cost = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True, help_text="سيتم حسابه تلقائياً عند الترحيل إذا كان إذن صرف", validators=[MinValueValidator(Decimal('0.00'))])
+    total_cost = models.DecimalField(max_digits=18, decimal_places=2, default=0, validators=[MinValueValidator(Decimal('0.00'))])
     notes = models.CharField(max_length=200, blank=True)
+
+    def clean(self):
+        if self.quantity <= 0:
+            raise ValidationError({'quantity': 'الكمية يجب أن تكون أكبر من صفر'})
+
+    def save(self, *args, **kwargs):
+        if self.unit:
+            self.base_quantity = self.item.convert_to_base(self.quantity, self.unit)
+        else:
+            self.base_quantity = self.quantity
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.item.name} - {self.quantity}"
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['voucher', 'item'], name='unique_voucher_item')
+        ]
 

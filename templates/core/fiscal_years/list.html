@@ -5,9 +5,11 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">قائمة السنوات المالية</h5>
+        {% if perms.core.add_fiscalyear %}
         <a href="{% url 'core:fiscalyear-create' %}" class="btn btn-primary">
             <i class="bi bi-calendar-plus"></i> إضافة سنة مالية
         </a>
+        {% endif %}
     </div>
     <div class="card-body">
         <table class="table table-hover">
@@ -34,7 +36,7 @@
                         {% endif %}
                     </td>
                     <td>
-                        {% if not fy.is_closed %}
+                        {% if not fy.is_closed and perms.core.change_fiscalyear %}
                         <form method="post" action="{% url 'core:fiscalyear-post-opening' fy.pk %}" style="display:inline;" onsubmit="return confirm('هل تريد توليد القيد الافتتاحي بناءً على أرصدة دليل الحسابات؟');">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-sm btn-outline-primary">

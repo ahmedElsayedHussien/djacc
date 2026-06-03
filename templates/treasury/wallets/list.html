@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% block title %}سجل المحافظ الإلكترونية | DJACC Pro{% endblock %}
+{% block header %}إدارة المحافظ الإلكترونية{% endblock %}
+{% block content %}
+<div class="card shadow-sm border-0 mb-4" style="border-radius: 16px; overflow: hidden; font-family: 'Cairo', sans-serif;">
+    <div class="card-header bg-white border-0 py-4 px-4 d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="mb-1 fw-bold text-plum">سجل المحافظ الإلكترونية الرقمية</h5>
+            <p class="text-muted small mb-0">تهيئة وإدارة محافظ النقدية الرقمية (فودافون كاش، إنستاباي، فوري) ومطابقة أرصدتها.</p>
+        </div>
+        {% if perms.treasury.add_mobilewallet %}
+        <a href="{% url 'treasury:wallet-create' %}" class="btn btn-primary rounded-pill px-4 shadow-sm">
+            <i class="bi bi-plus-lg me-1"></i> إضافة محفظة جديدة
+        </a>
+        {% endif %}
+    </div>
+    <div class="card-body px-4 pb-4 pt-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light text-secondary" style="font-size: 0.9rem;">
+                    <tr>
+                        <th class="py-3 px-3">الكود</th>
+                        <th class="py-3">اسم المحفظة</th>
+                        <th class="py-3">النوع / المزود</th>
+                        <th class="py-3">رقم الهاتف المرتبط</th>
+                        <th class="py-3">رقم الحساب المالي</th>
+                        <th class="py-3">العملة</th>
+                        <th class="py-3 text-center">الحالة</th>
+                        <th class="py-3 text-center">إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody style="font-size: 0.95rem;">
+                    {% for wallet in object_list %}
+                    <tr>
+                        <td class="py-3 px-3">
+                            <span class="badge bg-secondary-subtle text-secondary fw-bold rounded px-2.5 py-1.5 font-monospace">
+                                {{ wallet.code }}
+                            </span>
+                        </td>
+                        <td class="py-3 fw-bold text-plum">{{ wallet.name }}</td>
+                        <td class="py-3">
+                            <span class="d-flex align-items-center gap-2">
+                                <i class="bi bi-phone text-success"></i>
+                                <span class="fw-bold">{{ wallet.get_provider_display }}</span>
+                            </span>
+                        </td>
+                        <td class="py-3 font-monospace">{{ wallet.mobile_number }}</td>
+                        <td class="py-3"><code>{{ wallet.account.code }}</code></td>
+                        <td class="py-3">{{ wallet.currency }}</td>
+                        <td class="py-3 text-center">
+                            {% if wallet.is_active %}
+                            <span class="badge bg-success-subtle text-success rounded-pill px-3 py-1.5 small">نشط</span>
+                            {% else %}
+                            <span class="badge bg-light text-muted rounded-pill px-3 py-1.5 small">معطل</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 text-center">
+                            <div class="d-flex justify-content-center gap-2">
+                                {% if perms.treasury.change_mobilewallet %}<a href="{% url 'treasury:wallet-update' wallet.pk %}" class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                                    <i class="bi bi-pencil-square me-1"></i> تعديل
+                                </a>{% endif %}
+                                <a href="{% url 'treasury:wallet-detail' wallet.pk %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
+                                    <i class="bi bi-eye me-1"></i> كشف حركة
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5 text-muted">
+                            <i class="bi bi-phone-vibrate fs-1 d-block mb-3 opacity-50 text-secondary"></i>
+                            <span class="fw-bold d-block mb-1">لا توجد محافظ إلكترونية مضافة بعد</span>
+                            <span class="small">اضغط على زر "إضافة محفظة جديدة" لربط أول محفظة رقمية.</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% include 'partials/pagination.html' %}
+</div>
+{% endblock %}

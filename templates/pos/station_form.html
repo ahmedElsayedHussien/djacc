@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }} | DJACC Pro{% endblock %}
+{% block header %}{{ title }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center" style="font-family: 'Cairo', sans-serif;">
+    <div class="col-lg-8 col-md-10">
+        <div class="card shadow-sm border-0 mb-4" style="border-radius: 16px; overflow: hidden;">
+            <!-- Header -->
+            <div class="card-header bg-white border-0 py-4 px-4 border-bottom">
+                <h5 class="mb-0 fw-bold text-plum">
+                    <i class="bi bi-gear-wide-connected me-1 text-primary"></i>
+                    {% if form.instance.pk %}تعديل تهيئة نقطة البيع{% else %}تهيئة نقطة بيع جديدة{% endif %}
+                </h5>
+                <p class="text-muted small mb-0 mt-1">قم بملء الحقول التالية لربط محطة الكاشير بالمستودع المناسب وخزينة النقدية.</p>
+            </div>
+            
+            <!-- Body -->
+            <div class="card-body p-4">
+                <form method="post" class="needs-validation" novalidate>
+                    {% csrf_token %}
+                    
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger border-0 rounded-3 mb-4">
+                        {% for error in form.non_field_errors %}
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            <span>{{ error }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="row g-4">
+                        <!-- Code & Name -->
+                        <div class="col-md-6">
+                            <label for="{{ form.code.id_for_label }}" class="form-label fw-bold text-plum">كود النقطة <span class="text-danger">*</span></label>
+                            {{ form.code }}
+                            {% if form.code.errors %}
+                            <div class="text-danger small mt-1">{% for error in form.code.errors %}{{ error }} {% endfor %}</div>
+                            {% endif %}
+                            <div class="form-text small text-muted">كود فريد يحدد محطة الكاشير بجهازها الفيزيائي.</div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label for="{{ form.name.id_for_label }}" class="form-label fw-bold text-plum">اسم نقطة البيع <span class="text-danger">*</span></label>
+                            {{ form.name }}
+                            {% if form.name.errors %}
+                            <div class="text-danger small mt-1">{% for error in form.name.errors %}{{ error }} {% endfor %}</div>
+                            {% endif %}
+                            <div class="form-text small text-muted">مثال: كاشير الفرع الرئيسي - جهاز 1.</div>
+                        </div>
+
+                        <!-- Warehouse (لسحب البضاعة) -->
+                        <div class="col-md-12">
+                            <label for="{{ form.warehouse.id_for_label }}" class="form-label fw-bold text-plum">المخزن المرتبط (سحب بضاعة) <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light text-secondary border-end-0"><i class="bi bi-box-seam"></i></span>
+                                {{ form.warehouse }}
+                            </div>
+                            {% if form.warehouse.errors %}
+                            <div class="text-danger small mt-1">{% for error in form.warehouse.errors %}{{ error }} {% endfor %}</div>
+                            {% endif %}
+                            <div class="form-text small text-muted">سيقوم النظام بسحب الكميات المباعة من هذا المخزن بشكل تلقائي وفوري.</div>
+                        </div>
+
+                        <!-- Cash Box (درج النقدية) -->
+                        <div class="col-md-4">
+                            <label for="{{ form.cash_box.id_for_label }}" class="form-label fw-bold text-plum">درج النقدية (الخزينة) <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light text-secondary border-end-0"><i class="bi bi-wallet2"></i></span>
+                                {{ form.cash_box }}
+                            </div>
+                            {% if form.cash_box.errors %}
+                            <div class="text-danger small mt-1">{% for error in form.cash_box.errors %}{{ error }} {% endfor %}</div>
+                            {% endif %}
+                            <div class="form-text small text-muted">الخزينة المقبوضة نقداً من المبيعات.</div>
+                        </div>
+
+                        <!-- Bank Account (حساب الفيزا) -->
+                        <div class="col-md-4">
+                            <label for="{{ form.bank_account.id_for_label }}" class="form-label fw-bold text-plum">حساب البنك (الفيزا)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light text-secondary border-end-0"><i class="bi bi-credit-card"></i></span>
+                                {{ form.bank_account }}
+                            </div>
+                            {% if form.bank_account.errors %}
+                            <div class="text-danger small mt-1">{% for error in form.bank_account.errors %}{{ error }} {% endfor %}</div>
+                            {% endif %}
+                            <div class="form-text small text-muted">حساب البنك لتسوية مدفوعات الشبكة/الفيزا.</div>
+                        </div>
+
+                        <!-- Mobile Wallet (المحفظة الإلكترونية) -->
+                        <div class="col-md-4">
+                            <label for="{{ form.mobile_wallet.id_for_label }}" class="form-label fw-bold text-plum">المحفظة الإلكترونية</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light text-secondary border-end-0"><i class="bi bi-phone"></i></span>
+                                {{ form.mobile_wallet }}
+                            </div>
+                            {% if form.mobile_wallet.errors %}
+                            <div class="text-danger small mt-1">{% for error in form.mobile_wallet.errors %}{{ error }} {% endfor %}</div>
+                            {% endif %}
+                            <div class="form-text small text-muted">مثال: فودافون كاش، إنستاباي لتسوية مدفوعات المحفظة.</div>
+                        </div>
+
+                        <!-- Status Toggle -->
+                        <div class="col-md-12">
+                            <div class="form-check form-switch p-3 bg-light rounded-3 border border-dashed">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <label class="form-check-label fw-bold text-plum" for="{{ form.is_active.id_for_label }}">
+                                        <i class="bi bi-activity me-1 text-success"></i> حالة نقطة البيع نشطة للعمل
+                                    </label>
+                                    {{ form.is_active }}
+                                </div>
+                                <div class="form-text small text-muted mt-2">إذا تم تعطيلها، لن تظهر في شاشة تسجيل الدخول وفتح الورديات للكاشير.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer Actions -->
+                    <div class="d-flex gap-3 justify-content-end mt-5 border-t pt-4">
+                        <a href="{% url 'pos:station-list' %}" class="btn btn-outline-secondary rounded-pill px-4">
+                            <i class="bi bi-x-circle me-1"></i> إلغاء
+                        </a>
+                        <button type="submit" class="btn btn-primary rounded-pill px-4 shadow-sm">
+                            <i class="bi bi-save me-1"></i> حفظ الإعدادات
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

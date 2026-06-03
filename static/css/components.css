@@ -1001,3 +1001,245 @@ a:hover {
         background: white;
     }
 }
+
+/* =========================================================
+   DJACC Premium ERP Design Enhancements
+   ========================================================= */
+
+/* 1. Modern Borderless Grid Layout (Clean tables with only soft horizontal rules) */
+.table, .table-bordered {
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    border: none !important;
+}
+
+.table th, .table td {
+    border-left: none !important;
+    border-right: none !important;
+    border-top: none !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+}
+
+.table thead th {
+    background-color: #f8f9fa !important;
+    color: var(--text-secondary) !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
+    font-size: 0.825rem !important;
+    padding: 14px 10px !important;
+    border-bottom: 2px solid rgba(0, 0, 0, 0.08) !important;
+    white-space: nowrap;
+}
+
+.table tbody td {
+    padding: 10px 10px !important;
+    vertical-align: middle !important;
+}
+
+/* 2. Responsive Form Controls inside Tables */
+.table select.form-select,
+.table input.form-control {
+    border-radius: 8px !important;
+    font-size: 0.85rem !important;
+    padding: 6px 12px !important;
+    height: 38px !important;
+    border: 1px solid var(--border-color) !important;
+    background-color: var(--bg-input) !important;
+    transition: all 0.2s ease-in-out !important;
+}
+
+.table select.form-select:focus,
+.table input.form-control:focus {
+    border-color: var(--border-focus) !important;
+    box-shadow: var(--shadow-input-focus) !important;
+    background-color: var(--bg-input-focus) !important;
+}
+
+/* 3. Perfect Min-Widths to avoid squishing on Desktop */
+@media (min-width: 768px) {
+    .table select.item-select { min-width: 240px !important; }
+    .table select.unit-select { min-width: 100px !important; }
+    .table select[name$="-warehouse"] { min-width: 150px !important; }
+    .table input.qty-input { min-width: 90px !important; text-align: center; }
+    .table input.price-input { min-width: 110px !important; text-align: right; }
+    .table input.discount-input { min-width: 80px !important; text-align: center; }
+    .table select.tax-select, .table select.tax-select2 { min-width: 130px !important; }
+    .table input.line-total-display, .table input.line-total { min-width: 110px !important; text-align: right; font-weight: 700; background-color: #f8f9fa !important; }
+    .table select[name$="-return_account"], .table select[name$="-cogs_account"] { min-width: 180px !important; }
+}
+
+/* 4. Elegant Prominent Add Row Button */
+#addRow, .add-row-btn, button[id*="add"] {
+    background-color: var(--primary-soft) !important;
+    color: var(--color-primary) !important;
+    border: 1px dashed var(--color-primary) !important;
+    font-weight: 700 !important;
+    border-radius: 30px !important;
+    padding: 8px 24px !important;
+    transition: all 0.25s ease-in-out !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    box-shadow: var(--shadow-sm) !important;
+    margin-top: 1rem;
+}
+
+#addRow:hover, .add-row-btn:hover, button[id*="add"]:hover {
+    background-color: var(--color-primary) !important;
+    color: #ffffff !important;
+    border-style: solid !important;
+    transform: translateY(-2px) !important;
+    box-shadow: var(--shadow-md) !important;
+}
+
+/* 5. Auto-Expanding Notes Field */
+textarea[name="notes"] {
+    height: 38px !important;
+    min-height: 38px !important;
+    resize: none !important;
+    overflow-y: hidden !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+textarea[name="notes"]:focus,
+textarea[name="notes"]:not(:placeholder-shown) {
+    min-height: 80px !important;
+    height: auto !important;
+    overflow-y: auto !important;
+}
+
+/* 6. Premium Borderless Totals Panel */
+.totals-card {
+    border: none !important;
+    box-shadow: none !important;
+    background-color: transparent !important;
+}
+
+.totals-card .card-body {
+    padding: 0 !important;
+}
+
+.totals-card .d-flex {
+    padding: 10px 0 !important;
+    border-bottom: 1px dashed rgba(0, 0, 0, 0.06) !important;
+    align-items: center !important;
+}
+
+.totals-card .d-flex:last-child {
+    border-bottom: none !important;
+    padding-top: 15px !important;
+}
+
+.totals-card #grandTotal {
+    color: #EC228D !important;
+    font-size: 2.2rem !important;
+    font-weight: 800 !important;
+    font-family: var(--font-family) !important;
+    text-shadow: 0 2px 4px rgba(236, 34, 141, 0.1);
+}
+
+/* 7. Mobile Table-to-Card Responsive Transformation */
+@media (max-width: 767.98px) {
+    .table-responsive {
+        border: none !important;
+        box-shadow: none !important;
+        background: transparent !important;
+    }
+    
+    .table-responsive table {
+        display: block !important;
+        width: 100% !important;
+        border: none !important;
+    }
+    
+    .table-responsive thead {
+        display: none !important;
+    }
+    
+    .table-responsive tbody {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 16px !important;
+        width: 100% !important;
+    }
+    
+    .table-responsive tr.line-row,
+    .table-responsive tr.line-form,
+    .table-responsive tr.item-row {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 12px 16px !important;
+        background: #ffffff !important;
+        border: 1px solid rgba(0, 0, 0, 0.08) !important;
+        border-radius: 16px !important;
+        padding: 20px !important;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.015) !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    
+    /* Make the first cell (Item Selector) span the entire width */
+    .table-responsive tr.line-row td:first-child,
+    .table-responsive tr.line-form td:first-child,
+    .table-responsive tr.item-row td:first-child {
+        grid-column: span 2 !important;
+        border-bottom: 2px dashed rgba(0, 0, 0, 0.05) !important;
+        padding-bottom: 12px !important;
+        margin-bottom: 4px !important;
+    }
+    
+    /* Make returns/cogs accounts span full width */
+    .table-responsive tr.line-row td:has(select[name$="-return_account"]),
+    .table-responsive tr.line-row td:has(select[name$="-cogs_account"]) {
+        grid-column: span 2 !important;
+    }
+    
+    .table-responsive tr.line-row td,
+    .table-responsive tr.line-form td,
+    .table-responsive tr.item-row td {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        justify-content: center !important;
+        padding: 0 !important;
+        border: none !important;
+        width: 100% !important;
+    }
+    
+    /* Dynamic Labels on Mobile via data-label attribute */
+    .table-responsive tr.line-row td::before,
+    .table-responsive tr.line-form td::before,
+    .table-responsive tr.item-row td::before {
+        content: attr(data-label) !important;
+        font-weight: 700 !important;
+        font-size: 0.775rem !important;
+        color: var(--text-secondary) !important;
+        margin-bottom: 6px !important;
+        text-transform: uppercase;
+    }
+    
+    /* Hide delete checkboxes default labels since it's now wrapped */
+    .table-responsive tr.line-row td:last-child,
+    .table-responsive tr.line-form td:last-child,
+    .table-responsive tr.item-row td:last-child {
+        grid-column: span 2 !important;
+        flex-direction: row !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        border-top: 1px solid rgba(0, 0, 0, 0.05) !important;
+        padding-top: 12px !important;
+        margin-top: 4px !important;
+    }
+    
+    .table-responsive tr.line-row td:last-child::before,
+    .table-responsive tr.line-form td:last-child::before,
+    .table-responsive tr.item-row td:last-child::before {
+        margin-bottom: 0 !important;
+    }
+    
+    /* Prevent iOS form zoomed view */
+    .table-responsive select.form-select,
+    .table-responsive input.form-control {
+        width: 100% !important;
+    }
+}

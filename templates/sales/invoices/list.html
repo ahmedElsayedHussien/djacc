@@ -6,12 +6,16 @@
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">سجل الفواتير</h5>
         <div class="btn-group">
+            {% if perms.sales.change_salesinvoice %}
             <button type="button" id="bulkSubmitBtn" class="btn btn-info text-white" style="display: none;">
                 <i class="bi bi-cloud-upload"></i> إرسال المختار للضرائب
             </button>
+            {% endif %}
+            {% if perms.sales.add_salesinvoice %}
             <a href="{% url 'sales:invoice-create' %}" class="btn btn-primary">
                 <i class="bi bi-plus-lg"></i> إنشاء فاتورة جديدة
             </a>
+            {% endif %}
         </div>
     </div>
     <div class="card-body">
@@ -54,7 +58,7 @@
                             <input type="checkbox" name="invoice_ids" value="{{ inv.pk }}" class="form-check-input invoice-check">
                             {% endif %}
                         </td>
-                        <td>{{ inv.number }}</td>
+                        <td><a href="{% url 'sales:invoice-detail' inv.pk %}" class="fw-bold text-decoration-none text-primary">{{ inv.number }}</a></td>
                         <td>{{ inv.date }}</td>
                         <td>{{ inv.customer.name }}</td>
                         <td><strong>{{ inv.total }}</strong></td>
@@ -87,6 +91,7 @@
                         <td>
                             {% if inv.status == 'draft' %}
                             <div class="btn-group">
+                                {% if perms.sales.change_salesinvoice or request.user.salesrepresentative and inv.sales_rep == request.user.salesrepresentative %}
                                 <form method="post" action="{% url 'sales:invoice-post' inv.pk %}" style="display:inline;">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn-sm btn-success">ترحيل</button>
@@ -94,7 +99,11 @@
                                 <a href="{% url 'sales:invoice-edit' inv.pk %}" class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-pencil"></i> تعديل
                                 </a>
-                                <form method="post" action="{% url 'sales:invoice-reverse' inv.pk %}" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من إلغاء هذه الفاتورة؟');">
+                                {% endif %}
+                                <form method="post" action="{% url 'sales:invoice-reverse' inv.pk %}" style="display:inline;"
+                                      data-reverse-type="sales-invoice-draft"
+                                      data-reverse-doc="إلغاء فاتورة رقم {{ inv.number }}"
+                                      data-reverse-detail="العميل: {{ inv.customer.name }} — الإجمالي: {{ inv.total }} ج.م">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn-sm btn-outline-warning">
                                         <i class="bi bi-x-circle"></i> إلغاء
@@ -104,12 +113,17 @@
                             {% elif inv.status == 'posted' %}
                             <div class="btn-group">
                                 <a href="{% url 'sales:invoice-detail' inv.pk %}" class="btn btn-sm btn-info text-white">عرض</a>
-                                <form method="post" action="{% url 'sales:invoice-reverse' inv.pk %}" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من عكس هذه الفاتورة؟ سيتم إنشاء قيد عكسي واستعادة المخزون.');">
+                                {% if perms.sales.change_salesinvoice %}
+                                <form method="post" action="{% url 'sales:invoice-reverse' inv.pk %}" style="display:inline;"
+                                      data-reverse-type="sales-invoice"
+                                      data-reverse-doc="عكس فاتورة رقم {{ inv.number }}"
+                                      data-reverse-detail="العميل: {{ inv.customer.name }} — الإجمالي: {{ inv.total }} ج.م">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn-sm btn-outline-danger">
                                         <i class="bi bi-arrow-counterclockwise"></i> عكس الفاتورة
                                     </button>
                                 </form>
+                                {% endif %}
                             </div>
                             {% else %}
                             <span class="text-muted small"><i class="bi bi-lock"></i> ملغي / معكوس</span>
@@ -125,6 +139,7 @@
             </table>
         </div>
     </div>
+    {% include 'partials/pagination.html' %}
 </div>
 {% endblock %}
 

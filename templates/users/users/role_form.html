@@ -6,12 +6,12 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-8">
+    <div class="col-12 col-lg-11">
         <div class="card shadow-sm border-0">
             <div class="card-header bg-white border-bottom pb-0">
-                <h5 class="fw-bold mb-3"><i class="bi bi-person-gear text-primary me-2"></i> بيانات وتصاريح المستخدم: {{ object.username }}</h5>
+                <h5 class="fw-bold mb-3 py-1"><i class="bi bi-person-gear text-primary me-2"></i> بيانات وتصاريح المستخدم: {{ object.username }}</h5>
             </div>
-            <div class="card-body p-4">
+            <div class="card-body p-4 p-lg-5">
                 <form method="post">
                     {% csrf_token %}
                     
@@ -26,7 +26,7 @@
 
                     <hr class="my-4">
                     
-                    <h5 class="fw-bold mb-3 text-secondary">الأدوار الممنوحة لهذا الموظف</h5>
+                    <h5 class="fw-bold mb-3 text-secondary fs-6">الأدوار الممنوحة لهذا الموظف</h5>
                     <div class="alert alert-light border">
                         <div style="max-height: 400px; overflow-y: auto; padding: 10px;">
                             {{ form.groups }}
@@ -38,7 +38,98 @@
                         بمجرد منح الموظف أي دور (مجموعة صلاحيات)، سيحصل تلقائياً على كافة الصلاحيات المُدرجة داخل هذا الدور ولن يحتاج لصلاحيات فردية.
                     </div>
 
-                    <div class="d-flex justify-content-between mt-4">
+                    <hr class="my-4">
+
+                    <h5 class="fw-bold mb-3 text-secondary fs-6">
+                        <i class="bi bi-shield-lock me-1"></i> الصلاحيات الفعلية للمستخدم
+                        {% if user_groups_names %}
+                            <small class="text-muted">(من الأدوار: {{ user_groups_names|join:'، ' }})</small>
+                        {% else %}
+                            <small class="text-muted text-danger">(بدون أدوار — لا توجد صلاحيات)</small>
+                        {% endif %}
+                    </h5>
+
+                    <div class="border rounded p-3 p-lg-4" style="max-height: 600px; overflow-y: auto; background: #fafbfc;">
+                        {% if user_perm_ids %}
+                            {% for app_label, perms in user_grouped_permissions.items %}
+                                {% for p in perms %}
+                                    {% if p.id in user_perm_ids %}
+                                        {% ifchanged app_label %}
+                                            <h6 class="text-primary mt-3 mb-3 border-bottom pb-2 fs-6">
+                                                {% if app_label == 'core' %}النظام الأساسي
+                                                {% elif app_label == 'sales' %}المبيعات
+                                                {% elif app_label == 'purchases' %}المشتريات
+                                                {% elif app_label == 'inventory' %}المخازن
+                                                {% elif app_label == 'treasury' %}الخزينة
+                                                {% elif app_label == 'expenses' %}المصروفات
+                                                {% elif app_label == 'hr' %}الموارد البشرية
+                                                {% elif app_label == 'auth' or app_label == 'users' %}المستخدمين والصلاحيات
+                                                {% elif app_label == 'reports' %}التقارير
+                                                {% elif app_label == 'pos' %}نقطة البيع
+                                                {% elif app_label == 'assets' %}الأصول الثابتة
+                                                {% elif app_label == 'e_invoice' %}الفاتورة الإلكترونية
+                                                {% else %}{{ app_label }}{% endif %}
+                                            </h6>
+                                        {% endifchanged %}
+                                        <span class="badge bg-success-subtle text-success border border-success me-1 mb-1 px-3 py-2 fs-6 fw-normal">{{ p.name }}</span>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted text-center my-4 fs-6">لا توجد صلاحيات — المستخدم ليس لديه أي أدوار</p>
+                        {% endif %}
+                    </div>
+
+                    <hr class="my-4">
+
+                    <h5 class="fw-bold mb-3 text-secondary fs-6">
+                        <i class="bi bi-person-plus me-1"></i> صلاحيات فردية إضافية
+                        <small class="text-muted">(صلاحيات إضافية غير مشمولة في الأدوار أعلاه)</small>
+                    </h5>
+
+                    <div class="accordion" id="userPermsAccordion">
+                        {% for app_label, perms in user_grouped_permissions.items %}
+                        <div class="accordion-item mb-2 border rounded">
+                            <h2 class="accordion-header" id="uh-{{ app_label }}">
+                                <button class="accordion-button collapsed fw-bold py-3 px-4 bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#uc-{{ app_label }}">
+                                    <span class="fs-6">{% if app_label == 'core' %}النظام الأساسي
+                                    {% elif app_label == 'sales' %}المبيعات
+                                    {% elif app_label == 'purchases' %}المشتريات
+                                    {% elif app_label == 'inventory' %}المخازن
+                                    {% elif app_label == 'treasury' %}الخزينة
+                                    {% elif app_label == 'expenses' %}المصروفات
+                                    {% elif app_label == 'hr' %}الموارد البشرية
+                                    {% elif app_label == 'auth' or app_label == 'users' %}المستخدمين والصلاحيات
+                                    {% elif app_label == 'reports' %}التقارير
+                                    {% elif app_label == 'pos' %}نقطة البيع
+                                    {% elif app_label == 'assets' %}الأصول الثابتة
+                                    {% elif app_label == 'e_invoice' %}الفاتورة الإلكترونية
+                                    {% else %}{{ app_label }}{% endif %}</span>
+                                    <span class="badge bg-secondary ms-auto rounded-pill fs-6 px-3">{{ perms|length }}</span>
+                                </button>
+                            </h2>
+                            <div id="uc-{{ app_label }}" class="accordion-collapse collapse" aria-labelledby="uh-{{ app_label }}" data-bs-parent="#userPermsAccordion">
+                                <div class="accordion-body px-4 py-3">
+                                    <div class="row g-3">
+                                        {% for perm in perms %}
+                                        <div class="col-12">
+                                            <div class="form-check form-switch d-flex align-items-center gap-3 py-1 px-3 rounded-3 border-bottom border-light">
+                                                <input class="form-check-input flex-shrink-0 user-permission-checkbox" style="width: 2.5rem; height: 1.3rem; cursor: pointer;" type="checkbox" name="user_permissions" value="{{ perm.id }}" id="uperm_{{ perm.id }}" {% if perm.id in user_individual_perm_ids %}checked{% endif %}>
+                                                <label class="form-check-label fs-6 fw-medium py-2" for="uperm_{{ perm.id }}" style="cursor: pointer;">
+                                                    {{ perm.name }}
+                                                    <small class="text-muted d-block d-md-inline mt-1 mt-md-0 ms-md-2 fw-normal">({{ perm.codename }})</small>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="d-flex justify-content-between mt-4 pt-2">
                         <a href="{% url 'users:user-list' %}" class="btn btn-outline-secondary px-4">إلغاء الرجوع</a>
                         <button type="submit" class="btn btn-primary px-5 fw-bold">حفظ الصلاحيات</button>
                     </div>

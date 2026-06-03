@@ -29,7 +29,7 @@
                         </td>
                     </tr>
                 </table>
-                <a href="{% url 'treasury:bank-update' bank.pk %}" class="btn btn-outline-secondary w-100 mt-2">تعديل البيانات</a>
+                {% if perms.treasury.change_bankaccount %}<a href="{% url 'treasury:bank-update' bank.pk %}" class="btn btn-outline-secondary w-100 mt-2">تعديل البيانات</a>{% endif %}
             </div>
         </div>
     </div>
@@ -40,7 +40,9 @@
             <div class="card-body">
                 <p class="text-muted">لعرض كشف حساب تفصيلي، يرجى الانتقال إلى التقارير المالية.</p>
                 <div class="d-grid gap-2">
-                    <a href="{% url 'reports:trial_balance' %}?account={{ bank.account.pk }}" class="btn btn-info">عرض ميزان المراجعة لهذا الحساب</a>
+                    <a href="{% url 'reports:account_statement' %}?account={{ bank.account.pk }}" class="btn btn-info text-white">
+                        <i class="bi bi-file-earmark-text me-1"></i> عرض كشف الحساب المالي (دفتر الأستاذ)
+                    </a>
                 </div>
             </div>
         </div>

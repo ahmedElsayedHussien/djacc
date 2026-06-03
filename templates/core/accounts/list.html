@@ -6,17 +6,21 @@
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">شجرة الحسابات</h5>
         <div class="d-flex gap-2">
-            {% if current_fiscal_year %}
+            {% if current_fiscal_year and perms.core.change_fiscalyear %}
             <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#postOpeningModal">
                 <i class="bi bi-journal-plus"></i> توليد القيد الافتتاحي
             </button>
             {% endif %}
+            {% if perms.core.change_account %}
             <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#initChartModal">
                 <i class="bi bi-diagram-3"></i> تجهيز الشجرة الافتراضية
             </button>
+            {% endif %}
+            {% if perms.core.add_account %}
             <a href="{% url 'core:account-create' %}" class="btn btn-primary">
                 <i class="bi bi-plus-lg"></i> إضافة حساب جديد
             </a>
+            {% endif %}
         </div>
     </div>
     <div class="card-body">
@@ -101,9 +105,9 @@
                         </td>
                         <td>
                             <div class="btn-group">
-                                <a href="{% url 'core:account-edit' account.pk %}" class="btn btn-sm btn-outline-primary" title="تعديل">
+                                {% if perms.core.change_account %}<a href="{% url 'core:account-edit' account.pk %}" class="btn btn-sm btn-outline-primary" title="تعديل">
                                     <i class="bi bi-pencil"></i>
-                                </a>
+                                </a>{% endif %}
                                 {% if account.is_leaf %}
                                 <a href="{% url 'reports:account_statement' %}?account={{ account.pk }}" class="btn btn-sm btn-outline-info" title="كشف الحساب">
                                     <i class="bi bi-journal-text"></i>

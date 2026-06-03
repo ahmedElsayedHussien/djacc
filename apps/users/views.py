@@ -14,7 +14,7 @@ def get_grouped_permissions():
     for perm in permissions:
         app_label = perm.content_type.app_label
         # نعرض فقط التطبيقات الخاصة بنا زائد بعض تطبيقات النظام الهامة
-        allowed_apps = ['core', 'sales', 'purchases', 'inventory', 'treasury', 'expenses', 'reports', 'hr', 'users', 'auth']
+        allowed_apps = ['core', 'sales', 'purchases', 'inventory', 'treasury', 'expenses', 'reports', 'hr', 'users', 'auth','pos']
         if app_label not in allowed_apps:
             continue
             
@@ -31,6 +31,7 @@ class RoleListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     template_name = 'users/roles/list.html'
     context_object_name = 'roles'
     permission_required = 'auth.view_group'
+    paginate_by = 25
 
 class RoleCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = Group
@@ -71,6 +72,14 @@ class RoleDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
     success_url = reverse_lazy('users:role-list')
     permission_required = 'auth.delete_group'
 
+    def dispatch(self, request, *args, **kwargs):
+        role = self.get_object()
+        protected = ['مدير النظام', 'admin', 'Administrator', 'مدير مالي', 'مدير مبيعات']
+        if role.name in protected:
+            messages.error(request, f'لا يمكن حذف الدور المحمي "{role.name}".')
+            return redirect('users:role-list')
+        return super().dispatch(request, *args, **kwargs)
+
     def delete(self, request, *args, **kwargs):
         messages.success(request, 'تم حذف الدور بنجاح.')
         return super().delete(request, *args, **kwargs)
@@ -83,10 +92,10 @@ class UserListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     template_name = 'users/users/list.html'
     context_object_name = 'users'
     permission_required = 'auth.view_user'
+    paginate_by = 25
 
     def get_queryset(self):
-        # استبعاد الـ superuser من القائمة العادية لحمايتهم
-        return User.objects.filter(is_superuser=False).prefetch_related('groups')
+        return User.objects.filter(is_superuser=False).prefetch_related('groups').order_by('username')
 
 class UserRoleUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = User

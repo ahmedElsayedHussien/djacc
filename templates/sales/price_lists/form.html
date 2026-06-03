@@ -63,19 +63,19 @@
                                 {% for hidden in item_form.hidden_fields %}
                                     {{ hidden }}
                                 {% endfor %}
-                                <td>
+                                <td data-label="الصنف">
                                     {{ item_form.item }}
                                     {{ item_form.item.errors }}
                                 </td>
-                                <td>
+                                <td data-label="سعر الوحدة">
                                     {{ item_form.unit_price }}
                                     {{ item_form.unit_price.errors }}
                                 </td>
-                                <td>
+                                <td data-label="أقل كمية">
                                     {{ item_form.min_qty }}
                                     {{ item_form.min_qty.errors }}
                                 </td>
-                                <td>
+                                <td data-label="حذف">
                                     {% if item_form.instance.pk %}
                                         {{ item_form.DELETE }}
                                     {% else %}

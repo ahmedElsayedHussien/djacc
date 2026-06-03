@@ -33,6 +33,7 @@
         </div>
         <div class="card-body p-0">
             {{ lines.management_form }}
+            <div class="table-responsive">
             <table class="table table-hover table-bordered mb-0" id="linesTable">
                 <thead class="table-light">
                     <tr>
@@ -48,12 +49,12 @@
                     {% for l_form in lines %}
                     <tr class="line-row">
                         {% for hidden in l_form.hidden_fields %}{{ hidden }}{% endfor %}
-                        <td>{{ l_form.account|as_crispy_field }}</td>
-                        <td>{{ l_form.cost_center|as_crispy_field }}</td>
-                        <td>{{ l_form.debit|as_crispy_field }}</td>
-                        <td>{{ l_form.credit|as_crispy_field }}</td>
-                        <td>{{ l_form.description|as_crispy_field }}</td>
-                        <td class="text-center align-middle">
+                        <td data-label="الحساب">{{ l_form.account|as_crispy_field }}</td>
+                        <td data-label="مركز التكلفة">{{ l_form.cost_center|as_crispy_field }}</td>
+                        <td data-label="مدين">{{ l_form.debit|as_crispy_field }}</td>
+                        <td data-label="دائن">{{ l_form.credit|as_crispy_field }}</td>
+                        <td data-label="البيان">{{ l_form.description|as_crispy_field }}</td>
+                        <td data-label="حذف" class="text-center align-middle">
                             {% if lines.can_delete %}
                                 {{ l_form.DELETE }}
                             {% endif %}
@@ -70,6 +71,7 @@
                     </tr>
                 </tfoot>
             </table>
+            </div>
         </div>
     </div>
 

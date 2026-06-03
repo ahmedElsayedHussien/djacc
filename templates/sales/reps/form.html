@@ -3,36 +3,100 @@
 {% block header %}{% if object %}تعديل بيانات المندوب: {{ object.name }}{% else %}إضافة مندوب جديد{% endif %}{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card shadow-sm">
-            <div class="card-header bg-white">
-                <h5 class="mb-0 fw-bold text-primary">بيانات المندوب</h5>
+    <div class="col-md-10">
+        {% include 'partials/_form_errors.html' %}
+        <form method="post">
+            {% csrf_token %}
+            
+            {% if not object %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0 fw-bold text-success"><i class="bi bi-person-badge"></i> بيانات الموظف</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">مستخدم النظام *</label>
+                            <div class="input-group">
+                                {{ form.user }}
+                                <a href="{% url 'hr:user-add' %}" class="btn btn-outline-primary" title="إضافة مستخدم جديد" target="_blank">
+                                    <i class="bi bi-plus-lg"></i>
+                                </a>
+                            </div>
+                            <div class="form-text small text-muted">اختر المستخدم — الاسم سيُجلب تلقائياً.</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">الاسم الأول</label>
+                            <input type="text" id="auto_first_name" class="form-control" readonly>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">الاسم الأخير</label>
+                            <input type="text" id="auto_last_name" class="form-control" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">الرقم القومي *</label>
+                            {{ form.national_id }}
+                            {{ form.national_id.errors }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">رقم الهاتف</label>
+                            {{ form.phone }}
+                            {{ form.phone.errors }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">تاريخ التعيين *</label>
+                            {{ form.hiring_date }}
+                            {{ form.hiring_date.errors }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">الإدارة *</label>
+                            {{ form.department }}
+                            {{ form.department.errors }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">المسمى الوظيفي *</label>
+                            {{ form.job_title }}
+                            {{ form.job_title.errors }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">الراتب الأساسي</label>
+                            {{ form.basic_salary }}
+                            {{ form.basic_salary.errors }}
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                {% include 'partials/_form_errors.html' %}
-                <form method="post">
-                    {% csrf_token %}
+            {% endif %}
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0 fw-bold text-primary"><i class="bi bi-person-workspace"></i> بيانات المندوب</h5>
+                </div>
+                <div class="card-body">
+                    {% if object %}
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold">الموظف المرتبط *</label>
+                            <label class="form-label fw-semibold">الموظف</label>
                             {{ form.employee }}
-                            <div class="form-text small text-muted">اختر الموظف لتحويله إلى مندوب مبيعات.</div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold">كود المندوب *</label>
+                            <label class="form-label fw-semibold">كود المندوب</label>
                             {{ form.code }}
                         </div>
+                    </div>
+                    {% endif %}
+                    <div class="row g-3">
                         <div class="col-md-4">
                             <label class="form-label fw-semibold">نسبة العمولة (%)</label>
                             {{ form.commission_rate }}
                             {{ form.commission_rate.errors }}
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label fw-semibold">المنطقة الجغرافية</label>
                             {{ form.territory }}
                             {{ form.territory.errors }}
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label fw-semibold">المشرف المباشر</label>
                             {{ form.supervisor }}
                             {{ form.supervisor.errors }}
@@ -46,22 +110,54 @@
                             </div>
                         </div>
                     </div>
-                    
-                    {% if not object %}
-                    <div class="alert alert-info mt-4">
-                        <i class="bi bi-info-circle-fill"></i> عند حفظ المندوب، سيقوم النظام بإنشاء **مخزن** و **خزنة نقدية** خاصة به تلقائياً.
-                    </div>
-                    {% endif %}
-
-                    <div class="mt-4 pt-3 border-top d-flex justify-content-between">
-                        <a href="{% url 'sales:rep-list' %}" class="btn btn-light px-4">إلغاء</a>
-                        <button type="submit" class="btn btn-primary px-5 rounded-pill">
-                            <i class="bi bi-check-lg"></i> حفظ البيانات
-                        </button>
-                    </div>
-                </form>
+                </div>
             </div>
-        </div>
+
+            {% if not object %}
+            <div class="alert alert-info mt-2">
+                <i class="bi bi-info-circle-fill"></i> عند حفظ المندوب، سيقوم النظام بإنشاء ملف موظف + مخزن + خزنة نقدية خاصة به تلقائياً.
+            </div>
+            {% endif %}
+
+            <div class="d-flex justify-content-between mt-4">
+                <a href="{% url 'sales:rep-list' %}" class="btn btn-light px-4">إلغاء</a>
+                <button type="submit" class="btn btn-primary px-5 rounded-pill">
+                    <i class="bi bi-check-lg"></i> حفظ البيانات
+                </button>
+            </div>
+        </form>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if not object %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const userSelect = document.querySelector('select[name="user"]');
+    const firstNameDisplay = document.getElementById('auto_first_name');
+    const lastNameDisplay = document.getElementById('auto_last_name');
+
+    if (userSelect) {
+        userSelect.addEventListener('change', function() {
+            const userId = this.value;
+            if (userId) {
+                fetch('/hr/api/user-info/?user_id=' + userId)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (!data.error) {
+                            firstNameDisplay.value = data.first_name || '';
+                            lastNameDisplay.value = data.last_name || '';
+                        }
+                    })
+                    .catch(error => console.error('Error fetching user info:', error));
+            } else {
+                firstNameDisplay.value = '';
+                lastNameDisplay.value = '';
+            }
+        });
+    }
+});
+</script>
+{% endif %}
 {% endblock %}

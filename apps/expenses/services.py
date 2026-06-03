@@ -1,7 +1,9 @@
+from decimal import Decimal
 from django.db import transaction
 from django.db.models import Sum
 from apps.core.models import JournalEntry
-from apps.core.services import JournalService
+from apps.core.services import JournalService, AuditService
+from apps.core.tax_utils import calculate_line_taxes
 from .models import Expense, Custody, CustodySettlement
 
 class ExpenseService:
@@ -26,56 +28,36 @@ class ExpenseService:
 
         lines = []
         
-        # Taxes processing
-        # Professional tax processing: VAT on (Subtotal + Table Tax)
+        # Taxes processing using unified engine
         tax_entries = []
-        capitalized_tax = 0  # Non-refundable (Table, Stamp, Customs)
         
-        taxes_to_process = []
-        if expense.tax_type: taxes_to_process.append({'type': expense.tax_type, 'rate': expense.tax_percent})
-        if expense.tax_type2: taxes_to_process.append({'type': expense.tax_type2, 'rate': expense.tax_percent2})
+        subtotal = Decimal(str(expense.subtotal or '0'))
+        res = calculate_line_taxes(
+            subtotal,
+            expense.tax_type,
+            expense.tax_percent,
+            expense.tax_type2,
+            expense.tax_percent2,
+            is_purchase_or_expense=True
+        )
         
-        # First pass: calculate Table Tax (Capitalized)
-        table_tax_val = 0
-        for tx_info in taxes_to_process:
-            tx = tx_info['type']
-            if tx.category == 'table':
-                rate = tx_info['rate'] if tx_info['rate'] is not None else tx.rate
-                table_tax_val += expense.subtotal * (rate / 100)
+        capitalized_tax = res['capitalized_amount']
         
-        # Second pass: calculate all taxes
-        for tx_info in taxes_to_process:
-            tx = tx_info['type']
-            rate = tx_info['rate'] if tx_info['rate'] is not None else tx.rate
-            
-            if tx.category == 'vat':
-                # VAT is on (Subtotal + Table Tax)
-                val = (expense.subtotal + table_tax_val) * (rate / 100)
-            elif tx.category in ['table', 'stamp', 'customs']:
-                # Capitalize
-                val = expense.subtotal * (rate / 100)
-                capitalized_tax += val
-                continue
-            else:
-                # Others (WHT, etc.) are on Subtotal
-                val = expense.subtotal * (rate / 100)
-            
-            if val == 0: continue
-            
-            # Routing: WHT/Salary/Insurance in expenses are Credits (Deductions from payee)
-            # VAT/Others are Debits (Refundable assets)
-            is_credit = (tx.category in ['wht', 'salary', 'insurance'])
-            tax_entries.append({
-                'account': tx.account,
-                'debit': 0 if is_credit else val,
-                'credit': val if is_credit else 0,
-                'description': f'ضريبة {tx.name} - مصروف {expense.number}'
-            })
+        for tx_type, tx_val in [(expense.tax_type, res['tax1_value']), (expense.tax_type2, res['tax2_value'])]:
+            if tx_type and tx_val > 0:
+                if tx_type.category not in ['table', 'stamp', 'customs', 'other']:
+                    is_credit = (tx_type.category in ['wht', 'salary', 'insurance'])
+                    tax_entries.append({
+                        'account': tx_type.account,
+                        'debit': 0 if is_credit else tx_val,
+                        'credit': tx_val if is_credit else 0,
+                        'description': f'ضريبة {tx_type.name} - مصروف {expense.number}'
+                    })
 
         # 1. Main Expense Line (Base + Capitalized Taxes)
         lines.append({
             'account': expense.category.account,
-            'debit': expense.subtotal + capitalized_tax,
+            'debit': subtotal + capitalized_tax,
             'credit': 0,
             'description': f'مصروف: {expense.description}',
             'cost_center': expense.cost_center,
@@ -85,7 +67,12 @@ class ExpenseService:
         lines.extend(tax_entries)
         
         # 3. Credit Payment Source (Amount Paid = subtotal + Additions - Deductions)
-        # Note: expense.amount should already be the net paid amount from the view
+        net_paid = (subtotal + capitalized_tax + 
+                    sum(t['debit'] for t in tax_entries) - 
+                    sum(t['credit'] for t in tax_entries))
+
+        if expense.amount != net_paid:
+            raise ValueError(f"قيمة السداد ({expense.amount}) لا تتطابق مع صافي المصروف بعد الضرائب ({net_paid})")
         if expense.payment_method == 'cash':
             account = expense.cash_box.account
         elif expense.payment_method == 'bank':
@@ -120,6 +107,7 @@ class ExpenseService:
         """
         عكس مصروف (إنشاء قيد عكسي)
         """
+        expense = Expense.objects.select_for_update().get(pk=expense.pk)
         if expense.status != Expense.Status.POSTED:
             raise ValueError("يمكن عكس المصاريف المرحلة فقط")
         
@@ -132,10 +120,9 @@ class ExpenseService:
             created_by=reversed_by
         )
         
-        expense.status = Expense.Status.REVERSED # ✅ Fixed status
+        expense.status = Expense.Status.REVERSED
         expense.save()
         
-        from apps.core.services import AuditService
         AuditService.log(reversed_by, 'Reverse', expense, f'عكس مصروف رقم {expense.number}')
         
         return entry
@@ -176,7 +163,7 @@ class CustodyService:
         if settlement.is_posted:
             raise ValueError("هذه التسوية مرحلة بالفعل")
         # ✅ Fix: Over-settlement validation
-        posted_expenses = custody.expense_set.filter(status='posted', settlement__isnull=True)
+        posted_expenses = custody.expense_set.filter(status=Expense.Status.POSTED, settlement__isnull=True)
         current_expenses_total = posted_expenses.aggregate(t=Sum('amount'))['t'] or 0
         
         # Calculate what has already been settled
@@ -195,13 +182,10 @@ class CustodyService:
         entry = None
         
         # 1. Calculate Expenses - Only those already posted (they already have G/L entries)
-        expenses = settlement.custody.expense_set.filter(status='posted', settlement__isnull=True)
-        total_expenses = 0
-        for exp in expenses:
-            total_expenses += exp.amount
-            exp.settlement = settlement  # Mark as settled
-            exp.save()
-            
+        expenses = settlement.custody.expense_set.filter(status=Expense.Status.POSTED, settlement__isnull=True)
+        total_expenses = expenses.aggregate(t=Sum('amount'))['t'] or 0
+        expenses.update(settlement=settlement)
+        
         # 2. Handle Cash Refund (G/L Entry needed for this part)
         if settlement.returned_amount > 0:
             lines.append({
@@ -236,7 +220,7 @@ class CustodyService:
         custody = settlement.custody
         # Total settled is the sum of ALL settlements' returned_amount + sum of all expenses linked to any settlement
         total_returned = custody.settlements.filter(is_posted=True).aggregate(t=Sum('returned_amount'))['t'] or 0
-        total_expenses_all = custody.expense_set.filter(settlement__isnull=False).aggregate(t=Sum('amount'))['t'] or 0
+        total_expenses_all = custody.expense_set.filter(settlement__is_posted=True).aggregate(t=Sum('amount'))['t'] or 0
         
         custody.settled_amount = total_returned + total_expenses_all
         

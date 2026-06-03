@@ -13,9 +13,13 @@
                 <ul class="list-group list-group-flush">
                     <li class="list-group-item d-flex justify-content-between px-0">
                         <span class="text-muted">الوثيقة الأصلية:</span>
-                        <a href="{{ log.content_object.get_absolute_url|default:'#' }}" class="fw-bold text-decoration-none">
+                        {% if log.content_object %}
+                        <a href="{{ log.content_object.get_absolute_url }}" class="fw-bold text-decoration-none">
                             {{ log.content_object.number|default:log.internal_id }}
                         </a>
+                        {% else %}
+                        <span class="fw-bold">{{ log.internal_id }}</span>
+                        {% endif %}
                     </li>
                     <li class="list-group-item d-flex justify-content-between px-0">
                         <span class="text-muted">Submission ID:</span>

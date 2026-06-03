@@ -9,7 +9,9 @@
             <input type="search" name="q" class="form-control me-2" placeholder="بحث بالاسم أو الرقم القومي..." value="{{ request.GET.q }}">
             <button class="btn btn-outline-primary" type="submit">بحث</button>
         </form>
+        {% if perms.hr.add_employee %}
         <a href="{% url 'hr:employee-add' %}" class="btn btn-primary"><i class="bi bi-person-plus"></i> إضافة موظف جديد</a>
+        {% endif %}
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -54,7 +56,7 @@
                         </td>
                         <td class="text-end">
                             <a href="{% url 'hr:employee-detail' emp.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i> الملف</a>
-                            <a href="{% url 'hr:employee-edit' emp.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                            {% if perms.hr.change_employee %}<a href="{% url 'hr:employee-edit' emp.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>{% endif %}
                         </td>
                     </tr>
                     {% empty %}

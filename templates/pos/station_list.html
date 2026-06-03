@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}إعدادات نقاط البيع | DJACC Pro{% endblock %}
+{% block header %}إعدادات نقاط البيع (POS Stations){% endblock %}
+{% block content %}
+<div class="card shadow-sm border-0 mb-4" style="border-radius: 16px; overflow: hidden;">
+    <div class="card-header bg-white border-0 py-4 px-4 d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="mb-1 fw-bold text-plum" style="font-family: 'Cairo', sans-serif;">محطات ونقاط البيع النشطة</h5>
+            <p class="text-muted small mb-0">يمكنك هنا تهيئة محطات الكاشير وربطها بالمستودعات وخزائن النقدية لإثبات المبيعات.</p>
+        </div>
+        {% if perms.pos.add_posstation %}
+        <a href="{% url 'pos:station-create' %}" class="btn btn-primary rounded-pill px-4 shadow-sm" style="font-family: 'Cairo', sans-serif;">
+            <i class="bi bi-plus-lg me-1"></i> إضافة نقطة بيع جديدة
+        </a>
+        {% endif %}
+    </div>
+    <div class="card-body px-4 pb-4 pt-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-family: 'Cairo', sans-serif;">
+                <thead class="table-light text-secondary" style="font-size: 0.9rem;">
+                    <tr>
+                        <th class="py-3 px-3">كود النقطة</th>
+                        <th class="py-3">اسم نقطة البيع</th>
+                        <th class="py-3">المخزن المرتبط (سحب بضاعة)</th>
+                        <th class="py-3">درج النقدية (الخزينة)</th>
+                        <th class="py-3">حساب البنك (الفيزا)</th>
+                        <th class="py-3">المحفظة الإلكترونية</th>
+                        <th class="py-3 text-center">الحالة</th>
+                        <th class="py-3 text-center">إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody style="font-size: 0.95rem;">
+                    {% for station in stations %}
+                    <tr>
+                        <td class="py-3 px-3">
+                            <span class="badge bg-secondary-subtle text-secondary fw-bold rounded px-2.5 py-1.5 font-monospace">
+                                {{ station.code }}
+                            </span>
+                        </td>
+                        <td class="py-3 fw-bold text-plum">{{ station.name }}</td>
+                        <td class="py-3">
+                            <span class="d-flex align-items-center gap-2">
+                                <i class="bi bi-box-seam text-primary"></i>
+                                <span>{{ station.warehouse.name }}</span>
+                            </span>
+                        </td>
+                        <td class="py-3">
+                            <span class="d-flex align-items-center gap-2">
+                                <i class="bi bi-wallet2 text-success"></i>
+                                <span>{{ station.cash_box.name }}</span>
+                            </span>
+                        </td>
+                        <td class="py-3">
+                            {% if station.bank_account %}
+                            <span class="d-flex align-items-center gap-2">
+                                <i class="bi bi-credit-card text-info"></i>
+                                <span>{{ station.bank_account.name }}</span>
+                            </span>
+                            {% else %}
+                            <span class="text-muted small">---</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3">
+                            {% if station.mobile_wallet %}
+                            <span class="d-flex align-items-center gap-2">
+                                <i class="bi bi-phone text-warning"></i>
+                                <span>{{ station.mobile_wallet.provider }} - {{ station.mobile_wallet.name }}</span>
+                            </span>
+                            {% else %}
+                            <span class="text-muted small">---</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 text-center">
+                            {% if station.is_active %}
+                            <span class="badge bg-success-subtle text-success rounded-pill px-3 py-1.5 small">
+                                <i class="bi bi-check-circle-fill me-1"></i> نشط
+                            </span>
+                            {% else %}
+                            <span class="badge bg-light text-muted rounded-pill px-3 py-1.5 small">
+                                <i class="bi bi-x-circle-fill me-1"></i> معطل
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 text-center">
+                            <div class="d-flex justify-content-center gap-2">
+                                {% if perms.pos.change_posstation %}<a href="{% url 'pos:station-update' station.pk %}" class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                                    <i class="bi bi-pencil-square me-1"></i> تعديل
+                                </a>{% endif %}
+                                {% if perms.pos.delete_posstation %}<a href="{% url 'pos:station-delete' station.pk %}" class="btn btn-sm btn-outline-danger rounded-pill px-3">
+                                    <i class="bi bi-trash3 me-1"></i> حذف
+                                </a>{% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5 text-muted">
+                            <i class="bi bi-shop fs-1 d-block mb-3 opacity-50 text-secondary"></i>
+                            <span class="fw-bold d-block mb-1">لا توجد نقاط بيع مهيأة بعد</span>
+                            <span class="small">قم بالضغط على "إضافة نقطة بيع جديدة" لتهيئة محطات الكاشير الخاصة بك.</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

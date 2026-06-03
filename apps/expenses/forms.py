@@ -1,7 +1,13 @@
+from datetime import date
+from django.utils.timezone import localdate
 from django import forms
-from .models import Expense, ExpenseCategory, Custody
+from django.conf import settings
+from django.db.models import Sum
+from apps.core.models import Account, CostCenter
 from apps.treasury.models import CashBox
-from apps.core.models import Account
+from apps.treasury.utils import get_available_cash_boxes
+from apps.hr.models import Employee
+from .models import Expense, ExpenseCategory, Custody, CustodySettlement
 
 class ExpenseCategoryForm(forms.ModelForm):
     class Meta:
@@ -69,14 +75,40 @@ class ExpenseForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        self.fields['cash_box'].queryset = CashBox.objects.exclude(
-            salesrepresentative__isnull=False
-        ).filter(is_active=True).order_by('name')
+        if 'cash_box' in self.fields:
+            if user:
+                self.fields['cash_box'].queryset = get_available_cash_boxes(user)
+            else:
+                self.fields['cash_box'].queryset = CashBox.objects.filter(is_active=True).order_by('name')
 
-        from apps.core.models import CostCenter
         if 'cost_center' in self.fields:
             self.fields['cost_center'].queryset = CostCenter.objects.filter(is_active=True, is_leaf=True).order_by('code')
+
+    def clean_date(self):
+        d = self.cleaned_data.get('date')
+        if d and d > localdate():
+            raise forms.ValidationError('تاريخ المصروف لا يمكن أن يكون في المستقبل')
+        return d
+
+    def clean_subtotal(self):
+        subtotal = self.cleaned_data.get('subtotal')
+        if subtotal is not None and subtotal <= 0:
+            raise forms.ValidationError('يجب أن يكون المبلغ أكبر من صفر')
+        return subtotal
+
+    def clean_tax_percent(self):
+        pct = self.cleaned_data.get('tax_percent')
+        if pct is not None and (pct < 0 or pct > 100):
+            raise forms.ValidationError('نسبة الضريبة 1 يجب أن تكون بين 0 و 100')
+        return pct
+
+    def clean_tax_percent2(self):
+        pct = self.cleaned_data.get('tax_percent2')
+        if pct is not None and (pct < 0 or pct > 100):
+            raise forms.ValidationError('نسبة الضريبة 2 يجب أن تكون بين 0 و 100')
+        return pct
 
     def clean(self):
         cleaned = super().clean()
@@ -111,35 +143,44 @@ class CustodyForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
-        self.fields['employee'].queryset = User.objects.filter(is_active=True)
-        from django.conf import settings
+        self.fields['employee'].queryset = Employee.objects.filter(status=Employee.Status.ACTIVE)
         custody_parent = getattr(settings, 'CUSTODY_ACCOUNTS_PARENT', '1142')
         self.fields['account'].queryset = Account.objects.filter(
-            code__startswith=custody_parent, is_leaf=True
+            code__startswith=custody_parent, is_leaf=True, is_active=True
         )
         
-        from apps.treasury.models import CashBox
-        self.fields['cash_box'].queryset = CashBox.objects.exclude(
-            salesrepresentative__isnull=False
-        ).filter(is_active=True).order_by('name')
+        if 'cash_box' in self.fields:
+            if user:
+                self.fields['cash_box'].queryset = get_available_cash_boxes(user)
+            else:
+                self.fields['cash_box'].queryset = CashBox.objects.filter(is_active=True).order_by('name')
     
+    def clean_date(self):
+        d = self.cleaned_data.get('date')
+        if d and d > localdate():
+            raise forms.ValidationError('تاريخ العهدة لا يمكن أن يكون في المستقبل')
+        return d
+
+    def clean_amount(self):
+        amt = self.cleaned_data.get('amount')
+        if amt is not None and amt <= 0:
+            raise forms.ValidationError('قيمة العهدة يجب أن تكون أكبر من صفر')
+        return amt
+
     def clean_employee(self):
         employee = self.cleaned_data.get('employee')
         if employee:
             open_custody = Custody.objects.filter(
                 employee=employee,
-                status__in=['open', 'partial']
+                status__in=[Custody.Status.OPEN, Custody.Status.PARTIALLY_SETTLED]
             ).exists()
             if open_custody and not self.instance.pk:
                 raise forms.ValidationError(
                     'هذا الموظف لديه عهدة مفتوحة — يجب تسويتها أولاً'
                 )
         return employee
-
-from .models import CustodySettlement
 
 class CustodySettlementForm(forms.ModelForm):
     class Meta:
@@ -159,11 +200,25 @@ class CustodySettlementForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        from apps.treasury.models import CashBox
-        self.fields['cash_box'].queryset = CashBox.objects.exclude(
-            salesrepresentative__isnull=False
-        ).filter(is_active=True).order_by('name')
+        if 'cash_box' in self.fields:
+            if user:
+                self.fields['cash_box'].queryset = get_available_cash_boxes(user)
+            else:
+                self.fields['cash_box'].queryset = CashBox.objects.filter(is_active=True).order_by('name')
+
+    def clean_date(self):
+        d = self.cleaned_data.get('date')
+        if d and d > localdate():
+            raise forms.ValidationError('تاريخ التسوية لا يمكن أن يكون في المستقبل')
+        return d
+
+    def clean_returned_amount(self):
+        amt = self.cleaned_data.get('returned_amount')
+        if amt is not None and amt < 0:
+            raise forms.ValidationError('المبلغ المرتجع لا يمكن أن يكون سالباً')
+        return amt
 
     def clean(self):
         cleaned = super().clean()
@@ -176,9 +231,7 @@ class CustodySettlementForm(forms.ModelForm):
         # ✅ Fix: Over-settlement validation in Form
         if self.instance and hasattr(self, 'custody_obj'):
             custody = self.custody_obj
-            from django.db.models import Sum
-            # Get expenses already posted but not yet settled
-            posted_expenses = custody.expense_set.filter(status='posted', settlement__isnull=True)
+            posted_expenses = custody.expense_set.filter(status=Expense.Status.POSTED, settlement__isnull=True)
             current_expenses_total = posted_expenses.aggregate(t=Sum('amount'))['t'] or 0
             
             already_settled = custody.settled_amount

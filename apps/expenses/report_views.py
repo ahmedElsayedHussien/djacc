@@ -1,14 +1,15 @@
 from django.views.generic import TemplateView
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
+from apps.core.mixins import PermRequiredMixin
 from datetime import date
 from apps.reports.services import ReportService
 from .models import CustodySettlement
 
-class ExpenseReportDashboardView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class ExpenseReportDashboardView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'expenses/reports/dashboard_links.html'
     permission_required = 'expenses.view_expense'
 
-class ExpensesByCategoryView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class ExpensesByCategoryView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'expenses/reports/by_category.html'
     permission_required = 'expenses.view_expense'
 
@@ -22,7 +23,7 @@ class ExpensesByCategoryView(LoginRequiredMixin, PermissionRequiredMixin, Templa
         context['to_date'] = to_date
         return context
 
-class ExpensesByCostCenterView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class ExpensesByCostCenterView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'expenses/reports/by_cost_center.html'
     permission_required = 'expenses.view_expense'
 
@@ -36,7 +37,7 @@ class ExpensesByCostCenterView(LoginRequiredMixin, PermissionRequiredMixin, Temp
         context['to_date'] = to_date
         return context
 
-class ExpenseTaxReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class ExpenseTaxReportView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'expenses/reports/tax_report.html'
     permission_required = 'expenses.view_expense'
 
@@ -50,7 +51,7 @@ class ExpenseTaxReportView(LoginRequiredMixin, PermissionRequiredMixin, Template
         context['to_date'] = to_date
         return context
 
-class OutstandingCustodiesView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class OutstandingCustodiesView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'expenses/reports/outstanding_custodies.html'
     permission_required = 'expenses.view_custody'
 
@@ -59,21 +60,21 @@ class OutstandingCustodiesView(LoginRequiredMixin, PermissionRequiredMixin, Temp
         context['report'] = ReportService.outstanding_custodies_summary()
         return context
 
-class CustodySettlementStatementView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class CustodySettlementStatementView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'expenses/reports/settlement_statement.html'
     permission_required = 'expenses.view_custodysettlement'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         settlement_id = self.request.GET.get('settlement')
-        context['settlements'] = CustodySettlement.objects.filter(is_posted=True).order_by('-date')
+        context['settlements'] = CustodySettlement.objects.filter(is_posted=True).select_related('custody').order_by('-date')
         
         if settlement_id:
             context['data'] = ReportService.custody_settlement_detail(int(settlement_id))
             context['selected_settlement'] = int(settlement_id)
         return context
 
-class AgedCustodiesView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class AgedCustodiesView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'expenses/reports/aged_custodies.html'
     permission_required = 'expenses.view_custody'
 
@@ -82,7 +83,7 @@ class AgedCustodiesView(LoginRequiredMixin, PermissionRequiredMixin, TemplateVie
         context['report'] = ReportService.aged_custodies_report()
         return context
 
-class ExpensesByPaymentMethodView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class ExpensesByPaymentMethodView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'expenses/reports/by_payment_method.html'
     permission_required = 'expenses.view_expense'
 

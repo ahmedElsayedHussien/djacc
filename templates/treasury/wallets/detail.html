@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block title %}كشف حركة المحفظة الإلكترونية | DJACC Pro{% endblock %}
+{% block header %}محفظة: {{ wallet.name }}{% endblock %}
+
+{% block content %}
+<div class="row g-4" style="font-family: 'Cairo', sans-serif;">
+    <div class="col-lg-4 col-md-5">
+        <div class="card shadow-sm border-0 mb-4" style="border-radius: 16px;">
+            <div class="card-header bg-success text-white py-3 px-4" style="border-radius: 16px 16px 0 0;">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-phone-vibrate me-1"></i> بيانات المحفظة</h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="text-center mb-4 p-3 bg-light rounded-3">
+                    <h6 class="text-muted small mb-2">الرصيد المالي الحالي:</h6>
+                    <h2 class="fw-extrabold text-success tracking-tight mb-0">
+                        {{ balance|floatformat:2 }} <span class="fs-5">EGP</span>
+                    </h2>
+                </div>
+                <table class="table table-sm align-middle">
+                    <tr class="py-2">
+                        <th class="text-secondary small py-2">الكود:</th>
+                        <td class="fw-bold py-2">{{ wallet.code }}</td>
+                    </tr>
+                    <tr class="py-2">
+                        <th class="text-secondary small py-2">نوع المحفظة:</th>
+                        <td class="fw-bold py-2"><span class="badge bg-success-subtle text-success">{{ wallet.get_provider_display }}</span></td>
+                    </tr>
+                    <tr class="py-2">
+                        <th class="text-secondary small py-2">رقم الهاتف:</th>
+                        <td class="fw-bold font-monospace py-2">{{ wallet.mobile_number }}</td>
+                    </tr>
+                    <tr class="py-2">
+                        <th class="text-secondary small py-2">الحساب المالي:</th>
+                        <td class="py-2"><code>{{ wallet.account.code }}</code> <br><small class="text-muted">{{ wallet.account.name }}</small></td>
+                    </tr>
+                    <tr class="py-2">
+                        <th class="text-secondary small py-2">الحالة:</th>
+                        <td class="py-2">
+                            {% if wallet.is_active %}
+                            <span class="badge bg-success">نشط</span>
+                            {% else %}
+                            <span class="badge bg-danger">متوقف</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+                {% if perms.treasury.change_mobilewallet %}<a href="{% url 'treasury:wallet-update' wallet.pk %}" class="btn btn-outline-primary w-100 rounded-pill mt-4 shadow-sm">
+                    <i class="bi bi-pencil-square me-1"></i> تعديل بيانات المحفظة
+                </a>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8 col-md-7">
+        <div class="card shadow-sm border-0 mb-4" style="border-radius: 16px;">
+            <div class="card-header bg-white border-0 py-3 px-4 border-bottom">
+                <h5 class="mb-0 fw-bold text-plum"><i class="bi bi-clock-history me-1"></i> آخر الحركات والعمليات المالية</h5>
+            </div>
+            <div class="card-body p-4 text-center py-5">
+                <i class="bi bi-receipt-cutoff text-secondary opacity-30 fs-1 d-block mb-3"></i>
+                <h6 class="fw-bold text-plum mb-2">كشف حركة تفصيلي للمحفظة الرقمية</h6>
+                <p class="text-muted small mb-4">يمكنك مراجعة كافة المبيعات والتحويلات المالية الواردة والصادرة على هذه المحفظة.</p>
+                <div class="d-grid gap-2 col-md-8 mx-auto">
+                    <a href="{% url 'reports:account_statement' %}?account={{ wallet.account.pk }}" class="btn btn-success rounded-pill text-white shadow-sm">
+                        <i class="bi bi-file-earmark-text me-1"></i> عرض كشف حساب المحفظة المالي (دفتر الأستاذ)
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

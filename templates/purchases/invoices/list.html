@@ -5,9 +5,11 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">سجل الفواتير</h5>
+        {% if perms.purchases.add_purchaseinvoice %}
         <a href="{% url 'purchases:invoice-create' %}" class="btn btn-primary">
             <i class="bi bi-plus-lg"></i> إنشاء فاتورة جديدة
         </a>
+        {% endif %}
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -25,7 +27,7 @@
                 <tbody>
                     {% for inv in invoices %}
                     <tr>
-                        <td>{{ inv.number }}</td>
+                        <td><a href="{% url 'purchases:invoice-detail' inv.pk %}" class="fw-bold text-decoration-none text-primary">{{ inv.number }}</a></td>
                         <td>{{ inv.supplier_invoice_number }}</td>
                         <td>{{ inv.date }}</td>
                         <td>{{ inv.supplier.name }}</td>
@@ -33,20 +35,30 @@
                         <td>
                             {% if inv.status == 'draft' %}
                             <div class="btn-group">
+                                {% if perms.purchases.change_purchaseinvoice %}
                                 <form method="post" action="{% url 'purchases:invoice-post' inv.pk %}" style="display:inline;">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn-sm btn-success">ترحيل</button>
                                 </form>
-                                <form method="post" action="{% url 'purchases:invoice-reverse' inv.pk %}" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من إلغاء هذه الفاتورة؟');">
+                                <form method="post" action="{% url 'purchases:invoice-reverse' inv.pk %}" style="display:inline;"
+                                      data-reverse-type="purchase-invoice"
+                                      data-reverse-doc="إلغاء فاتورة مشتريات رقم {{ inv.number }}"
+                                      data-reverse-detail="المورد: {{ inv.supplier.name }} — الإجمالي: {{ inv.total }} ج.م">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn-sm btn-outline-warning">إلغاء</button>
                                 </form>
+                                {% endif %}
                             </div>
                             {% elif inv.status == 'posted' %}
-                            <form method="post" action="{% url 'purchases:invoice-reverse' inv.pk %}" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من عكس هذه الفاتورة؟ سيتم إنشاء قيد عكسي وتحديث المخزون.');">
+                            {% if perms.purchases.change_purchaseinvoice %}
+                            <form method="post" action="{% url 'purchases:invoice-reverse' inv.pk %}" style="display:inline;"
+                                  data-reverse-type="purchase-invoice"
+                                  data-reverse-doc="عكس فاتورة مشتريات رقم {{ inv.number }}"
+                                  data-reverse-detail="المورد: {{ inv.supplier.name }} — الإجمالي: {{ inv.total }} ج.م">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn-sm btn-outline-danger">عكس الفاتورة</button>
                             </form>
+                            {% endif %}
                             {% else %}
                             <span class="badge bg-light text-dark">معكوس / ملغي</span>
                             {% endif %}
@@ -61,5 +73,6 @@
             </table>
         </div>
     </div>
+    {% include 'partials/pagination.html' %}
 </div>
 {% endblock %}

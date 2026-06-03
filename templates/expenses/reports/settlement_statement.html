@@ -14,7 +14,7 @@
                     <option value="">اختر من القائمة...</option>
                     {% for s in settlements %}
                     <option value="{{ s.id }}" {% if selected_settlement == s.id %}selected{% endif %}>
-                        {{ s.custody.employee.username }} - {{ s.custody.number }} - تاريخ: {{ s.date }}
+                        {{ s.custody.employee.full_name }} - {{ s.custody.number }} - تاريخ: {{ s.date }}
                     </option>
                     {% endfor %}
                 </select>

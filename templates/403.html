@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}صلاحية مطلوبة | DJACC Pro{% endblock %}
+{% block header %}غير مصرح بالدخول{% endblock %}
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm text-center" style="border-radius: 16px;">
+                <div class="card-body py-5 px-4">
+                    <div class="avatar-lg bg-danger bg-opacity-10 d-inline-flex align-items-center justify-content-center rounded-circle mb-4" style="width: 90px; height: 90px;">
+                        <i class="bi bi-shield-lock-fill text-danger fs-1"></i>
+                    </div>
+                    <h3 class="fw-bold text-dark mb-2" style="font-family: 'Cairo', sans-serif;">ليس لديك صلاحية كافية</h3>
+                    <p class="text-muted mb-4" style="font-family: 'Cairo', sans-serif;">
+                        هذه الصفحة تتطلب صلاحية محددة لا تملكها حالياً.
+                    </p>
+
+                    {% if perm_name %}
+                    <div class="bg-light rounded-3 p-3 mb-4 text-start" style="font-family: 'Cairo', sans-serif; direction: ltr;">
+                        <div class="small text-muted mb-1">الصلاحية المطلوبة:</div>
+                        <code class="text-danger fw-bold" style="font-size: 0.9rem; unicode-bidi: embed;">{{ perm_name }}</code>
+                    </div>
+                    {% endif %}
+
+                    <div class="bg-warning bg-opacity-10 rounded-3 p-3 mb-4 text-start" style="font-family: 'Cairo', sans-serif;">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <i class="bi bi-info-circle-fill text-warning"></i>
+                            <span class="fw-bold text-dark small">تفاصيل الطلب</span>
+                        </div>
+                        <div class="small text-muted mt-1">
+                            <span class="text-secondary">URL:</span>
+                            <code class="ms-1" style="font-size: 0.8rem; direction: ltr; unicode-bidi: embed;">{{ request_path }}</code>
+                        </div>
+                    </div>
+
+                    <p class="text-muted small mb-4" style="font-family: 'Cairo', sans-serif;">
+                        للاستفسار أو طلب تفعيل الصلاحية، يُرجى التواصل مع <strong>مدير النظام</strong>.
+                    </p>
+
+                    <div class="d-flex gap-2 justify-content-center">
+                        <a href="{% url 'core:dashboard' %}" class="btn btn-dark rounded-pill px-4 shadow-sm">
+                            <i class="bi bi-house-door me-1"></i> العودة للرئيسية
+                        </a>
+                        <a href="javascript:history.back()" class="btn btn-outline-secondary rounded-pill px-4">
+                            <i class="bi bi-arrow-right me-1"></i> الصفحة السابقة
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

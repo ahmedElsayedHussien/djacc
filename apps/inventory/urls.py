@@ -12,6 +12,7 @@ urlpatterns = [
 
     path('warehouses/', views.WarehouseListView.as_view(), name='warehouse-list'),
     path('warehouses/create/', views.WarehouseCreateView.as_view(), name='warehouse-create'),
+    path('warehouses/<int:pk>/toggle-active/', views.WarehouseToggleActiveView.as_view(), name='warehouse-toggle-active'),
 
     path('categories/', views.ItemCategoryListView.as_view(), name='category-list'),
     path('categories/create/', views.ItemCategoryCreateView.as_view(), name='category-create'),

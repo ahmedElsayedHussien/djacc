@@ -1,18 +1,24 @@
-from django.views.generic import ListView, CreateView, UpdateView, DetailView
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+import logging
+from datetime import date
+from decimal import Decimal
+from django.views.generic import View, ListView, CreateView, UpdateView, DetailView
+from django.contrib.auth.mixins import LoginRequiredMixin
+from apps.core.mixins import PermRequiredMixin
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.shortcuts import redirect, get_object_or_404
+from django.shortcuts import redirect, render, get_object_or_404
 from django.utils import timezone
 from django.db import transaction
 from apps.core.models import Account
+from apps.core.services import DocumentService
 from django.db.models import Sum, Count, Q
 from .models import Asset, AssetCategory, DepreciationLog
 from .services import AssetService
 from .forms import AssetForm, AssetCategoryForm
-from decimal import Decimal
 
-class AssetDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+logger = logging.getLogger(__name__)
+
+class AssetDashboardView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = Asset
     template_name = 'assets/dashboard.html'
     permission_required = 'assets.view_asset'
@@ -44,6 +50,7 @@ class AssetDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
 
         # 3. Status Distribution
         ctx['status_counts'] = Asset.objects.values('status').annotate(count=Count('id'))
+        ctx['fully_depreciated_count'] = Asset.objects.filter(status=Asset.Status.FULLY_DEPRECIATED).count()
         
         # 4. Recent Depreciation
         ctx['recent_depreciations'] = DepreciationLog.objects.select_related('asset').order_by('-date', '-id')[:10]
@@ -54,13 +61,14 @@ class AssetDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
 
         return ctx
 
-class AssetListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class AssetListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = Asset
     template_name = 'assets/asset_list.html'
     context_object_name = 'assets'
+    paginate_by = 25
     permission_required = 'assets.view_asset'
 
-class AssetCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class AssetCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = Asset
     form_class = AssetForm
     template_name = 'assets/asset_form.html'
@@ -76,7 +84,6 @@ class AssetCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
 
     @transaction.atomic
     def form_valid(self, form):
-        from apps.core.services import DocumentService
         asset = form.save(commit=False)
         asset.code = DocumentService.generate_number(Asset, 'AST', field_name='code')
         asset.save()
@@ -104,13 +111,13 @@ class AssetCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
 
         return redirect(self.success_url)
 
-class AssetCategoryListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class AssetCategoryListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = AssetCategory
     template_name = 'assets/category_list.html'
     context_object_name = 'categories'
     permission_required = 'assets.view_assetcategory'
 
-class AssetCategoryCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class AssetCategoryCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = AssetCategory
     form_class = AssetCategoryForm
     template_name = 'assets/category_form.html'
@@ -130,18 +137,22 @@ class AssetCategoryCreateView(LoginRequiredMixin, PermissionRequiredMixin, Creat
             messages.error(self.request, f'خطأ أثناء إنشاء الحسابات: {e}')
             return self.form_invalid(form)
 
-class RunDepreciationView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
-    # We use ListView but it's actually a trigger view
-    model = DepreciationLog
-    template_name = 'assets/depreciation_run.html'
+class RunDepreciationView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'assets.add_depreciationlog'
 
-    def post(self, request, *args, **kwargs):
-        count = AssetService.run_depreciation(timezone.now().date(), request.user)
-        messages.success(request, f'تم تنفيذ الإهلاك لـ {count} أصل بنجاح.')
+    def get(self, request):
+        logs = DepreciationLog.objects.select_related('asset', 'journal_entry').order_by('-date', '-id')[:50]
+        return render(request, 'assets/depreciation_run.html', {'object_list': logs})
+
+    def post(self, request):
+        try:
+            count = AssetService.run_depreciation(timezone.now().date(), request.user)
+            messages.success(request, f'تم تنفيذ الإهلاك لـ {count} أصل بنجاح.')
+        except Exception as e:
+            messages.error(request, f'خطأ أثناء تنفيذ الإهلاك: {str(e)}')
         return redirect('assets:asset-list')
 
-class AssetDisposeView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class AssetDisposeView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = Asset
     template_name = 'assets/asset_dispose.html'
     context_object_name = 'asset'
@@ -149,7 +160,6 @@ class AssetDisposeView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
     
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        from apps.core.models import Account
         ctx['offset_accounts'] = Account.objects.filter(is_leaf=True).order_by('code')
         return ctx
 
@@ -178,7 +188,7 @@ class AssetDisposeView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
             
         return redirect('assets:asset-list')
 
-class AssetDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class AssetDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = Asset
     template_name = 'assets/asset_detail.html'
     context_object_name = 'asset'
@@ -186,12 +196,11 @@ class AssetDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        from apps.core.models import Account
         ctx['logs'] = self.object.depreciation_logs.select_related('journal_entry').order_by('-date')
         ctx['offset_accounts'] = Account.objects.filter(is_leaf=True).order_by('code')
         return ctx
 
-class AssetUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class AssetUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
     model = Asset
     form_class = AssetForm
     template_name = 'assets/asset_form.html'

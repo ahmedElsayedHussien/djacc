@@ -38,6 +38,7 @@
                             {% endif %}
                         </td>
                     </tr>
+                    {% if perms.core.view_journalentry and not request.user.salesrepresentative %}
                     <tr><th>القيد المحاسبي:</th>
                         <td>
                             {% if invoice.journal_entry %}
@@ -47,13 +48,21 @@
                             {% endif %}
                         </td>
                     </tr>
+                    {% endif %}
                 </table>
 
-                {% if invoice.status == 'draft' %}
+                {% if invoice.status == 'draft' and perms.purchases.change_purchaseinvoice %}
                 <form method="post" action="{% url 'purchases:invoice-post' invoice.pk %}" class="mt-3">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-success w-100" onclick="return confirm('تأكيد ترحيل الفاتورة؟ سيتم إضافة الأصناف للمخزن وزيادة مديونية المورد.');">
                         <i class="bi bi-check-circle"></i> ترحيل الفاتورة
+                    </button>
+                </form>
+                {% elif invoice.status == 'posted' and perms.purchases.change_purchaseinvoice %}
+                <form method="post" action="{% url 'purchases:invoice-reverse' invoice.pk %}" class="mt-3">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger w-100" onclick="return confirm('تأكيد عكس الفاتورة؟ سيتم إنشاء قيد محاسبي عكسي.');">
+                        <i class="bi bi-arrow-counterclockwise"></i> عكس الفاتورة
                     </button>
                 </form>
                 {% endif %}

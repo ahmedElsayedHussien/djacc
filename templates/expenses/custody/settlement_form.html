@@ -10,7 +10,7 @@
             <div class="card-header bg-light"><h6 class="mb-0">ملخص العهدة الحالي</h6></div>
             <div class="card-body">
                 <table class="table table-sm">
-                    <tr><th>الموظف:</th><td>{{ custody.employee.get_full_name|default:custody.employee.username }}</td></tr>
+                    <tr><th>الموظف:</th><td>{{ custody.employee.full_name }}</td></tr>
                     <tr><th>المبلغ الأصلي:</th><td>{{ custody.amount }}</td></tr>
                     <tr><th>ما تم تسويته سابقاً:</th><td class="text-success">{{ custody.settled_amount }}</td></tr>
                     <tr class="table-info"><th>المصروفات المرحلة قيد التسوية حالياً:</th><td class="fw-bold">{{ total_expenses }}</td></tr>

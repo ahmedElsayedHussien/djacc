@@ -70,7 +70,7 @@
 
         <div class="card border-0 shadow-sm">
             <div class="card-body d-grid gap-2">
-                {% if transfer.status == 'draft' %}
+                {% if transfer.status == 'draft' and perms.inventory.change_warehousetransfer %}
                 <form method="post" action="{% url 'inventory:transfer-post' transfer.pk %}">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-success w-100 rounded-pill">
@@ -82,8 +82,11 @@
                 </a>
                 {% endif %}
                 
-                {% if transfer.status == 'posted' %}
-                <form method="post" action="{% url 'inventory:transfer-reverse' transfer.pk %}" onsubmit="return confirm('هل أنت متأكد من رغبتك في عكس هذا التحويل؟ سيؤدي ذلك لإعادة الكميات لمخازنها الأصلية.')">
+                {% if transfer.status == 'posted' and perms.inventory.change_warehousetransfer %}
+                <form method="post" action="{% url 'inventory:transfer-reverse' transfer.pk %}"
+                      data-reverse-type="warehouse-transfer"
+                      data-reverse-doc="عكس تحويل مخزني رقم {{ transfer.number }}"
+                      data-reverse-detail="من: {{ transfer.from_warehouse.name }} — إلى: {{ transfer.to_warehouse.name }}">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-danger w-100 rounded-pill">
                         <i class="bi bi-arrow-counterclockwise"></i> عكس التحويل

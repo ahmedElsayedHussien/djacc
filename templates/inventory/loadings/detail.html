@@ -2,8 +2,74 @@
 {% block title %}تفاصيل طلب التحميل: {{ order.number }}{% endblock %}
 {% block header %}تفاصيل طلب التحميل{% endblock %}
 {% block content %}
+<style>
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        .print-w-100 {
+            width: 100% !important;
+            flex: 0 0 100% !important;
+            max-width: 100% !important;
+        }
+        .card {
+            border: 1px solid #ccc !important;
+            box-shadow: none !important;
+            margin-bottom: 8px !important;
+        }
+        .card-body {
+            padding: 8px 12px !important;
+        }
+        .card-header {
+            padding: 6px 12px !important;
+            background-color: #f8f9fa !important;
+            border-bottom: 1px solid #ccc !important;
+        }
+        .row {
+            margin-right: -4px !important;
+            margin-left: -4px !important;
+        }
+        .col-4, .col-6 {
+            padding-right: 4px !important;
+            padding-left: 4px !important;
+        }
+        body {
+            background-color: #fff !important;
+            font-size: 11px !important;
+            color: #000 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        h5 {
+            font-size: 13px !important;
+            margin: 0 !important;
+        }
+        .p-2 {
+            padding: 4px !important;
+        }
+        .mt-4, .mb-4, .g-4 {
+            margin-top: 4px !important;
+            margin-bottom: 4px !important;
+            --bs-gutter-y: 0.25rem !important;
+            --bs-gutter-x: 0.25rem !important;
+        }
+        .py-4 {
+            padding-top: 8px !important;
+            padding-bottom: 8px !important;
+        }
+        .mb-3 {
+            margin-bottom: 4px !important;
+        }
+        .badge {
+            border: 1px solid #aaa !important;
+            color: #000 !important;
+            background: transparent !important;
+            font-size: 10px !important;
+        }
+    }
+</style>
 <div class="row">
-    <div class="col-md-9">
+    <div class="col-md-9 print-w-100">
         <div class="card shadow-sm mb-4">
             <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
                 <h5 class="mb-0 fw-bold">البيانات الأساسية للطلب <code>{{ order.number }}</code></h5>
@@ -20,26 +86,26 @@
                 </div>
             </div>
             <div class="card-body">
-                <div class="row g-4">
-                    <div class="col-md-4">
+                <div class="row g-3">
+                    <div class="col-md-4 col-4">
                         <small class="text-muted d-block">تاريخ الطلب</small>
                         <span class="fw-bold">{{ order.date }}</span>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-4 col-4">
                         <small class="text-muted d-block">المندوب</small>
                         <span class="fw-bold">{{ order.sales_rep.name }}</span>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-4 col-4">
                         <small class="text-muted d-block">بواسطة</small>
                         <span class="fw-bold">{{ order.requested_by.get_full_name|default:order.requested_by.username }}</span>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-6 col-6">
                         <div class="p-2 border-start border-4 border-info bg-light">
                             <small class="text-muted d-block">من مخزن (المصدر)</small>
                             <span class="fw-bold">{{ order.from_warehouse.name }}</span>
                         </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-6 col-6">
                         <div class="p-2 border-start border-4 border-success bg-light">
                             <small class="text-muted d-block">إلى مخزن (المندوب)</small>
                             <span class="fw-bold">{{ order.to_warehouse.name }}</span>
@@ -50,7 +116,12 @@
         </div>
 
         <div class="card shadow-sm mb-4">
-            <div class="card-header bg-white py-3"><h5 class="mb-0 fw-bold">الأصناف المطلوبة</h5></div>
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-list-check me-2 text-primary"></i>الأصناف المطلوبة</h5>
+                <a href="?refresh=1" class="btn btn-sm rounded-pill px-3 fw-bold text-white no-print" style="background-color: #fd7e14; border-color: #fd7e14;">
+                    <i class="bi bi-arrow-clockwise"></i> تحديث الكميات المتاحة
+                </a>
+            </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-flush align-middle mb-0">
@@ -58,6 +129,7 @@
                             <tr>
                                 <th>الصنف</th>
                                 <th class="text-center">الكمية المطلوبة</th>
+                                <th class="text-center">المتاح بالمستودع</th>
                                 <th class="text-center">الكمية المعتمدة</th>
                                 <th class="text-center">الكمية المنصرفة</th>
                                 <th>ملاحظات</th>
@@ -68,11 +140,22 @@
                             <tr>
                                 <td>{{ line.item.name }}</td>
                                 <td class="text-center fw-bold">{{ line.requested_qty|floatformat:0 }}</td>
+                                
+                                <td class="text-center">
+                                    {% if line.available_qty <= 0 %}
+                                        <span class="badge bg-danger-subtle text-danger rounded-pill px-3 py-1.5 fw-bold">{{ line.available_qty|floatformat:0 }}</span>
+                                    {% elif line.available_qty < line.requested_qty %}
+                                        <span class="badge bg-warning-subtle text-warning rounded-pill px-3 py-1.5 fw-bold" title="الرصيد المتاح أقل من الكمية المطلوبة">
+                                            {{ line.available_qty|floatformat:0 }} <i class="bi bi-exclamation-triangle-fill ms-1"></i>
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-success-subtle text-success rounded-pill px-3 py-1.5 fw-bold">{{ line.available_qty|floatformat:0 }}</span>
+                                    {% endif %}
+                                </td>
 
                                 <td class="text-center">
                                     {% if line.approved_qty is not None %}
                                         <span class="text-primary fw-bold">{{ line.approved_qty|floatformat:0 }}</span>
-
                                     {% else %}
                                         <span class="text-muted">---</span>
                                     {% endif %}
@@ -80,7 +163,6 @@
                                 <td class="text-center">
                                     {% if line.issued_qty is not None %}
                                         <span class="text-success fw-bold">{{ line.issued_qty|floatformat:0 }}</span>
-
                                     {% else %}
                                         <span class="text-muted">---</span>
                                     {% endif %}
@@ -91,30 +173,56 @@
                         </tbody>
                     </table>
                 </div>
+                
+                <!-- ✍️ قسم التوقيعات وبيانات الاستلام للمخازن والشحن -->
+                <div class="card-footer bg-light py-2 border-top">
+                    <div class="row text-center g-2">
+                        <div class="col-md-4 col-4">
+                            <h6 class="fw-bold text-secondary mb-2 small"><i class="bi bi-pencil-square me-1"></i>توقيع المندوب</h6>
+                            <div class="py-2 border border-dashed rounded bg-white text-muted" style="border-style: dashed !important; min-height: 75px;">
+                                <span class="small d-block mb-1 text-dark" style="font-size: 0.75rem;">المندوب: {{ order.sales_rep.name }}</span>
+                                <div class="mt-2 border-top mx-2 pt-1 text-muted" style="font-size: 0.7rem;">التوقيع: __________________</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-4">
+                            <h6 class="fw-bold text-secondary mb-2 small"><i class="bi bi-person-check me-1"></i>توقيع أمين المستودع</h6>
+                            <div class="py-2 border border-dashed rounded bg-white text-muted" style="border-style: dashed !important; min-height: 75px;">
+                                <span class="small d-block mb-1 text-dark" style="font-size: 0.75rem;">أمين المخزن: _______________</span>
+                                <div class="mt-2 border-top mx-2 pt-1 text-muted" style="font-size: 0.7rem;">التوقيع: __________________</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-4">
+                            <h6 class="fw-bold text-secondary mb-2 small"><i class="bi bi-truck me-1"></i>بيانات مركبة الشحن</h6>
+                            <div class="py-2 border border-dashed rounded bg-white text-muted" style="border-style: dashed !important; min-height: 75px; font-size: 0.75rem;">
+                                <span class="d-block mb-1 text-dark">رقم السيارة: ________________</span>
+                                <span class="d-block text-dark">اسم وتوقيع السائق: __________</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="col-md-3">
+    <div class="col-md-3 no-print">
         <div class="card shadow-sm mb-4">
             <div class="card-header bg-white fw-bold">إجراءات التحكم</div>
             <div class="card-body">
                 <div class="d-grid gap-2">
-                    {% if order.status == 'draft' %}
+                    {% if order.status == 'draft' and perms.inventory.change_loadingorder %}
                     <form method="post" action="{% url 'inventory:loading-request' order.pk %}"> {% csrf_token %}
                         <button type="submit" class="btn btn-warning w-100 rounded-pill mb-2">طلب الاعتماد</button>
                     </form>
-                    <a href="#" class="btn btn-outline-primary rounded-pill mb-2">تعديل المسودة</a>
                     {% endif %}
 
-                    {% if order.status == 'pending' %}
+                    {% if order.status == 'pending' and perms.inventory.change_loadingorder and not request.user.salesrepresentative %}
                     <form method="post" action="{% url 'inventory:loading-approve' order.pk %}">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-info w-100 rounded-pill mb-2">اعتماد الطلب</button>
                     </form>
                     {% endif %}
 
-                    {% if order.status == 'approved' %}
+                    {% if order.status == 'approved' and perms.inventory.change_loadingorder and not request.user.salesrepresentative %}
                     <form method="post" action="{% url 'inventory:loading-issue' order.pk %}">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-success w-100 rounded-pill mb-2">تنفيذ الصرف المخزني</button>
@@ -125,11 +233,15 @@
                     <div class="alert alert-success py-2 text-center small mb-0">
                         <i class="bi bi-check-circle-fill"></i> تمت عملية الصرف بنجاح
                     </div>
-                    <button class="btn btn-outline-secondary w-100 rounded-pill mt-2">طباعة إذن الصرف</button>
+                    <button onclick="window.print()" class="btn btn-outline-secondary w-100 rounded-pill mt-2">طباعة إذن الصرف</button>
                     {% endif %}
                     
                     <hr>
+                    {% if request.user.salesrepresentative %}
+                    <a href="{% url 'reports:rep_dashboard' %}" class="btn btn-light w-100 rounded-pill">عودة للوحة التحكم</a>
+                    {% else %}
                     <a href="{% url 'inventory:loading-list' %}" class="btn btn-light w-100 rounded-pill">عودة للقائمة</a>
+                    {% endif %}
                 </div>
             </div>
         </div>

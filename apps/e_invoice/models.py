@@ -1,9 +1,13 @@
+from datetime import date
 from django.db import models
 from django.conf import settings
-from django.core.validators import MinValueValidator
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+from django.utils import timezone
 from decimal import Decimal
+from .encrypt import encrypt_value, decrypt_value
 
 
 class CompanySettings(models.Model):
@@ -50,6 +54,22 @@ class CompanySettings(models.Model):
         verbose_name = "إعدادات الشركة"
         verbose_name_plural = "إعدادات الشركات"
 
+    def clean(self):
+        if self.tax_id and not self.tax_id.isdigit():
+            raise ValidationError({'tax_id': 'الرقم الضريبي يجب أن يحتوي على أرقام فقط'})
+        if self.tax_id and len(self.tax_id) < 9:
+            raise ValidationError({'tax_id': 'الرقم الضريبي يجب أن يكون 9 أرقام على الأقل'})
+        if self.is_active:
+            required = ['company_name_ar', 'company_name_en', 'tax_id', 'address', 'governorate', 'region_city', 'phone', 'email']
+            for field in required:
+                val = getattr(self, field, None)
+                if not val or (isinstance(val, str) and not val.strip()):
+                    raise ValidationError({field: 'هذا الحقل مطلوب عند تفعيل الإعدادات'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.company_name_ar} - {self.tax_id}"
 
@@ -84,7 +104,7 @@ class EInvoiceConfig(models.Model):
     
     # إعدادات إضافية
     auto_submit = models.BooleanField(default=False, verbose_name="إرسال تلقائي عند الترحيل")
-    timeout_seconds = models.PositiveIntegerField(default=30, verbose_name="مهلة الانتظار (ثواني)")
+    timeout_seconds = models.PositiveIntegerField(default=30, verbose_name="مهلة الانتظار (ثواني)", validators=[MinValueValidator(1), MaxValueValidator(300)])
     is_active = models.BooleanField(default=True, verbose_name="نشط")
     
     created_at = models.DateTimeField(auto_now_add=True)
@@ -93,6 +113,29 @@ class EInvoiceConfig(models.Model):
     class Meta:
         verbose_name = "إعدادات الفاتورة الإلكترونية"
         verbose_name_plural = "إعدادات الفاتورة الإلكترونية"
+
+    def clean(self):
+        if self.is_active:
+            if not self.api_base_url:
+                raise ValidationError({'api_base_url': 'رابط API مطلوب عند تفعيل الإعدادات'})
+            if not self.client_id:
+                raise ValidationError({'client_id': 'معرّف العميل مطلوب عند تفعيل الإعدادات'})
+            if not self.client_secret:
+                raise ValidationError({'client_secret': 'المفتاح السري مطلوب عند تفعيل الإعدادات'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        if self.client_secret and not self.client_secret.startswith('gAAAAA'):
+            self.client_secret = encrypt_value(self.client_secret)
+        if self.security_token and not self.security_token.startswith('gAAAAA'):
+            self.security_token = encrypt_value(self.security_token)
+        super().save(*args, **kwargs)
+
+    def decrypt_client_secret(self) -> str:
+        return decrypt_value(self.client_secret)
+
+    def decrypt_security_token(self) -> str:
+        return decrypt_value(self.security_token)
 
     def __str__(self):
         return f"{self.company.company_name_ar} - {self.get_environment_display()}"
@@ -131,19 +174,38 @@ class Certificate(models.Model):
     class Meta:
         verbose_name = "شهادة رقمية"
         verbose_name_plural = "الشهادات الرقمية"
+        constraints = [
+            models.UniqueConstraint(
+                fields=['company'],
+                condition=models.Q(is_default=True),
+                name='unique_default_cert_per_company'
+            ),
+        ]
+
+    def clean(self):
+        if self.valid_from and self.valid_until and self.valid_from > self.valid_until:
+            raise ValidationError({'valid_from': 'تاريخ بداية الصلاحية يجب أن يكون قبل تاريخ الانتهاء'})
+        if self.is_default and not self.is_active:
+            raise ValidationError({'is_default': 'الشهادة الافتراضية يجب أن تكون نشطة'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        if self.password_encrypted and not self.password_encrypted.startswith('gAAAAA'):
+            self.password_encrypted = encrypt_value(self.password_encrypted)
+        super().save(*args, **kwargs)
+
+    def decrypt_password(self) -> str:
+        return decrypt_value(self.password_encrypted)
 
     def __str__(self):
         return f"{self.name} - {self.valid_until}"
     
     @property
     def is_expired(self):
-        from django.utils import timezone
         return self.valid_until < timezone.now().date()
     
     @property
     def days_until_expiry(self):
-        from django.utils import timezone
-        from datetime import date
         if self.valid_until:
             return (self.valid_until - date.today()).days
         return 0
@@ -167,14 +229,15 @@ class EInvoiceLog(models.Model):
     document = GenericForeignKey('content_type', 'object_id')
     
     # البيانات من مصلحة الضرائب
-    internal_id = models.CharField(max_length=50, blank=True, verbose_name="الرقم المرجعي الداخلي")
-    uuid = models.CharField(max_length=100, blank=True, verbose_name="UUID")
+    internal_id = models.CharField(max_length=50, blank=True, db_index=True, verbose_name="الرقم المرجعي الداخلي")
+    uuid = models.CharField(max_length=100, blank=True, db_index=True, verbose_name="UUID")
     submission_id = models.CharField(max_length=100, blank=True, verbose_name="معرف الإرسال")
     
     status = models.CharField(
         max_length=30,
         choices=Status.choices,
         default=Status.DRAFT,
+        db_index=True,
         verbose_name="الحالة"
     )
     
@@ -202,6 +265,14 @@ class EInvoiceLog(models.Model):
         verbose_name = "سجل الفاتورة الإلكترونية"
         verbose_name_plural = "سجلات الفاتورة الإلكترونية"
         ordering = ['-created_at']
+
+    def clean(self):
+        if self.submitted_at and self.validated_at and self.submitted_at > self.validated_at:
+            raise ValidationError({'validated_at': 'وقت التحقق يجب أن يكون بعد وقت الإرسال'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.internal_id or self.object_id} - {self.get_status_display()}"

@@ -35,14 +35,16 @@
                 </div>
                 
                 <ul class="nav flex-column">
+                    {% if not request.user.salesrepresentative %}{% if user.is_superuser or perms.core.view_account %}
                     <li class="nav-item">
                         <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'core:dashboard' %}">
                             <i class="bi bi-grid-1x2"></i> لوحة التحكم
                         </a>
                     </li>
+                    {% endif %}{% endif %}
 
                     <!-- Employee Portal (ESS) -->
-                    {% if user.employee or perms.hr.view_employee %}
+                    {% if user.employee_profile or perms.hr.view_employee %}
                     <li class="nav-item">
                         <a class="nav-link nav-group-title text-success" data-bs-toggle="collapse" href="#essMenu" role="button" aria-expanded="false">
                             <span><i class="bi bi-person-badge"></i> بوابة الموظف (ESS)</span>
@@ -57,7 +59,7 @@
                     {% endif %}
 
                     <!-- Accounting -->
-                    {% if perms.core.view_account or perms.core.view_journalentry %}
+                    {% if not request.user.salesrepresentative %}{% if perms.core.view_account or perms.core.view_journalentry %}
                     <li class="nav-item">
                         <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#accMenu" role="button" aria-expanded="false">
                             <span><i class="bi bi-bank"></i> المحاسبة العامة</span>
@@ -68,16 +70,16 @@
                                 {% if perms.core.view_account %}<li><a class="nav-link" href="{% url 'core:account-list' %}">دليل الحسابات</a></li>{% endif %}
                                 {% if perms.core.view_fiscalyear %}<li><a class="nav-link" href="{% url 'core:fiscalyear-list' %}">السنوات المالية</a></li>{% endif %}
                                 {% if perms.core.view_costcenter %}<li><a class="nav-link" href="{% url 'core:costcenter-list' %}">مراكز التكلفة</a></li>{% endif %}
-                                {% if perms.core.view_journalentry %}<li><a class="nav-link" href="{% url 'core:journal-list' %}">القيود المحاسبية</a></li>{% endif %}
+                                {% if perms.core.view_journalentry and not request.user.salesrepresentative %}<li><a class="nav-link" href="{% url 'core:journal-list' %}">القيود المحاسبية</a></li>{% endif %}
                                 <li><hr class="dropdown-divider bg-secondary mx-2"></li>
                                 {% if perms.core.view_taxtype %}<li><a class="nav-link" href="{% url 'core:taxtype-list' %}">إعدادات الضرائب</a></li>{% endif %}
                             </ul>
                         </div>
                     </li>
-                    {% endif %}
+                    {% endif %}{% endif %}
 
                     <!-- Fixed Assets -->
-                    {% if perms.assets.view_asset %}
+                    {% if not request.user.salesrepresentative %}{% if perms.assets.view_asset or perms.core.view_account %}
                     <li class="nav-item">
                         <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#assetMenu" role="button" aria-expanded="false">
                             <span><i class="bi bi-building-gear"></i> الأصول الثابتة</span>
@@ -89,10 +91,10 @@
                             </ul>
                         </div>
                     </li>
-                    {% endif %}
+                    {% endif %}{% endif %}
 
                     <!-- Sales -->
-                    {% if perms.sales.view_salesinvoice or perms.sales.view_customer or perms.sales.view_salesrepresentative %}
+                    {% if not request.user.salesrepresentative %}{% if perms.sales.view_salesinvoice or perms.sales.view_customer or perms.sales.view_salesrepresentative or perms.core.view_account %}
                     <li class="nav-item">
                         <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#salesMenu" role="button" aria-expanded="false">
                             <span><i class="bi bi-cart-check"></i> المبيعات</span>
@@ -101,13 +103,18 @@
                         <div class="collapse" id="salesMenu">
                             <ul class="submenu">
                                 <li><a class="nav-link text-primary fw-bold" href="{% url 'sales:dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تحكم المبيعات</a></li>
+                                <li><a class="nav-link" href="{% url 'sales:customer-list' %}"><i class="bi bi-people me-1"></i> العملاء</a></li>
+                                <li><a class="nav-link text-success fw-semibold" href="{% url 'sales:pricelist-list' %}"><i class="bi bi-tags me-1"></i> قوائم الأسعار</a></li>
+                                <li><a class="nav-link text-warning fw-semibold" href="{% url 'sales:sector-list' %}"><i class="bi bi-diagram-3 me-1"></i> قطاعات العملاء</a></li>
+                                <li><a class="nav-link" href="{% url 'sales:rep-list' %}"><i class="bi bi-person-badge me-1"></i> مناديب المبيعات / الكاشيرية</a></li>
+                                <li><a class="nav-link" href="{% url 'sales:settlement-list' %}"><i class="bi bi-journal-check me-1"></i> تسويات المناديب والورديات</a></li>
                             </ul>
                         </div>
                     </li>
-                    {% endif %}
+                    {% endif %}{% endif %}
 
                     <!-- Purchases -->
-                    {% if perms.purchases.view_purchaseinvoice or perms.purchases.view_supplier %}
+                    {% if not request.user.salesrepresentative %}{% if perms.purchases.view_purchaseinvoice or perms.purchases.view_supplier or perms.core.view_account %}
                     <li class="nav-item">
                         <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#purMenu" role="button" aria-expanded="false">
                             <span><i class="bi bi-bag-check"></i> المشتريات</span>
@@ -119,10 +126,10 @@
                             </ul>
                         </div>
                     </li>
-                    {% endif %}
+                    {% endif %}{% endif %}
 
                     <!-- Inventory -->
-                    {% if perms.inventory.view_item or perms.inventory.view_warehouse %}
+                    {% if not request.user.salesrepresentative %}{% if perms.inventory.view_item or perms.inventory.view_warehouse or perms.core.view_account %}
                     <li class="nav-item">
                         <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#invMenu" role="button" aria-expanded="false">
                             <span><i class="bi bi-box-seam"></i> المخزون</span>
@@ -134,10 +141,27 @@
                             </ul>
                         </div>
                     </li>
-                    {% endif %}
+                    {% endif %}{% endif %}
+
+                    <!-- Point of Sale (POS) -->
+                    {% if not request.user.salesrepresentative %}{% if perms.pos.view_posstation or perms.core.view_account or user.is_superuser %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#posMenu" role="button" aria-expanded="false">
+                            <span><i class="bi bi-shop text-danger"></i> نقاط البيع</span>
+                            <i class="bi bi-chevron-left chevron"></i>
+                        </a>
+                        <div class="collapse" id="posMenu">
+                            <ul class="submenu">
+                                <li><a class="nav-link text-primary fw-bold" href="{% url 'pos:dashboard' %}"><i class="bi bi-pc-display-horizontal me-1"></i> نقطة البيع (POS)</a></li>
+                                <li><a class="nav-link" href="{% url 'pos:session-list' %}"><i class="bi bi-clock-history me-1"></i> سجل الورديات (التقفيل)</a></li>
+                                <li><a class="nav-link" href="{% url 'pos:station-list' %}"><i class="bi bi-sliders2 me-1"></i> ضبط نقاط البيع</a></li>
+                            </ul>
+                        </div>
+                    </li>
+                    {% endif %}{% endif %}
 
                     <!-- Treasury -->
-                    {% if perms.treasury.view_cashbox or perms.treasury.view_bankaccount %}
+                    {% if not request.user.salesrepresentative %}{% if perms.treasury.view_cashbox or perms.treasury.view_bankaccount or perms.core.view_account %}
                     <li class="nav-item">
                         <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#treaMenu" role="button" aria-expanded="false">
                             <span><i class="bi bi-wallet2"></i> الخزينة والبنوك</span>
@@ -149,10 +173,10 @@
                             </ul>
                         </div>
                     </li>
-                    {% endif %}
+                    {% endif %}{% endif %}
 
                     <!-- Expenses & Custody -->
-                    {% if perms.expenses.view_expense or perms.expenses.view_custody %}
+                    {% if not request.user.salesrepresentative %}{% if perms.expenses.view_expense or perms.expenses.view_custody or perms.core.view_account %}
                     <li class="nav-item">
                         <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#expMenu" role="button" aria-expanded="false">
                             <span><i class="bi bi-receipt-cutoff"></i> المصروفات والعهد</span>
@@ -164,10 +188,10 @@
                             </ul>
                         </div>
                     </li>
-                    {% endif %}
+                    {% endif %}{% endif %}
 
                     <!-- HR & Payroll -->
-                    {% if perms.hr.view_employee %}
+                    {% if not request.user.salesrepresentative %}{% if perms.hr.view_employee or perms.core.view_account %}
                     <li class="nav-item">
                         <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#hrMenu" role="button" aria-expanded="false">
                             <span><i class="bi bi-people"></i> شئون العاملين والرواتب</span>
@@ -184,10 +208,10 @@
                             </ul>
                         </div>
                     </li>
-                    {% endif %}
+                    {% endif %}{% endif %}
 
                     <!-- Reports -->
-                    {% if perms.core.view_account or perms.sales.view_customer or perms.inventory.view_item %}
+                    {% if request.user.salesrepresentative or perms.core.view_account or perms.sales.view_customer or perms.inventory.view_item %}
                     <li class="nav-item">
                         <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#repMenu" role="button" aria-expanded="false">
                             <span><i class="bi bi-bar-chart-line"></i> التقارير المالية</span>
@@ -195,13 +219,14 @@
                         </a>
                         <div class="collapse" id="repMenu">
                             <ul class="submenu">
-                                {% if perms.sales.view_salesinvoice %}<li><a class="nav-link text-primary fw-bold" href="{% url 'sales:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير المبيعات</a></li>{% endif %}
-                                {% if perms.purchases.view_purchaseinvoice %}<li><a class="nav-link text-warning fw-bold" href="{% url 'purchases:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير المشتريات</a></li>{% endif %}
-                                {% if perms.treasury.view_cashbox %}<li><a class="nav-link text-info fw-bold" href="{% url 'treasury:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير النقدية</a></li>{% endif %}
-                                {% if perms.inventory.view_item %}<li><a class="nav-link text-success fw-bold" href="{% url 'inventory:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير المخازن</a></li>{% endif %}
-                                {% if perms.expenses.view_expense %}<li><a class="nav-link text-danger fw-bold" href="{% url 'expenses:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير المصروفات</a></li>{% endif %}
-                                {% if perms.hr.view_employee %}<li><a class="nav-link text-primary fw-bold" href="{% url 'hr:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير الموارد البشرية</a></li>{% endif %}
-                                {% if perms.core.view_account %}<li><a class="nav-link text-dark fw-bold border-top mt-2 pt-2" href="{% url 'reports:financial_dashboard' %}"><i class="bi bi-bar-chart-steps me-1"></i> التقارير المالية والضريبية</a></li>{% endif %}
+                                {% if perms.sales.view_salesinvoice and not request.user.salesrepresentative %}<li><a class="nav-link text-primary fw-bold" href="{% url 'sales:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير المبيعات</a></li>{% endif %}
+                                {% if request.user.salesrepresentative or perms.sales.view_salesrepresentative %}<li><a class="nav-link text-info fw-bold" href="{% url 'reports:rep_dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تحكم أداء المندوب</a></li>{% endif %}
+                                {% if perms.purchases.view_purchaseinvoice and not request.user.salesrepresentative %}<li><a class="nav-link text-warning fw-bold" href="{% url 'purchases:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير المشتريات</a></li>{% endif %}
+                                {% if not request.user.salesrepresentative and perms.treasury.view_cashbox %}<li><a class="nav-link text-info fw-bold" href="{% url 'treasury:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير النقدية</a></li>{% endif %}
+                                {% if perms.inventory.view_item and not request.user.salesrepresentative %}<li><a class="nav-link text-success fw-bold" href="{% url 'inventory:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير المخازن</a></li>{% endif %}
+                                {% if perms.expenses.view_expense and not request.user.salesrepresentative %}<li><a class="nav-link text-danger fw-bold" href="{% url 'expenses:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير المصروفات</a></li>{% endif %}
+                                {% if perms.hr.view_employee and not request.user.salesrepresentative %}<li><a class="nav-link text-primary fw-bold" href="{% url 'hr:report-dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> لوحة تقارير الموارد البشرية</a></li>{% endif %}
+                                {% if perms.core.view_account and not request.user.salesrepresentative %}<li><a class="nav-link text-dark fw-bold border-top mt-2 pt-2" href="{% url 'reports:financial_dashboard' %}"><i class="bi bi-bar-chart-steps me-1"></i> التقارير المالية والضريبية</a></li>{% endif %}
                             </ul>
                         </div>
                     </li>
@@ -274,23 +299,25 @@
                 <!-- Quick Access Dashboards & Reports -->
                 <div class="d-flex align-items-center ms-auto me-2 me-md-4">
                     <!-- Dashboards Dropdown -->
+                    {% if not request.user.salesrepresentative %}{% if user.is_superuser or perms.core.view_account or perms.sales.view_salesinvoice or perms.purchases.view_purchaseinvoice or perms.inventory.view_item or perms.treasury.view_cashbox or perms.hr.view_employee or perms.assets.view_asset or perms.expenses.view_expense %}
                     <div class="dropdown me-2 me-md-3">
                         <button class="btn btn-sm btn-outline-primary dropdown-toggle rounded-pill px-2 px-md-3 shadow-sm" type="button" id="dashboardsDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-speedometer2"></i>
                             <span class="d-none d-md-inline ms-1">لوحات التحكم</span>
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2 py-2" aria-labelledby="dashboardsDropdown" style="min-width: 200px;">
-                            <li><a class="dropdown-item py-2" href="{% url 'core:dashboard' %}"><i class="bi bi-grid-1x2 me-2 text-primary"></i> العامة</a></li>
-                            <li><hr class="dropdown-divider opacity-50"></li>
-                            {% if perms.sales.view_salesinvoice %}<li><a class="dropdown-item py-2" href="{% url 'sales:dashboard' %}"><i class="bi bi-cart-check me-2 text-primary"></i> المبيعات</a></li>{% endif %}
-                            {% if perms.purchases.view_purchaseinvoice %}<li><a class="dropdown-item py-2" href="{% url 'purchases:dashboard' %}"><i class="bi bi-bag-check me-2 text-primary"></i> المشتريات</a></li>{% endif %}
-                            {% if perms.inventory.view_item %}<li><a class="dropdown-item py-2" href="{% url 'inventory:dashboard' %}"><i class="bi bi-box-seam me-2 text-primary"></i> المخازن</a></li>{% endif %}
-                            {% if perms.treasury.view_cashbox %}<li><a class="dropdown-item py-2" href="{% url 'treasury:dashboard' %}"><i class="bi bi-wallet2 me-2 text-primary"></i> الخزينة</a></li>{% endif %}
-                            {% if perms.hr.view_employee %}<li><a class="dropdown-item py-2" href="{% url 'hr:dashboard' %}"><i class="bi bi-people me-2 text-primary"></i> الموارد البشرية</a></li>{% endif %}
-                            {% if perms.assets.view_asset %}<li><a class="dropdown-item py-2" href="{% url 'assets:dashboard' %}"><i class="bi bi-building-gear me-2 text-primary"></i> الأصول</a></li>{% endif %}
-                            {% if perms.expenses.view_expense %}<li><a class="dropdown-item py-2" href="{% url 'expenses:dashboard' %}"><i class="bi bi-receipt-cutoff me-2 text-primary"></i> المصروفات</a></li>{% endif %}
+                            {% if user.is_superuser or perms.core.view_account %}<li><a class="dropdown-item py-2" href="{% url 'core:dashboard' %}"><i class="bi bi-grid-1x2 me-2 text-primary"></i> العامة</a></li>{% endif %}
+                            {% if user.is_superuser or perms.sales.view_salesinvoice %}<li><hr class="dropdown-divider opacity-50"></li>
+                            <li><a class="dropdown-item py-2" href="{% url 'sales:dashboard' %}"><i class="bi bi-cart-check me-2 text-primary"></i> المبيعات</a></li>{% endif %}
+                            {% if user.is_superuser or perms.purchases.view_purchaseinvoice %}<li><a class="dropdown-item py-2" href="{% url 'purchases:dashboard' %}"><i class="bi bi-bag-check me-2 text-primary"></i> المشتريات</a></li>{% endif %}
+                            {% if user.is_superuser or perms.inventory.view_item %}<li><a class="dropdown-item py-2" href="{% url 'inventory:dashboard' %}"><i class="bi bi-box-seam me-2 text-primary"></i> المخازن</a></li>{% endif %}
+                            {% if user.is_superuser or perms.treasury.view_cashbox %}<li><a class="dropdown-item py-2" href="{% url 'treasury:dashboard' %}"><i class="bi bi-wallet2 me-2 text-primary"></i> الخزينة</a></li>{% endif %}
+                            {% if user.is_superuser or perms.hr.view_employee %}<li><a class="dropdown-item py-2" href="{% url 'hr:dashboard' %}"><i class="bi bi-people me-2 text-primary"></i> الموارد البشرية</a></li>{% endif %}
+                            {% if user.is_superuser or perms.assets.view_asset %}<li><a class="dropdown-item py-2" href="{% url 'assets:dashboard' %}"><i class="bi bi-building-gear me-2 text-primary"></i> الأصول</a></li>{% endif %}
+                            {% if user.is_superuser or perms.expenses.view_expense %}<li><a class="dropdown-item py-2" href="{% url 'expenses:dashboard' %}"><i class="bi bi-receipt-cutoff me-2 text-primary"></i> المصروفات</a></li>{% endif %}
                         </ul>
                     </div>
+                    {% endif %}{% endif %}
 
                     <!-- Reports Dropdown -->
                     <div class="dropdown me-2 me-md-0">
@@ -299,19 +326,68 @@
                             <span class="d-none d-md-inline ms-1">التقارير</span>
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2 py-2" aria-labelledby="reportsDropdown" style="min-width: 220px;">
-                            {% if perms.core.view_account %}<li><a class="dropdown-item py-2 fw-bold text-primary" href="{% url 'reports:financial_dashboard' %}"><i class="bi bi-bank me-2"></i> المالية والضريبية</a></li>{% endif %}
-                            <li><hr class="dropdown-divider opacity-50"></li>
-                            {% if perms.sales.view_salesinvoice %}<li><a class="dropdown-item py-2" href="{% url 'sales:report-dashboard' %}"><i class="bi bi-cart-check me-2 text-secondary"></i> تقارير المبيعات</a></li>{% endif %}
-                            {% if perms.purchases.view_purchaseinvoice %}<li><a class="dropdown-item py-2" href="{% url 'purchases:report-dashboard' %}"><i class="bi bi-bag-check me-2 text-secondary"></i> تقارير المشتريات</a></li>{% endif %}
-                            {% if perms.inventory.view_item %}<li><a class="dropdown-item py-2" href="{% url 'inventory:report-dashboard' %}"><i class="bi bi-box-seam me-2 text-secondary"></i> تقارير المخازن</a></li>{% endif %}
-                            {% if perms.treasury.view_cashbox %}<li><a class="dropdown-item py-2" href="{% url 'treasury:report-dashboard' %}"><i class="bi bi-wallet2 me-2 text-secondary"></i> تقارير النقدية</a></li>{% endif %}
-                            {% if perms.hr.view_employee %}<li><a class="dropdown-item py-2" href="{% url 'hr:report-dashboard' %}"><i class="bi bi-people me-2 text-secondary"></i> تقارير الموارد البشرية</a></li>{% endif %}
-                            {% if perms.expenses.view_expense %}<li><a class="dropdown-item py-2" href="{% url 'expenses:report-dashboard' %}"><i class="bi bi-receipt-cutoff me-2 text-secondary"></i> تقارير المصروفات</a></li>{% endif %}
+                            {% if perms.core.view_account and not request.user.salesrepresentative %}<li><a class="dropdown-item py-2 fw-bold text-primary" href="{% url 'reports:financial_dashboard' %}"><i class="bi bi-bank me-2"></i> المالية والضريبية</a></li>{% endif %}
+                            {% if not request.user.salesrepresentative %}<li><hr class="dropdown-divider opacity-50"></li>{% endif %}
+                            {% if perms.sales.view_salesinvoice and not request.user.salesrepresentative %}<li><a class="dropdown-item py-2" href="{% url 'sales:report-dashboard' %}"><i class="bi bi-cart-check me-2 text-secondary"></i> تقارير المبيعات</a></li>{% endif %}
+                            {% if request.user.salesrepresentative or perms.sales.view_salesrepresentative %}<li><a class="dropdown-item py-2 fw-bold text-info" href="{% url 'reports:rep_dashboard' %}"><i class="bi bi-speedometer2 me-2"></i> لوحة أداء المندوب</a></li>{% endif %}
+                            {% if perms.purchases.view_purchaseinvoice and not request.user.salesrepresentative %}<li><a class="dropdown-item py-2" href="{% url 'purchases:report-dashboard' %}"><i class="bi bi-bag-check me-2 text-secondary"></i> تقارير المشتريات</a></li>{% endif %}
+                            {% if perms.inventory.view_item and not request.user.salesrepresentative %}<li><a class="dropdown-item py-2" href="{% url 'inventory:report-dashboard' %}"><i class="bi bi-box-seam me-2 text-secondary"></i> تقارير المخازن</a></li>{% endif %}
+                            {% if not request.user.salesrepresentative and perms.treasury.view_cashbox %}<li><a class="dropdown-item py-2" href="{% url 'treasury:report-dashboard' %}"><i class="bi bi-wallet2 me-2 text-secondary"></i> تقارير النقدية</a></li>{% endif %}
+                            {% if perms.hr.view_employee and not request.user.salesrepresentative %}<li><a class="dropdown-item py-2" href="{% url 'hr:report-dashboard' %}"><i class="bi bi-people me-2 text-secondary"></i> تقارير الموارد البشرية</a></li>{% endif %}
+                            {% if perms.expenses.view_expense and not request.user.salesrepresentative %}<li><a class="dropdown-item py-2" href="{% url 'expenses:report-dashboard' %}"><i class="bi bi-receipt-cutoff me-2 text-secondary"></i> تقارير المصروفات</a></li>{% endif %}
                         </ul>
                     </div>
                 </div>
 
                 <div class="d-flex align-items-center">
+                    <!-- Notifications Dropdown -->
+                    {% if not request.user.salesrepresentative %}
+                    <div class="dropdown me-4">
+                        <a href="#" class="position-relative text-dark d-flex align-items-center justify-content-center text-decoration-none shadow-sm" id="notificationsDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="width: 38px; height: 38px; background-color: #f1f3f9; border-radius: 50%; transition: all 0.3s ease;">
+                            <i class="bi bi-bell-fill fs-5 text-secondary"></i>
+                            {% if unread_notifications_count > 0 %}
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow" style="font-size: 0.65rem; border: 2px solid white; transform: translate(10%, -10%) !important;">
+                                {{ unread_notifications_count }}
+                                <span class="visually-hidden">إشعارات غير مقروءة</span>
+                            </span>
+                            {% endif %}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2 py-0 overflow-hidden" aria-labelledby="notificationsDropdown" style="min-width: 320px; border-radius: 12px; direction: rtl;">
+                            <li class="px-3 py-3 border-bottom d-flex align-items-center justify-content-between bg-light">
+                                <span class="fw-bold text-dark"><i class="bi bi-bell-fill text-primary me-2"></i>الإشعارات اليومية</span>
+                                {% if unread_notifications_count > 0 %}
+                                <span class="badge bg-danger-subtle text-danger rounded-pill small">{{ unread_notifications_count }} جديدة</span>
+                                {% endif %}
+                            </li>
+                            <div style="max-height: 350px; overflow-y: auto;">
+                                {% if unread_notifications %}
+                                    {% for notif in unread_notifications %}
+                                    <li>
+                                        <a class="dropdown-item px-3 py-3 border-bottom d-flex flex-column gap-1 text-wrap transition" href="{% url 'core:notification-read' notif.id %}" style="border-right: 4px solid var(--bs-warning); background-color: #fcfcfc;">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <span class="fw-bold text-dark small" style="font-family: 'Cairo', sans-serif;">{{ notif.title }}</span>
+                                                <span class="text-muted" style="font-size: 0.7rem;">منذ {{ notif.created_at|timesince }}</span>
+                                            </div>
+                                            <span class="text-muted small lh-sm" style="font-family: 'Cairo', sans-serif;">{{ notif.message }}</span>
+                                        </a>
+                                    </li>
+                                    {% endfor %}
+                                {% else %}
+                                    <li class="px-4 py-5 text-center text-muted">
+                                        <i class="bi bi-bell-slash fs-2 d-block mb-2 opacity-50 text-secondary"></i>
+                                        <span class="small d-block fw-bold">لا توجد إشعارات جديدة حالياً</span>
+                                    </li>
+                                {% endif %}
+                            </div>
+                            <li class="border-top text-center bg-light">
+                                <a class="dropdown-item py-2 fw-bold text-primary small" href="{% url 'core:notification-list' %}">
+                                    عرض كافة الإشعارات <i class="bi bi-arrow-left ms-1"></i>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    {% endif %}
+
                     <div class="dropdown">
                         <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle text-dark" id="userDropdown" data-bs-toggle="dropdown">
                             <div class="avatar-sm bg-primary text-white">
@@ -402,6 +478,183 @@
         });
     </script>
     
+    <!-- ====== Global Reverse Confirmation Modal ====== -->
+    <div class="modal fade" id="reverseConfirmModal" tabindex="-1" aria-labelledby="reverseConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
+                <!-- Header -->
+                <div class="modal-header text-white border-0 py-4 px-4" style="background: linear-gradient(135deg, #dc3545, #c0392b);">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="d-flex align-items-center justify-content-center bg-white bg-opacity-25 rounded-circle" style="width: 44px; height: 44px;">
+                            <i class="bi bi-exclamation-triangle-fill fs-4 text-white"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title fw-bold mb-0" id="reverseConfirmModalLabel" style="font-family: 'Cairo', sans-serif;">
+                                تأكيد عملية العكس
+                            </h5>
+                            <small class="opacity-75">هذه العملية لا يمكن التراجع عنها</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Body -->
+                <div class="modal-body px-4 py-4">
+                    <!-- Document Info -->
+                    <div class="rounded-3 p-3 mb-3 d-flex align-items-center gap-3" style="background: #fff8f0; border: 1px solid #ffd6a5;">
+                        <i class="bi bi-file-earmark-text fs-3 text-warning"></i>
+                        <div>
+                            <div class="fw-bold text-dark" id="reverseDocTitle" style="font-family: 'Cairo', sans-serif; font-size: 1rem;"></div>
+                            <div class="text-muted small" id="reverseDocSub"></div>
+                        </div>
+                    </div>
+
+                    <!-- Impacts List -->
+                    <p class="fw-bold text-dark mb-2" style="font-family: 'Cairo', sans-serif;">
+                        <i class="bi bi-list-check text-danger me-2"></i>التأثيرات المتوقعة:
+                    </p>
+                    <ul class="list-unstyled mb-3" id="reverseImpactsList" style="font-family: 'Cairo', sans-serif; font-size: 0.9rem;"></ul>
+
+                    <!-- Admin Notification Warning -->
+                    <div class="alert alert-warning border-0 rounded-3 d-flex align-items-start gap-2 py-3 mb-0" style="background: #fff3cd;">
+                        <i class="bi bi-bell-fill text-warning mt-1 flex-shrink-0"></i>
+                        <span style="font-family: 'Cairo', sans-serif; font-size: 0.88rem;">
+                            <strong>تنبيه:</strong> سيتم إخطار الإدارة والمحاسبين فوراً بهذه العملية عبر نظام الإشعارات.
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="modal-footer border-0 px-4 pb-4 pt-0 gap-2">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal" style="font-family: 'Cairo', sans-serif;">
+                        <i class="bi bi-x-circle me-1"></i>إلغاء
+                    </button>
+                    <button type="button" class="btn btn-danger rounded-pill px-4 shadow-sm" id="reverseConfirmBtn" style="font-family: 'Cairo', sans-serif;">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>نعم، تأكيد العكس
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ====== Global Reverse Confirmation Handler ======
+    (function() {
+        // Map of impact bullets per reverse type
+        const impactsMap = {
+            'sales-invoice': [
+                'سيتم إلغاء/عكس الفاتورة وإنشاء قيد عكسي في اليومية.',
+                'سيتم استعادة الكميات المباعة إلى المخزن.',
+                'سيتم إلغاء أثر الفاتورة على رصيد حساب العميل.',
+                'لن يتم استعادة أي مبالغ مسددة تلقائياً.',
+            ],
+            'sales-invoice-draft': [
+                'سيتم حذف/إلغاء مسودة الفاتورة نهائياً.',
+                'لا توجد قيود أو حركات مخزنية تحتاج للعكس لأن الفاتورة مسودة ولم تُرحّل.',
+            ],
+            'purchase-invoice': [
+                'سيتم إلغاء/عكس فاتورة المشتريات وإنشاء قيد عكسي.',
+                'سيتم خصم الكميات المستلمة من المخزن.',
+                'سيتم إلغاء أثر الفاتورة على رصيد حساب المورد.',
+                'لن يتم استعادة أي مبالغ مسددة للمورد تلقائياً.',
+            ],
+            'journal-entry': [
+                'سيتم إنشاء قيد عكسي بنفس السطور بأرقام معاكسة.',
+                'لن يتم حذف القيد الأصلي بل سيُعلَّم كـ "معكوس".',
+                'سيتم الأثر الفوري على أرصدة الحسابات المعنية.',
+            ],
+            'cash-transfer': [
+                'سيتم عكس قيد التحويل النقدي بالكامل.',
+                'ستعود المبالغ إلى الحساب المصدر.',
+                'لن يتم التأثير على التحويلات الأخرى.',
+            ],
+            'warehouse-transfer': [
+                'ستعود الكميات إلى مستودعاتها الأصلية.',
+                'سيتم إنشاء قيد عكسي في حركات المخزون.',
+                'لن يتم التأثير على فواتير البيع المرتبطة بهذه الكميات.',
+            ],
+            'stock-voucher': [
+                'سيتم عكس إذن الصرف/الاستلام وتحديث كميات المخزون.',
+                'سيتم إنشاء قيد عكسي لحركة البضاعة.',
+            ],
+            'expense': [
+                'سيتم إنشاء قيد محاسبي عكسي للمصروف.',
+                'سيتم إلغاء الأثر على رصيد الحساب الدائن والمدين.',
+                'لن يتم استعادة النقد/الشيك المدفوع تلقائياً.',
+            ],
+            'default': [
+                'سيتم إنشاء قيد عكسي لهذه العملية.',
+                'سيتم تحديث جميع الأرصدة المرتبطة.',
+            ]
+        };
+
+        let pendingForm = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Auto-expand textareas named 'notes'
+            document.addEventListener('input', function(e) {
+                if (e.target.tagName && e.target.tagName.toLowerCase() === 'textarea' && e.target.name === 'notes') {
+                    e.target.style.height = 'auto';
+                    e.target.style.height = (e.target.scrollHeight) + 'px';
+                }
+            });
+
+            const modal = document.getElementById('reverseConfirmModal');
+            const bsModal = new bootstrap.Modal(modal);
+            const confirmBtn = document.getElementById('reverseConfirmBtn');
+            const docTitle = document.getElementById('reverseDocTitle');
+            const docSub = document.getElementById('reverseDocSub');
+            const impactsList = document.getElementById('reverseImpactsList');
+
+            // Intercept all forms marked with data-reverse-type
+            document.querySelectorAll('form[data-reverse-type]').forEach(function(form) {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    pendingForm = form;
+
+                    const reverseType = form.dataset.reverseType || 'default';
+                    const docNum = form.dataset.reverseDoc || '';
+                    const docDetail = form.dataset.reverseDetail || '';
+
+                    // Populate modal content
+                    docTitle.textContent = docNum;
+                    docSub.textContent = docDetail;
+
+                    const impacts = impactsMap[reverseType] || impactsMap['default'];
+                    impactsList.innerHTML = impacts.map(function(impact) {
+                        return '<li class="d-flex align-items-start gap-2 mb-2 text-secondary">' +
+                               '<i class="bi bi-dot fs-5 text-danger flex-shrink-0" style="margin-top:-2px;"></i>' +
+                               '<span>' + impact + '</span></li>';
+                    }).join('');
+
+                    bsModal.show();
+                });
+            });
+
+            // On confirm button click — submit the pending form
+            confirmBtn.addEventListener('click', function() {
+                bsModal.hide();
+                if (pendingForm) {
+                    // Remove the event listener to avoid infinite loop
+                    const clone = pendingForm.cloneNode(true);
+                    pendingForm.parentNode.replaceChild(clone, pendingForm);
+                    clone.submit();
+                    pendingForm = null;
+                }
+            });
+        });
+    })();
+
+    // Auto-fill empty date inputs with today's date across the entire project
+    document.addEventListener('DOMContentLoaded', function() {
+        const today = new Date().toISOString().split('T')[0];
+        document.querySelectorAll('input[type="date"]').forEach(function(input) {
+            if (!input.value) {
+                input.value = today;
+            }
+        });
+    });
+    </script>
+
     {% block extra_js %}{% endblock %}
 </body>
 </html>

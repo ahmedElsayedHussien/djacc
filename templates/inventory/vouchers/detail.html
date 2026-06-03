@@ -25,6 +25,7 @@
                         </td>
                     </tr>
                     <tr><th>الحساب المقابل:</th><td>{{ voucher.offset_account.name|default:"-" }}</td></tr>
+                    {% if perms.core.view_journalentry and not request.user.salesrepresentative %}
                     <tr><th>القيد المحاسبي:</th>
                         <td>
                             {% if voucher.journal_entry %}
@@ -34,19 +35,23 @@
                             {% endif %}
                         </td>
                     </tr>
+                    {% endif %}
                 </table>
 
-                {% if voucher.status == 'draft' %}
+                {% if voucher.status == 'draft' and perms.inventory.change_stockvoucher %}
                 <form method="post" action="{% url 'inventory:voucher-post' voucher.pk %}" class="mt-3">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-success w-100" onclick="return confirm('تأكيد الترحيل؟ سيتم تحديث المخزون ولن يمكنك تعديل الإذن بعد ذلك.');">
                         <i class="bi bi-check-circle"></i> ترحيل الإذن
                     </button>
                 </form>
-                {% elif voucher.status == 'posted' %}
-                <form method="post" action="{% url 'inventory:voucher-reverse' voucher.pk %}" class="mt-3">
+                {% elif voucher.status == 'posted' and perms.inventory.change_stockvoucher %}
+                <form method="post" action="{% url 'inventory:voucher-reverse' voucher.pk %}" class="mt-3"
+                      data-reverse-type="stock-voucher"
+                      data-reverse-doc="عكس إذن {{ voucher.get_voucher_type_display }} رقم {{ voucher.number }}"
+                      data-reverse-detail="المستودع: {{ voucher.warehouse.name }} — التاريخ: {{ voucher.date|date:'Y-m-d' }}">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-outline-danger w-100" onclick="return confirm('تأكيد عكس الإذن؟ سيتم إنشاء حركات مخزنية وقيد محاسبي عكسي.');">
+                    <button type="submit" class="btn btn-outline-danger w-100">
                         <i class="bi bi-arrow-counterclockwise"></i> عكس الإذن
                     </button>
                 </form>

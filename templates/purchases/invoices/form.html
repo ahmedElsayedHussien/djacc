@@ -48,6 +48,7 @@
         <div class="card-header">أصناف الفاتورة</div>
         <div class="card-body">
             {{ lines.management_form }}
+            <div class="table-responsive">
             <table class="table table-bordered" id="linesTable">
                 <thead class="table-light">
                     <tr>
@@ -65,29 +66,30 @@
                 <tbody>
                     {% for line_form in lines %}
                     <tr class="line-row">
-                        <td>{{ line_form.item }}</td>
-                        <td>{{ line_form.unit }}</td>
-                        <td>{{ line_form.warehouse }}</td>
-                        <td>{{ line_form.quantity }}</td>
-                        <td>{{ line_form.unit_cost }}</td>
-                        <td>
+                        <td data-label="الصنف">{{ line_form.item }}</td>
+                        <td data-label="الوحدة">{{ line_form.unit }}</td>
+                        <td data-label="المستودع">{{ line_form.warehouse }}</td>
+                        <td data-label="الكمية">{{ line_form.quantity }}</td>
+                        <td data-label="تكلفة الوحدة">{{ line_form.unit_cost }}</td>
+                        <td data-label="ضريبة 1">
                             {{ line_form.tax_type }}
                             <input type="hidden" name="{{ line_form.prefix }}-tax_percent" id="id_{{ line_form.prefix }}-tax_percent" class="tax-rate" value="{{ line_form.tax_percent.value|default:'0' }}">
                         </td>
-                        <td>
+                        <td data-label="ضريبة 2">
                             {{ line_form.tax_type2 }}
                             <input type="hidden" name="{{ line_form.prefix }}-tax_percent2" id="id_{{ line_form.prefix }}-tax_percent2" class="tax-rate2" value="{{ line_form.tax_percent2.value|default:'0' }}">
                         </td>
-                        <td>
+                        <td data-label="الإجمالي">
                             <input type="text" class="form-control line-total" readonly value="0.00">
                         </td>
-                        <td class="text-center">
+                        <td data-label="حذف" class="text-center">
                             {% if line_form.instance.pk %}{{ line_form.DELETE }}{% endif %}
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
+            </div>
             <button type="button" class="btn btn-outline-secondary btn-sm" id="addRow">
                 <i class="bi bi-plus"></i> إضافة سطر
             </button>

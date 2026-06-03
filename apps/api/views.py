@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework import viewsets, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -57,12 +58,16 @@ class PriceListViewSet(viewsets.ReadOnlyModelViewSet):
         item_id = request.query_params.get('item_id')
         if not item_id:
             return Response({'error': 'item_id is required'}, status=400)
-        
+
         try:
-            item_price = PriceListItem.objects.get(price_list_id=pk, item_id=item_id)
+            item_id = int(item_id)
+        except (ValueError, TypeError):
+            return Response({'error': 'item_id must be an integer'}, status=400)
+
+        item_price = PriceListItem.objects.filter(price_list_id=pk, item_id=item_id).first()
+        if item_price:
             return Response({'price': item_price.unit_price})
-        except PriceListItem.DoesNotExist:
-            return Response({'price': None})
+        return Response({'price': None})
 class QuotationViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Quotation.objects.filter(is_active=True, status='active')
     serializer_class = QuotationSerializer
@@ -73,8 +78,7 @@ class QuotationViewSet(viewsets.ReadOnlyModelViewSet):
         sector_id = request.query_params.get('sector_id')
         if not sector_id:
             return Response({'error': 'sector_id is required'}, status=400)
-        
-        from django.utils import timezone
+
         today = timezone.now().date()
         
         offers = Quotation.objects.filter(

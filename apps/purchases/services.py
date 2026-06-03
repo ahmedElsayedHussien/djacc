@@ -1,9 +1,31 @@
+import logging
+from datetime import date
+from decimal import Decimal
 from django.db import transaction
 from django.conf import settings
+from django.db.models import F
 from apps.core.models import JournalEntry, Account
-from apps.core.services import JournalService
+from apps.core.services import JournalService, DocumentService, AuditService
 from apps.inventory.services import InventoryService
-from .models import PurchaseInvoice, Supplier
+from apps.inventory.models import StockMovement
+from apps.core.tax_utils import calculate_line_taxes
+from .models import PurchaseInvoice, Supplier, SupplierPayment, PaymentAllocation, PurchaseReturn
+
+logger = logging.getLogger(__name__)
+
+
+def _conversion_to_base(line):
+    """حساب معامل تحويل الوحدة إلى الوحدة الأساسية"""
+    if not hasattr(line, 'unit') or not line.unit or not line.item:
+        return Decimal('1')
+    item = line.item
+    if line.unit_id == item.base_unit_id:
+        return Decimal('1')
+    if line.unit_id == item.purchase_unit_id:
+        return item.purchase_conversion_factor or Decimal('1')
+    if line.unit_id == item.sales_unit_id:
+        return item.conversion_factor or Decimal('1')
+    return Decimal('1')
 
 class SupplierService:
     SUPPLIERS_PARENT_CODE = getattr(settings, 'SUPPLIERS_PARENT_ACCOUNT', '2111')
@@ -13,12 +35,16 @@ class SupplierService:
     def create_supplier(validated_data: dict) -> Supplier:
         parent = Account.objects.select_for_update().get(code=SupplierService.SUPPLIERS_PARENT_CODE)
         # ✅ Fix: Use max code instead of count() to avoid duplicates
-        last_account = Account.objects.filter(parent=parent).order_by('-code').first()
+        from django.db.models import IntegerField
+        from django.db.models.functions import Cast, Substr
+        last_account = Account.objects.filter(parent=parent).annotate(
+            seq_int=Cast(Substr('code', len(parent.code) + 1), output_field=IntegerField())
+        ).order_by('-seq_int').first()
         if last_account:
             try:
-                last_seq = int(last_account.code[len(parent.code):])
+                last_seq = last_account.seq_int
                 next_seq = last_seq + 1
-            except (ValueError, IndexError):
+            except (ValueError, TypeError, IndexError):
                 next_seq = Account.objects.filter(parent=parent).count() + 1
         else:
             next_seq = 1
@@ -48,12 +74,12 @@ class SupplierService:
         )
 
     @staticmethod
+    @transaction.atomic
     def generate_supplier_code():
-        from .models import Supplier
-        last_supplier = Supplier.objects.filter(code__startswith='vend-').order_by('-code').first()
-        if last_supplier:
+        locked = Supplier.objects.select_for_update().filter(code__startswith='vend-').order_by('-code').first()
+        if locked:
             try:
-                last_num = int(last_supplier.code.split('-')[1])
+                last_num = int(locked.code.split('-')[1])
                 next_num = last_num + 1
             except (IndexError, ValueError):
                 next_num = Supplier.objects.count() + 1
@@ -90,7 +116,7 @@ class SupplierService:
             supplier.account.save(update_fields=['name', 'initial_balance', 'initial_balance_type'])
 
         for field, value in validated_data.items():
-            if field not in ('initial_balance', 'initial_balance_type'):
+            if field not in ('initial_balance', 'initial_balance_type', 'code', 'account', 'account_id'):
                 setattr(supplier, field, value)
         supplier.save()
         return supplier
@@ -105,6 +131,8 @@ class PurchaseService:
         
         if invoice.status == PurchaseInvoice.Status.POSTED:
             raise ValueError("هذه الفاتورة مرحلة بالفعل")
+        if invoice.status == PurchaseInvoice.Status.CANCELLED:
+            raise ValueError("لا يمكن ترحيل فاتورة ملغاة")
 
         if not invoice.lines.exists():
             raise ValueError("لا يمكن ترحيل فاتورة بدون أسطر")
@@ -118,67 +146,41 @@ class PurchaseService:
 
         for line in invoice.lines.all():
             # Determine target inventory account
-            acc = line.warehouse.gl_account or line.item.inventory_account
+            warehouse_acc = line.warehouse.gl_account if line.warehouse else None
+            acc = warehouse_acc or line.item.inventory_account or getattr(line.item, 'expense_account', None)
             if not acc:
                 raise ValueError(f"يرجى تحديد حساب المخزون للصنف {line.item.name} أو للمخزن {line.warehouse.name}")
             
             # Calculate net line amount (Price - Discount) to ensure balanced journal entry
             # and accurate average cost calculation in inventory.
-            # Professional logic for Purchases: Capitalize Table/Customs, VAT on (Subtotal + Table)
-            line_net = line.quantity * line.unit_cost * (Decimal('1') - (Decimal(str(line.discount_percent)) / Decimal('100')))
+            discount_pct = Decimal(str(line.discount_percent or '0'))
+            line_net = line.quantity * line.unit_cost * (Decimal('1') - (discount_pct / Decimal('100')))
             
-            # Find Table Tax & Customs
-            table_tax_val = Decimal('0')
-            customs_val = Decimal('0')
-            taxes_to_process = []
-            if line.tax_type: taxes_to_process.append({'type': line.tax_type, 'rate': line.tax_percent})
-            if line.tax_type2: taxes_to_process.append({'type': line.tax_type2, 'rate': line.tax_percent2})
+            res = calculate_line_taxes(
+                line_net,
+                line.tax_type,
+                line.tax_percent,
+                line.tax_type2,
+                line.tax_percent2,
+                is_purchase_or_expense=True
+            )
             
-            for t in taxes_to_process:
-                rate = t['rate'] if t['rate'] is not None else t['type'].rate
-                if t['type'].category == 'table':
-                    table_tax_val += line_net * (Decimal(str(rate)) / Decimal('100'))
-                elif t['type'].category == 'customs':
-                    customs_val += line_net * (Decimal(str(rate)) / Decimal('100'))
-            
-            # Inventory Cost = Net + Table + Customs (Capitalization)
-            inv_cost = line_net + table_tax_val + customs_val
+            # Inventory Cost = Net + Table + Customs etc. (Capitalization)
+            inv_cost = line_net + res['capitalized_amount']
             if acc.id not in inv_account_totals:
                 inv_account_totals[acc.id] = {'account': acc, 'amount': Decimal('0')}
             inv_account_totals[acc.id]['amount'] += inv_cost
             
-            # Other taxes (VAT, WHT)
-            for t in taxes_to_process:
-                tx_type = t['type']
-                rate = t['rate'] if t['rate'] is not None else tx_type.rate
-                
-                if tx_type.category == 'vat':
-                    # VAT is on (Net + Table Tax)
-                    val = (line_net + table_tax_val) * (Decimal(str(rate)) / Decimal('100'))
-                elif tx_type.category in ['table', 'customs']:
-                    continue # Already capitalized
-                else:
-                    # Others like WHT are on Net
-                    val = line_net * (Decimal(str(rate)) / Decimal('100'))
-                
-                if val == 0: continue
-                
-                tax_acc = tx_type.account
-                if not tax_acc: continue
-                if tax_acc.id not in tax_account_totals:
-                    tax_account_totals[tax_acc.id] = {'account': tax_acc, 'amount': Decimal('0'), 'category': tx_type.category}
-                tax_account_totals[tax_acc.id]['amount'] += val
-
-        # Adjust WHT to be credit in Purchases
-        for tax_id, info in tax_account_totals.items():
-            is_credit = (info['category'] in ['wht']) # WHT in purchases is a credit (deduction from supplier)
-            lines.append({
-                'account': info['account'],
-                'debit': 0 if is_credit else info['amount'],
-                'credit': info['amount'] if is_credit else 0,
-                'description': f"ضريبة {info['account'].name} - فاتورة {invoice.number}",
-                'cost_center': invoice.cost_center
-            })
+            # Non-capitalized taxes (VAT, WHT)
+            for tx_type, tx_val in [(line.tax_type, res['tax1_value']), (line.tax_type2, res['tax2_value'])]:
+                if tx_type and tx_val > 0:
+                    if tx_type.category not in ['table', 'customs', 'stamp', 'other']:
+                        tax_acc = tx_type.account
+                        if not tax_acc:
+                            raise ValueError(f"يرجى تحديد حساب الأستاذ لضريبة {tx_type.name}")
+                        if tax_acc.id not in tax_account_totals:
+                            tax_account_totals[tax_acc.id] = {'account': tax_acc, 'amount': Decimal('0'), 'category': tx_type.category}
+                        tax_account_totals[tax_acc.id]['amount'] += tx_val
 
         # 2. Construct Journal Lines
         # In Purchases: Even for cash, we pass through the Supplier account (Credit)
@@ -214,6 +216,11 @@ class PurchaseService:
                     'cost_center': invoice.cost_center
                 })
 
+        total_dr = sum(l['debit'] for l in lines)
+        total_cr = sum(l['credit'] for l in lines)
+        if total_dr != total_cr:
+            raise ValueError(f"عدم اتزان مالي: مدين {total_dr} ، دائن {total_cr}. يرجى مراجعة الخصومات والضرائب.")
+            
         entry = JournalService.create_entry(
             date_val=invoice.date,
             entry_type=JournalEntry.EntryType.PURCHASE,
@@ -229,9 +236,6 @@ class PurchaseService:
         
         # 3. Handle Auto-Payment for Cash Purchases
         if invoice.payment_type == PurchaseInvoice.PaymentType.CASH:
-            from .models import SupplierPayment, PaymentAllocation
-            from apps.core.services import DocumentService
-            
             # Determine payment method
             pm = 'cash'
             if invoice.payment_method == 'bank':
@@ -269,13 +273,22 @@ class PurchaseService:
         Reverses a posted purchase invoice by creating a reversal journal entry 
         and reducing inventory stock.
         """
+        invoice = PurchaseInvoice.objects.select_for_update().get(pk=invoice.pk)
         if invoice.status != PurchaseInvoice.Status.POSTED:
             raise ValueError("يمكن فقط عكس الفواتير المرحلة")
         
         if not invoice.journal_entry:
             raise ValueError("الفاتورة لا تملك قيداً محاسبياً لعكسه")
 
-        from datetime import date
+        if invoice.journal_entry.is_reversed:
+            raise ValueError("هذه الفاتورة تم عكسها مسبقاً")
+
+        if invoice.paid_amount > 0:
+            raise ValueError(
+                f"لا يمكن عكس فاتورة مدفوعة جزئياً ({invoice.paid_amount:.2f}). "
+                f"يرجى عكس سندات الصرف المرتبطة أولاً"
+            )
+
         # 1. Reverse the Journal Entry
         reversal_entry = JournalService.reverse_entry(
             invoice.journal_entry, 
@@ -285,24 +298,32 @@ class PurchaseService:
 
         # 2. Update Invoice Status
         invoice.status = PurchaseInvoice.Status.CANCELLED
-        invoice.paid_amount = 0 # ✅ Fix: Reset paid amount
         invoice.save()
 
         # 3. Reduce Inventory Stock (Inverse of increase_stock)
-        from apps.inventory.models import StockMovement
         for line in invoice.lines.all():
+            base_qty = line.base_quantity or line.quantity
+            if base_qty <= 0:
+                continue
+
+            discount_pct = Decimal(str(line.discount_percent or '0'))
+            line_net = line.quantity * line.unit_cost * (Decimal('1') - (discount_pct / Decimal('100')))
+            res = calculate_line_taxes(line_net, line.tax_type, line.tax_percent or 0, line.tax_type2, line.tax_percent2 or 0, is_purchase_or_expense=True)
+            inv_cost = line_net + res['capitalized_amount']
+            base_qty = line.base_quantity or line.quantity
+            unit_cost_base = (inv_cost / base_qty) if base_qty > 0 else Decimal('0')
+
             InventoryService.record_movement(
                 date_val=date.today(),
                 item=line.item,
                 warehouse=line.warehouse,
-                movement_type=StockMovement.MovementType.ADJUSTMENT_OUT,
-                quantity=-(line.base_quantity or line.quantity), # ✅ Fix: Fallback if base_quantity is 0
-                unit_cost=line.unit_cost,
+                movement_type=StockMovement.MovementType.PURCHASE_RETURN,
+                quantity=-base_qty,
+                unit_cost=unit_cost_base,
                 source=invoice,
                 reference=f'Reverse {invoice.number}'
             )
 
-        from apps.core.services import AuditService
         AuditService.log(reversed_by, 'Reverse', invoice, f'عكس فاتورة مشتريات رقم {invoice.number}')
         return reversal_entry
 
@@ -314,6 +335,9 @@ class PurchaseService:
         DR  Supplier Payable            → payment.amount
         CR  Cash/Bank Account           → payment.amount
         """
+        payment = SupplierPayment.objects.select_for_update().get(pk=payment.pk)
+        if payment.journal_entry:
+            raise ValueError("هذا السند مرحل بالفعل")
         lines = []
         
         # Debit Supplier
@@ -345,6 +369,11 @@ class PurchaseService:
             'description': f'سند صرف رقم {payment.number}'
         })
         
+        total_dr = sum(l['debit'] for l in lines)
+        total_cr = sum(l['credit'] for l in lines)
+        if total_dr != total_cr:
+            raise ValueError(f"عدم اتزان مالي: مدين {total_dr} ، دائن {total_cr}. يرجى مراجعة الخصومات والضرائب.")
+            
         entry = JournalService.create_entry(
             date_val=payment.date,
             entry_type=JournalEntry.EntryType.PAYMENT,
@@ -358,15 +387,28 @@ class PurchaseService:
         payment.save()
 
         # Update paid_amount in related invoices
-        for allocation in payment.paymentallocation_set.all():
-            invoice = allocation.invoice
-            remaining = invoice.total - invoice.paid_amount
-            actual_alloc = min(allocation.amount, remaining)
+        total_allocated = Decimal('0')
+        for allocation in payment.paymentallocation_set.select_related('invoice').all():
+            if allocation.amount <= 0:
+                raise ValueError("مبلغ التخصيص يجب أن يكون موجباً")
+            total_allocated += allocation.amount
             
-            invoice.paid_amount += actual_alloc # ✅ Fix #2: منع الدفع الزائد
-            invoice.save()
+            invoice = allocation.invoice
+            Invoice = type(invoice)
+            locked_invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
+            
+            if locked_invoice.status != PurchaseInvoice.Status.POSTED:
+                raise ValueError(f"لا يمكن السداد لفاتورة غير مرحلة أو ملغاة: {locked_invoice.number}")
+                
+            if locked_invoice.paid_amount + allocation.amount > locked_invoice.total:
+                raise ValueError(f"التخصيص يتجاوز المتبقي للفاتورة {locked_invoice.number}")
+                
+            locked_invoice.paid_amount += allocation.amount
+            locked_invoice.save(update_fields=['paid_amount'])
+            
+        if total_allocated > payment.amount:
+            raise ValueError("إجمالي التخصيصات يتجاوز مبلغ السند")
 
-        from apps.core.services import AuditService
         AuditService.log(posted_by, 'Record', payment, f'تسجيل سند صرف مورد رقم {payment.number}')
 
         return entry
@@ -377,11 +419,11 @@ class PurchaseService:
         """
         Purchase Return Journal Entry:
         DR  Supplier (Payable ↓)         → total_amount
-        CR  Inventory Account (↓)        → quantity * unit_cost
-        CR  Tax Deductible (Reverse)     → tax_amount
-        CR  Discount (Reverse)           → discount_amount (✅ Fix #3: لموازنة القيد)
+        CR  Inventory Account (↓)        → Net + Capitalized taxes
+        CR  Tax Deductible (Reverse)     → VAT (Credit), WHT (Debit)
         """
-        if purchase_return.status == 'posted':
+        purchase_return = PurchaseReturn.objects.select_for_update().get(pk=purchase_return.pk)
+        if purchase_return.status == PurchaseReturn.Status.POSTED:
             raise ValueError("هذا المرتجع مرحل بالفعل")
 
         lines = []
@@ -395,53 +437,74 @@ class PurchaseService:
             'cost_center': purchase_return.cost_center
         })
 
+        inv_account_totals = {}
+        tax_account_totals = {}
+
         for line in purchase_return.lines.all():
-            # Credit: Inventory
+            # Determine target inventory account (Warehouse-aware)
+            warehouse_acc = line.warehouse.gl_account if line.warehouse else None
+            acc = warehouse_acc or line.item.inventory_account or getattr(line.item, 'expense_account', None)
+            if not acc:
+                raise ValueError(f"يرجى تحديد حساب المخزون للصنف {line.item.name} أو للمخزن {line.warehouse.name}")
+            
+            discount_pct = Decimal(str(line.discount_percent or '0'))
+            line_net = line.quantity * line.unit_cost * (Decimal('1') - (discount_pct / Decimal('100')))
+            
+            res = calculate_line_taxes(
+                line_net,
+                line.tax_type,
+                line.tax_percent,
+                line.tax_type2,
+                line.tax_percent2,
+                is_purchase_or_expense=True
+            )
+            
+            # Inventory Cost to credit = Net + Capitalized taxes
+            inv_cost = line_net + res['capitalized_amount']
+            if acc.id not in inv_account_totals:
+                inv_account_totals[acc.id] = {'account': acc, 'amount': Decimal('0')}
+            inv_account_totals[acc.id]['amount'] += inv_cost
+            
+            # Non-capitalized taxes (VAT, WHT)
+            for tx_type, tx_val in [(line.tax_type, res['tax1_value']), (line.tax_type2, res['tax2_value'])]:
+                if tx_type and tx_val > 0:
+                    if tx_type.category not in ['table', 'customs', 'stamp', 'other']:
+                        tax_acc = tx_type.account
+                        if not tax_acc:
+                            raise ValueError(f"يرجى تحديد حساب الأستاذ لضريبة {tx_type.name}")
+                        if tax_acc.id not in tax_account_totals:
+                            tax_account_totals[tax_acc.id] = {'account': tax_acc, 'amount': Decimal('0'), 'category': tx_type.category}
+                        tax_account_totals[tax_acc.id]['amount'] += tx_val
+
+        # CR Inventory Accounts
+        for info in inv_account_totals.values():
             lines.append({
-                'account': line.item.inventory_account,
+                'account': info['account'],
                 'debit': 0,
-                'credit': line.quantity * line.unit_cost,
-                'description': f'مردودات مشتريات - {line.item.name}',
+                'credit': info['amount'],
+                'description': f"مردودات مشتريات - مرتجع {purchase_return.number}",
                 'cost_center': purchase_return.cost_center
             })
 
-        # ✅ Fix #3: إضافة سطر للخصم لموازنة القيد
-        if purchase_return.discount_amount > 0:
-            # استخدام حساب خصم المشتريات (غالباً كود 422 أو من الإعدادات)
-            discount_acc_code = getattr(settings, 'PURCHASE_DISCOUNT_ACCOUNT', '422')
-            from apps.inventory.services import _get_or_create_account # أو استيراد مباشر
-            discount_acc = Account.objects.get(code=discount_acc_code)
-            lines.append({
-                'account': discount_acc,
-                'debit': 0,
-                'credit': purchase_return.discount_amount,
-                'description': f'خصم مكتسب (مرتجع {purchase_return.number})',
-                'cost_center': purchase_return.cost_center
-            })
-
-        # Group taxes by account
-        tax_lines = {}
-        for line in purchase_return.lines.all():
-            if line.tax_type:
-                tax_rate = line.tax_percent if line.tax_percent else line.tax_type.rate
-                tax_val = (line.quantity * line.unit_cost) * (tax_rate / 100)
-                acc = line.tax_type.account
-                if acc.id not in tax_lines:
-                    tax_lines[acc.id] = {'account': acc, 'amount': 0, 'category': line.tax_type.category}
-                tax_lines[acc.id]['amount'] += tax_val
-
-        for tax_info in tax_lines.values():
+        # CR/DR Tax Accounts
+        for tax_info in tax_account_totals.values():
             if tax_info['amount'] > 0:
-                # If VAT was debited in purchases, it's credited in returns
-                is_credit = (tax_info['category'] != 'wht') 
+                # WHT is debited in returns (reducing the WHT deduction credit)
+                # VAT is credited in returns (reducing the VAT debit)
+                is_debit = (tax_info['category'] in ['wht', 'insurance', 'salary'])
                 lines.append({
                     'account': tax_info['account'],
-                    'debit': tax_info['amount'] if not is_credit else 0,
-                    'credit': tax_info['amount'] if is_credit else 0,
+                    'debit': tax_info['amount'] if is_debit else 0,
+                    'credit': 0 if is_debit else tax_info['amount'],
                     'description': f"عكس ضريبة {tax_info['account'].name} (مرتجع مشتريات)",
                     'cost_center': purchase_return.cost_center
                 })
 
+        total_dr = sum(l['debit'] for l in lines)
+        total_cr = sum(l['credit'] for l in lines)
+        if total_dr != total_cr:
+            raise ValueError(f"عدم اتزان مالي: مدين {total_dr} ، دائن {total_cr}. يرجى مراجعة الخصومات والضرائب.")
+            
         entry = JournalService.create_entry(
             date_val=purchase_return.date,
             entry_type=JournalEntry.EntryType.PURCHASE,
@@ -452,24 +515,28 @@ class PurchaseService:
         )
         
         purchase_return.journal_entry = entry
-        purchase_return.status = 'posted'
+        purchase_return.status = PurchaseReturn.Status.POSTED
         purchase_return.save()
         
-        # ✅ Fix #1: record_movement الآن جزء من الـ transaction بسبب @transaction.atomic
-        from apps.inventory.models import StockMovement
         for line in purchase_return.lines.all():
+            discount_pct = Decimal(str(line.discount_percent or '0'))
+            line_net = line.quantity * line.unit_cost * (Decimal('1') - (discount_pct / Decimal('100')))
+            res = calculate_line_taxes(line_net, line.tax_type, line.tax_percent or 0, line.tax_type2, line.tax_percent2 or 0, is_purchase_or_expense=True)
+            inv_cost = line_net + res['capitalized_amount']
+            base_qty = line.base_quantity or line.quantity
+            unit_cost_base = (inv_cost / base_qty) if base_qty > 0 else Decimal('0')
+
             InventoryService.record_movement(
                 date_val=purchase_return.date,
                 item=line.item,
                 warehouse=line.warehouse,
                 movement_type=StockMovement.MovementType.PURCHASE_RETURN,
-                quantity=-(line.base_quantity or line.quantity), # ✅ Fix: Fallback if base_quantity is 0
-                unit_cost=line.unit_cost,
+                quantity=-(line.base_quantity or line.quantity),
+                unit_cost=unit_cost_base,
                 source=purchase_return,
                 reference=purchase_return.number,
             )
 
-        from apps.core.services import AuditService
         AuditService.log(posted_by, 'Post', purchase_return, f'ترحيل مرتجع مشتريات رقم {purchase_return.number}')
 
         return entry

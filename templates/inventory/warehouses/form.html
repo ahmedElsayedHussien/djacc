@@ -20,6 +20,11 @@
                         <label class="form-label">الموقع / العنوان</label>
                         {{ form.location }}
                     </div>
+                    <div class="mb-3 form-check form-switch ms-1">
+                        {{ form.is_active }}
+                        <label class="form-check-label fw-bold" for="id_is_active">نشط</label>
+                    </div>
+
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">حفظ</button>
                         <a href="{% url 'inventory:warehouse-list' %}" class="btn btn-secondary">إلغاء</a>

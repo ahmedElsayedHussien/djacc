@@ -6,9 +6,11 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">قائمة المصروفات</h5>
+        {% if perms.expenses.add_expense %}
         <a href="{% url 'expenses:expense-create' %}" class="btn btn-primary">
             <i class="bi bi-plus-lg"></i> تسجيل مصروف جديد
         </a>
+        {% endif %}
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -49,7 +51,7 @@
                             <a href="{% url 'expenses:expense-detail' expense.pk %}" class="btn btn-sm btn-outline-info">
                                 <i class="bi bi-eye"></i>
                             </a>
-                            {% if expense.status == 'draft' %}
+                            {% if expense.status == 'draft' and perms.expenses.change_expense %}
                             <form method="post" action="{% url 'expenses:expense-approve' expense.pk %}" class="d-inline">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn-sm btn-success" title="اعتماد وترحيل" onclick="return confirm('تأكيد الاعتماد والترحيل؟');">

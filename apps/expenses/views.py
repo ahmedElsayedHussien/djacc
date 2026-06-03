@@ -1,18 +1,26 @@
-from django.views.generic import ListView, CreateView, UpdateView, DetailView
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.urls import reverse_lazy
+import logging
+from decimal import Decimal
+from datetime import timedelta
+from django.views.generic import ListView, CreateView, UpdateView, DetailView, TemplateView
+from django.contrib.auth.mixins import LoginRequiredMixin
+from apps.core.mixins import PermRequiredMixin
+from django.urls import reverse_lazy, reverse as django_reverse
 from django.contrib import messages
-from django.shortcuts import redirect
-from django.views import View
-from .models import Expense, ExpenseCategory, Custody, CustodySettlement
-from .forms import ExpenseForm, ExpenseCategoryForm, CustodyForm
-from .services import ExpenseService
+from django.shortcuts import get_object_or_404, redirect
+from django.db import transaction
 from django.db.models import Sum, Count, Q
 from django.utils import timezone
-from datetime import timedelta
+from django.views import View
+from apps.core.services import DocumentService, AuditService
+from apps.core.tax_utils import calculate_line_taxes
+from apps.core.models import SystemNotification
+from .models import Expense, ExpenseCategory, Custody, CustodySettlement
+from .forms import ExpenseForm, ExpenseCategoryForm, CustodyForm, CustodySettlementForm
+from .services import ExpenseService, CustodyService
 
-class ExpenseDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
-    model = Expense
+logger = logging.getLogger(__name__)
+
+class ExpenseDashboardView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'expenses/dashboard.html'
     permission_required = 'expenses.view_expense'
 
@@ -55,77 +63,76 @@ class ExpenseDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListView
         # For simplicity in this view, we'll just pass raw data for the chart if needed
         return ctx
 
-class ExpenseListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class ExpenseListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = Expense
     template_name = 'expenses/list.html'
     context_object_name = 'expenses'
     permission_required = 'expenses.view_expense'
     paginate_by = 25
 
-class ExpenseCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    def get_queryset(self):
+        return super().get_queryset().select_related('category', 'cost_center', 'created_by', 'approved_by')
+
+class ExpenseCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = Expense
     form_class = ExpenseForm
     template_name = 'expenses/form.html'
     success_url = reverse_lazy('expenses:expense-list')
     permission_required = 'expenses.add_expense'
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
     def form_valid(self, form):
-        from apps.core.services import DocumentService
-        from django.db import transaction
-        
         with transaction.atomic():
             expense = form.instance
             expense.number = DocumentService.generate_number(Expense, 'EXP')
             expense.created_by = self.request.user
             
             # Calculate Taxes
-            subtotal = expense.subtotal
-            tax1_val = 0
-            if expense.tax_type:
-                rate = expense.tax_percent if expense.tax_percent else expense.tax_type.rate
-                tax1_val = subtotal * (rate / 100)
-                if expense.tax_type.category in ['wht', 'salary', 'insurance']:
-                    tax1_val = -tax1_val # Deduction
+            subtotal = Decimal(str(expense.subtotal or '0'))
+            res = calculate_line_taxes(
+                subtotal,
+                expense.tax_type,
+                expense.tax_percent,
+                expense.tax_type2,
+                expense.tax_percent2,
+                is_purchase_or_expense=True
+            )
             
-            tax2_val = 0
-            if expense.tax_type2:
-                rate2 = expense.tax_percent2 if expense.tax_percent2 else expense.tax_type2.rate
-                tax2_val = subtotal * (rate2 / 100)
-                if expense.tax_type2.category in ['wht', 'salary', 'insurance']:
-                    tax2_val = -tax2_val # Deduction
-            
-            expense.tax_amount = abs(tax1_val) + abs(tax2_val) # Total absolute taxes
-            expense.total = subtotal + tax1_val + tax2_val # Net Payable
-            expense.amount = expense.total # Final Net Paid
+            expense.tax_amount = res['tax_total_added'] + res['tax_total_deducted']
+            expense.total = subtotal + res['tax1_signed'] + res['tax2_signed']
+            expense.amount = expense.total
             
             response = super().form_valid(form)
             
         messages.success(self.request, f'تم تسجيل المصروف {expense.number} بنجاح')
         return response
 
-class ExpenseApproveView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class ExpenseApproveView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'expenses.change_expense'
     
     def post(self, request, pk):
-        from django.shortcuts import get_object_or_404
-        expense = get_object_or_404(Expense, pk=pk)
-        if expense.status != Expense.Status.DRAFT:
-            messages.warning(request, "يمكن فقط اعتماد المصروفات في حالة المسودة")
-            return redirect('expenses:expense-detail', pk=pk)
-            
-        expense.status = Expense.Status.APPROVED
-        expense.approved_by = request.user
-        expense.save()
+        with transaction.atomic():
+            expense = get_object_or_404(Expense.objects.select_for_update(), pk=pk)
+            if expense.status != Expense.Status.DRAFT:
+                messages.warning(request, "يمكن فقط اعتماد المصروفات في حالة المسودة")
+                return redirect('expenses:expense-detail', pk=pk)
+                
+            expense.status = Expense.Status.APPROVED
+            expense.approved_by = request.user
+            expense.save()
+        AuditService.log(request.user, 'Approve', expense, f'اعتماد مصروف رقم {expense.number}')
         messages.success(request, f'تم اعتماد المصروف {expense.number} بنجاح')
         return redirect('expenses:expense-detail', pk=pk)
 
-class ExpensePostView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class ExpensePostView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'expenses.change_expense'
     
     def post(self, request, pk):
-        from .services import ExpenseService
-        from django.shortcuts import get_object_or_404
-        expense = get_object_or_404(Expense, pk=pk)
+        expense = get_object_or_404(Expense.objects.select_for_update(), pk=pk)
         if expense.status == Expense.Status.POSTED:
             messages.warning(request, "هذا المصروف تم ترحيله بالفعل")
             return redirect('expenses:expense-detail', pk=pk)
@@ -138,90 +145,115 @@ class ExpensePostView(LoginRequiredMixin, PermissionRequiredMixin, View):
             ExpenseService.post_expense(expense, request.user)
             messages.success(request, f'تم ترحيل المصروف {expense.number}')
         except Exception as e:
+            logger.exception("خطأ في ترحيل المصروف %s", pk)
             messages.error(request, f'خطأ في الترحيل: {e}')
         return redirect('expenses:expense-detail', pk=pk)
 
-class ExpenseReverseView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class ExpenseReverseView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'expenses.change_expense'
     
     def post(self, request, pk):
-        from .services import ExpenseService
-        from django.shortcuts import get_object_or_404
         expense = get_object_or_404(Expense, pk=pk)
         
         try:
             ExpenseService.reverse_expense(expense, request.user)
             messages.success(request, f'تم عكس المصروف {expense.number} وإنشاء قيد عكسي بنجاح.')
+            SystemNotification.notify_accountants(
+                title="عكس مصروف",
+                message=f"قام {request.user.username} بعكس المصروف رقم {expense.number} بقيمة {expense.amount:.2f} ج.م.",
+                url=django_reverse('expenses:expense-detail', args=[expense.id])
+            )
         except Exception as e:
+            logger.exception("خطأ في عكس المصروف %s", pk)
             messages.error(request, f'خطأ في العكس: {e}')
         return redirect('expenses:expense-detail', pk=pk)
 
-class ExpenseCategoryListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class ExpenseCategoryListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = ExpenseCategory
     template_name = 'expenses/categories/list.html'
+    context_object_name = 'categories'
     permission_required = 'expenses.view_expensecategory'
+    paginate_by = 25
 
-class ExpenseCategoryCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class ExpenseCategoryCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = ExpenseCategory
     form_class = ExpenseCategoryForm
     template_name = 'expenses/categories/form.html'
     success_url = reverse_lazy('expenses:category-list')
     permission_required = 'expenses.add_expensecategory'
 
-class CustodyListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class CustodyListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = Custody
     template_name = 'expenses/custody/list.html'
+    context_object_name = 'custodies'
     permission_required = 'expenses.view_custody'
+    paginate_by = 25
 
-class CustodyCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    def get_queryset(self):
+        return super().get_queryset().select_related('employee', 'cash_box')
+
+class CustodyCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = Custody
     form_class = CustodyForm
     template_name = 'expenses/custody/form.html'
     success_url = reverse_lazy('expenses:custody-list')
     permission_required = 'expenses.add_custody'
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
     def form_valid(self, form):
-        from apps.core.services import DocumentService
-        from .services import CustodyService
-        from django.db import transaction
-        
         with transaction.atomic():
             form.instance.number = DocumentService.generate_number(Custody, 'CUS')
-            # Fix: created_by removed as it doesn't exist in Custody model
+            form.instance.created_by = self.request.user
             response = super().form_valid(form)
             CustodyService.issue_custody(self.object, self.request.user)
             messages.success(self.request, f'تم صرف العهدة رقم {self.object.number} وإنشاء القيد المحاسبي بنجاح.')
             return response
 
-class ExpenseDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class ExpenseDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = Expense
     template_name = 'expenses/detail.html'
     context_object_name = 'expense'
     permission_required = 'expenses.view_expense'
 
-class CustodyDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    def get_queryset(self):
+        return super().get_queryset().select_related('category', 'cost_center', 'tax_type', 'tax_type2', 'bank_account', 'cash_box', 'custody', 'created_by', 'approved_by', 'journal_entry')
+
+class CustodyDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = Custody
     template_name = 'expenses/custody/detail.html'
     context_object_name = 'custody'
     permission_required = 'expenses.view_custody'
 
-from .forms import CustodySettlementForm
+    def get_queryset(self):
+        return super().get_queryset().select_related(
+            'employee', 'account', 'cash_box', 'journal_entry'
+        ).prefetch_related(
+            'settlements', 'settlements__journal_entry',
+            'expense_set', 'expense_set__category'
+        )
 
-class CustodySettlementCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class CustodySettlementCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = CustodySettlement
     form_class = CustodySettlementForm
     template_name = 'expenses/custody/settlement_form.html'
     permission_required = 'expenses.add_custodysettlement'
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
     
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        from django.shortcuts import get_object_or_404
         custody = get_object_or_404(Custody, pk=self.kwargs['custody_pk'])
         ctx['custody'] = custody
         
         # Calculate pending expenses
-        from django.db.models import Sum
-        expenses = custody.expense_set.filter(status='posted')
+        expenses = custody.expense_set.filter(status=Expense.Status.POSTED).select_related('category', 'cost_center')
         total_expenses = expenses.aggregate(t=Sum('amount'))['t'] or 0
         ctx['pending_expenses'] = expenses
         ctx['total_expenses'] = total_expenses
@@ -230,18 +262,14 @@ class CustodySettlementCreateView(LoginRequiredMixin, PermissionRequiredMixin, C
         
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
-        from django.shortcuts import get_object_or_404
         form.custody_obj = get_object_or_404(Custody, pk=self.kwargs['custody_pk'])
         return form
 
     def form_valid(self, form):
-        from django.shortcuts import get_object_or_404
-        from .services import CustodyService
-        from django.db import transaction
-        
         with transaction.atomic():
             custody = form.custody_obj
             form.instance.custody = custody
+            form.instance.created_by = self.request.user
             
             self.object = form.save()
             CustodyService.settle_custody(self.object, self.request.user)

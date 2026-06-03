@@ -2,6 +2,25 @@
 {% block title %}دفتر الأستاذ (كشف حساب){% endblock %}
 {% block header %}دفتر الأستاذ (كشف حساب){% endblock %}
 
+{% block extra_css %}
+<!-- Tom Select CSS for premium searchable dropdowns -->
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+<style>
+    /* Styling adjustments for premium integration */
+    .ts-wrapper.select2 .ts-control {
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        font-family: 'Cairo', sans-serif;
+        font-size: 0.95rem;
+    }
+    .ts-dropdown {
+        font-family: 'Cairo', sans-serif;
+        border-radius: 8px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="card mb-4">
     <div class="card-body">
@@ -25,8 +44,11 @@
                 <label class="form-label">إلى تاريخ</label>
                 <input type="date" name="to" class="form-control" value="{{ to_date|date:'Y-m-d' }}">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <button type="submit" class="btn btn-primary w-100">عرض دفتر الأستاذ</button>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" name="export" value="xlsx" class="btn btn-success w-100">Excel</button>
             </div>
         </form>
     </div>
@@ -150,4 +172,22 @@
         body { background-color: var(--bg-surface) !important; }
     }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Tom Select JS -->
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        new TomSelect(".select2", {
+            create: false,
+            placeholder: "اختر الحساب المحاسبي...",
+            searchField: ['text', 'value'],
+            sortField: {
+                field: "text",
+                direction: "asc"
+            }
+        });
+    });
+</script>
 {% endblock %}

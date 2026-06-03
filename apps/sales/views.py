@@ -1,16 +1,33 @@
+import logging
 from decimal import Decimal
-from datetime import date as date_type
+from datetime import date as date_type, datetime, date, timedelta
+from django import forms
 from django.views.generic import ListView, CreateView, UpdateView, DetailView, DeleteView, TemplateView
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
+from apps.core.mixins import PermRequiredMixin
 from django.urls import reverse_lazy, reverse
+from django.core.exceptions import PermissionDenied
 from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Sum, Q
+from django.db.models.functions import Coalesce
 from django.views import View
+from django.conf import settings
+from django.http import JsonResponse, HttpResponse
+from apps.hr.models import Employee
+from apps.core.models import Account, JournalLine, SystemNotification
+from apps.core.services import DocumentService
+from apps.core.tax_utils import calculate_line_taxes
+from apps.inventory.models import Warehouse, Item
+from apps.inventory.services import InventoryService
+from apps.treasury.models import CashBox, BankAccount
+from apps.treasury.utils import get_available_cash_boxes
+from apps.core.utils import get_account_balance
+from apps.reports.services import ReportService
 from .models import (
     Customer, CustomerSector, SalesInvoice, SalesInvoiceLine, 
-    CustomerReceipt, SalesRepresentative, SalesReturn, Quotation, 
+    CustomerReceipt, SalesRepresentative, SalesReturn, SalesReturnLine, Quotation, 
     QuotationLine, PriceList, PriceListItem, RepDailySettlement, RepSettlementInvoice
 )
 from .forms import (
@@ -21,14 +38,17 @@ from .forms import (
 )
 from .services import CustomerService, SalesRepresentativeService, SalesService, RepSettlementService
 
-class QuotationListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+logger = logging.getLogger(__name__)
+
+class QuotationListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = Quotation
     template_name = 'sales/quotations/list.html'
     context_object_name = 'quotations'
     permission_required = 'sales.view_quotation'
+    paginate_by = 25
     ordering = ['-id']
 
-class QuotationCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class QuotationCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = Quotation
     form_class = QuotationForm
     template_name = 'sales/quotations/form.html'
@@ -46,23 +66,23 @@ class QuotationCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateVie
     def form_valid(self, form):
         context = self.get_context_data()
         lines = context['lines']
-        
+
         is_valid = False
         with transaction.atomic():
             form.instance.created_by = self.request.user
             if not form.instance.number:
-                from apps.core.services import DocumentService
                 form.instance.number = DocumentService.generate_number(Quotation, 'OFFR')
-            
+
             self.object = form.save()
-            
+
             if lines.is_valid():
                 lines.instance = self.object
                 lines.save()
+                self._recalculate_quotation_totals(self.object)
                 is_valid = True
             else:
                 transaction.set_rollback(True)
-                
+
         if is_valid:
             messages.success(self.request, f"تم إنشاء العرض {self.object.name} بنجاح")
             return redirect('sales:quotation-list')
@@ -75,7 +95,33 @@ class QuotationCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateVie
             messages.error(self.request, "يرجى التأكد من إدخال جميع الحقول الإلزامية بشكل صحيح.")
         return super().form_invalid(form)
 
-class QuotationUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    @staticmethod
+    def _recalculate_quotation_totals(quotation):
+        subtotal = Decimal('0')
+        discount_amount = Decimal('0')
+        tax_amount = Decimal('0')
+        for line in quotation.lines.all():
+            line_subtotal = (line.unit_price or Decimal('0')) * (line.quantity or Decimal('0'))
+            line_discount = line_subtotal * ((line.discount_percent or Decimal('0')) / Decimal('100'))
+            line_net = line_subtotal - line_discount
+            tax_result = calculate_line_taxes(
+                line_net,
+                tax_type1=line.tax_type,
+                tax_percent1=line.tax_percent,
+            )
+            line_total = line_net + tax_result.get('tax_total_added', Decimal('0')) - tax_result.get('tax_total_deducted', Decimal('0'))
+            line.total = line_total.quantize(Decimal('0.01'))
+            line.save(update_fields=['total'])
+            subtotal += line_subtotal
+            discount_amount += line_discount
+            tax_amount += tax_result.get('tax_total_added', Decimal('0')) - tax_result.get('tax_total_deducted', Decimal('0'))
+        quotation.subtotal = subtotal
+        quotation.discount_amount = discount_amount
+        quotation.tax_amount = tax_amount
+        quotation.total = (subtotal - discount_amount + tax_amount).quantize(Decimal('0.01'))
+        quotation.save(update_fields=['subtotal', 'discount_amount', 'tax_amount', 'total'])
+
+class QuotationUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
     model = Quotation
     form_class = QuotationForm
     template_name = 'sales/quotations/form.html'
@@ -97,13 +143,14 @@ class QuotationUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateVie
 
         context = self.get_context_data()
         lines = context['lines']
-        
+
         is_valid = False
         with transaction.atomic():
             self.object = form.save()
             if lines.is_valid():
                 lines.instance = self.object
                 lines.save()
+                QuotationCreateView._recalculate_quotation_totals(self.object)
                 is_valid = True
             else:
                 transaction.set_rollback(True)
@@ -119,7 +166,7 @@ class QuotationUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateVie
         messages.error(self.request, "يرجى التأكد من إدخال جميع الحقول الإلزامية بشكل صحيح.")
         return super().form_invalid(form)
 
-class QuotationCancelView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class QuotationCancelView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'sales.change_quotation'
     def post(self, request, pk):
         quotation = get_object_or_404(Quotation, pk=pk)
@@ -128,19 +175,23 @@ class QuotationCancelView(LoginRequiredMixin, PermissionRequiredMixin, View):
         messages.success(request, f"تم إلغاء عرض السعر {quotation.name}")
         return redirect('sales:quotation-list')
 
-class QuotationDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class QuotationDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = Quotation
     template_name = 'sales/quotations/detail.html'
     context_object_name = 'quotation'
     permission_required = 'sales.view_quotation'
 
-class CustomerSectorListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    def get_queryset(self):
+        return super().get_queryset().prefetch_related('lines__item', 'lines__unit')
+
+class CustomerSectorListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = CustomerSector
     template_name = 'sales/sectors/list.html'
     context_object_name = 'sectors'
     permission_required = 'sales.view_customersector'
+    paginate_by = 25
 
-class CustomerSectorCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class CustomerSectorCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = CustomerSector
     form_class = CustomerSectorForm
     template_name = 'sales/sectors/form.html'
@@ -151,7 +202,7 @@ class CustomerSectorCreateView(LoginRequiredMixin, PermissionRequiredMixin, Crea
         messages.success(self.request, "تم إنشاء القطاع بنجاح")
         return super().form_valid(form)
 
-class CustomerSectorUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class CustomerSectorUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
     model = CustomerSector
     form_class = CustomerSectorForm
     template_name = 'sales/sectors/form.html'
@@ -162,13 +213,14 @@ class CustomerSectorUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Upda
         messages.success(self.request, "تم تحديث القطاع بنجاح")
         return super().form_valid(form)
 
-class PriceListListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class PriceListListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = PriceList
     template_name = 'sales/price_lists/list.html'
     context_object_name = 'price_lists'
     permission_required = 'sales.view_pricelist'
+    paginate_by = 25
 
-class PriceListCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class PriceListCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = PriceList
     form_class = PriceListForm
     template_name = 'sales/price_lists/form.html'
@@ -203,7 +255,7 @@ class PriceListCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateVie
         else:
             return self.form_invalid(form)
 
-class PriceListUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class PriceListUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
     model = PriceList
     form_class = PriceListForm
     template_name = 'sales/price_lists/form.html'
@@ -238,8 +290,8 @@ class PriceListUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateVie
         else:
             return self.form_invalid(form)
 
-class PriceListDeleteView(LoginRequiredMixin, PermissionRequiredMixin, View):
-    permission_required = 'sales.change_pricelist'
+class PriceListDeleteView(LoginRequiredMixin, PermRequiredMixin, View):
+    permission_required = 'sales.delete_pricelist'
     def post(self, request, pk):
         pricelist = get_object_or_404(PriceList, pk=pk)
         pricelist.is_active = False
@@ -247,7 +299,7 @@ class PriceListDeleteView(LoginRequiredMixin, PermissionRequiredMixin, View):
         messages.success(request, f"تم إيقاف قائمة الأسعار {pricelist.name}")
         return redirect('sales:pricelist-list')
 
-class QuotationConvertToInvoiceView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class QuotationConvertToInvoiceView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'sales.add_salesinvoice'
 
     def post(self, request, pk):
@@ -259,13 +311,14 @@ class QuotationConvertToInvoiceView(LoginRequiredMixin, PermissionRequiredMixin,
         try:
             with transaction.atomic():
                 # Create Invoice
-                from apps.core.services import DocumentService
+                payment_terms_days = quotation.customer.payment_terms_days if quotation.customer else 0
+                due_date_value = date.today() + timedelta(days=payment_terms_days)
                 invoice = SalesInvoice.objects.create(
                     number=DocumentService.generate_number(SalesInvoice, 'SINV'),
                     date=date.today(),
                     customer=quotation.customer,
                     sales_rep=quotation.sales_rep,
-                    due_date=date.today(),
+                    due_date=due_date_value,
                     subtotal=quotation.subtotal,
                     discount_amount=quotation.discount_amount,
                     tax_amount=quotation.tax_amount,
@@ -275,25 +328,22 @@ class QuotationConvertToInvoiceView(LoginRequiredMixin, PermissionRequiredMixin,
                 )
                 
                 # Create Lines
-                from apps.core.models import Account
-                from django.conf import settings
                 default_sales_acc = Account.objects.get(code=getattr(settings, 'DEFAULT_SALES_ACCOUNT', '411'))
 
-                from apps.inventory.services import InventoryService
-                for q_line in quotation.lines.all():
+                q_lines = quotation.lines.select_related('item', 'unit', 'tax_type', 'tax_type2').all()
+                for q_line in q_lines:
                     warehouse = quotation.sales_rep.warehouse if (quotation.sales_rep and quotation.sales_rep.warehouse) else None
                     cost = InventoryService.get_item_cost(q_line.item, warehouse) if warehouse else 0
-                    
-                    # Calculate base quantity
+
                     base_qty = q_line.quantity
-                    if hasattr(q_line, 'unit') and q_line.unit:
+                    if q_line.unit:
                         base_qty = q_line.item.convert_to_base(q_line.quantity, q_line.unit)
 
                     SalesInvoiceLine.objects.create(
                         invoice=invoice,
                         item=q_line.item,
                         warehouse=warehouse,
-                        unit=getattr(q_line, 'unit', None),
+                        unit=q_line.unit,
                         quantity=q_line.quantity,
                         base_quantity=base_qty,
                         unit_price=q_line.unit_price,
@@ -312,13 +362,11 @@ class QuotationConvertToInvoiceView(LoginRequiredMixin, PermissionRequiredMixin,
                 messages.success(request, f"تم تحويل عرض السعر لفاتورة بنجاح: {invoice.number}")
                 return redirect('sales:invoice-detail', pk=invoice.pk)
         except Exception as e:
+            logger.exception("Error converting quotation to invoice")
             messages.error(request, f"خطأ أثناء التحويل: {e}")
             return redirect('sales:quotation-detail', pk=pk)
 
-from apps.core.models import JournalLine
-from datetime import datetime, date
-
-class CustomerListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class CustomerListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = Customer
     template_name = 'sales/customers/list.html'
     context_object_name = 'customers'
@@ -332,7 +380,7 @@ class CustomerListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
             qs = qs.filter(name__icontains=q) | qs.filter(code__icontains=q)
         return qs
 
-class CustomerCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class CustomerCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = Customer
     form_class = CustomerForm
     template_name = 'sales/customers/form.html'
@@ -346,13 +394,13 @@ class CustomerCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView
                 self.request,
                 f'تم إنشاء العميل "{customer.name}" بنجاح — كود الحساب: {customer.account.code}'
             )
-            from django.shortcuts import redirect
             return redirect(self.success_url)
         except Exception as e:
+            logger.exception("Error creating customer")
             messages.error(self.request, f'خطأ: {e}')
             return self.form_invalid(form)
 
-class CustomerUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class CustomerUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
     model = Customer
     form_class = CustomerForm
     template_name = 'sales/customers/form.html'
@@ -362,59 +410,139 @@ class CustomerUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView
     def form_valid(self, form):
         CustomerService.update_customer(self.object, form.cleaned_data)
         messages.success(self.request, 'تم تحديث بيانات العميل بنجاح')
-        from django.shortcuts import redirect
         return redirect(self.success_url)
 
-class CustomerDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class CustomerDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = Customer
     template_name = 'sales/customers/detail.html'
     permission_required = 'sales.view_customer'
 
+    def get_queryset(self):
+        return super().get_queryset().select_related('account', 'sector')
+
     def get_context_data(self, **kwargs):
-        from apps.core.utils import get_account_balance
-        from datetime import date
         ctx = super().get_context_data(**kwargs)
-        ctx['invoices'] = self.object.salesinvoice_set.order_by('-date')[:10]
+        ctx['invoices'] = self.object.salesinvoice_set.select_related('customer').order_by('-date')[:10]
         ctx['balance'] = get_account_balance(self.object.account) if self.object.account else 0
         return ctx
 
 # --- Sales Representative Views ---
 
-class SalesRepresentativeListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class SalesRepresentativeListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     permission_required = 'sales.view_salesrepresentative'
     model = SalesRepresentative
     template_name = 'sales/reps/list.html'
     context_object_name = 'reps'
+    paginate_by = 25
 
-class SalesRepresentativeDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        # المشرفين (change) يشوفوا الكل — المندوب العادي يشوف نفسه بس
+        if not user.has_perm('sales.change_salesrepresentative') and user.has_perm('sales.view_salesrepresentative'):
+            try:
+                rep = user.salesrepresentative
+                return qs.filter(pk=rep.pk)
+            except SalesRepresentative.DoesNotExist:
+                return qs.none()
+        return qs
+
+class SalesRepresentativeDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     permission_required = 'sales.view_salesrepresentative'
     model = SalesRepresentative
     template_name = 'sales/reps/detail.html'
     context_object_name = 'rep'
 
-class SalesRepresentativeCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    def get_object(self, queryset=None):
+        obj = super().get_object(queryset)
+        user = self.request.user
+        if not user.has_perm('sales.change_salesrepresentative') and user.has_perm('sales.view_salesrepresentative'):
+            try:
+                my_rep = user.salesrepresentative
+                if obj.pk != my_rep.pk:
+                    raise PermissionDenied('لا يمكنك عرض بيانات مندوب آخر.')
+            except SalesRepresentative.DoesNotExist:
+                raise PermissionDenied
+        return obj
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        rep = self.get_object()
+        today = date.today()
+        
+        if rep.cash_box and rep.cash_box.account:
+            context['cash_box_balance'] = get_account_balance(rep.cash_box.account, as_of_date=today)
+        else:
+            context['cash_box_balance'] = 0.0
+            
+        if rep.account:
+            context['receivable_balance'] = get_account_balance(rep.account, as_of_date=today)
+        else:
+            context['receivable_balance'] = 0.0
+            
+        return context
+
+class SalesRepresentativeCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     permission_required = 'sales.add_salesrepresentative'
     model = SalesRepresentative
     form_class = SalesRepresentativeForm
     template_name = 'sales/reps/form.html'
     success_url = reverse_lazy('sales:rep-list')
 
+    @transaction.atomic
     def form_valid(self, form):
-        self.object = SalesRepresentativeService.create_rep(form.cleaned_data)
+        data = form.cleaned_data
+        user = data.get('user')
+
+        # البحث عن موظف مرتبط بهذا المستخدم
+        try:
+            employee = Employee.objects.get(user=user)
+            employee.national_id = data.get('national_id', employee.national_id)
+            employee.phone = data.get('phone', employee.phone)
+            if data.get('department'):
+                employee.department = data['department']
+            if data.get('job_title'):
+                employee.job_title = data['job_title']
+            employee.hiring_date = data.get('hiring_date', employee.hiring_date)
+            employee.basic_salary = data.get('basic_salary', employee.basic_salary)
+            employee.save()
+        except Employee.DoesNotExist:
+            employee = Employee.objects.create(
+                user=user,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                national_id=data.get('national_id', ''),
+                phone=data.get('phone', ''),
+                department=data.get('department'),
+                job_title=data.get('job_title'),
+                hiring_date=data.get('hiring_date'),
+                basic_salary=data.get('basic_salary', 0),
+            )
+
+        rep_data = {
+            'employee': employee,
+            'commission_rate': data.get('commission_rate', 0),
+            'territory': data.get('territory', ''),
+            'supervisor': data.get('supervisor'),
+            'is_active': data.get('is_active', True),
+        }
+
+        self.object = SalesRepresentativeService.create_rep(rep_data)
+        messages.success(self.request, f'تم إنشاء مندوب المبيعات "{self.object.name}" بنجاح.')
         return redirect(self.success_url)
 
-class SalesRepresentativeUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class SalesRepresentativeUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
     permission_required = 'sales.change_salesrepresentative'
     model = SalesRepresentative
     form_class = SalesRepresentativeForm
     template_name = 'sales/reps/form.html'
     success_url = reverse_lazy('sales:rep-list')
 
-class SalesInvoiceListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class SalesInvoiceListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = SalesInvoice
     template_name = 'sales/invoices/list.html'
     context_object_name = 'invoices'
-
+    paginate_by = 25
     ordering = ['-date', '-id']
     permission_required = 'sales.view_salesinvoice'
 
@@ -425,12 +553,26 @@ class SalesInvoiceListView(LoginRequiredMixin, PermissionRequiredMixin, ListView
             qs = qs.filter(number__icontains=q) | qs.filter(customer__name__icontains=q)
         return qs
 
-class SalesInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class SalesInvoiceCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = SalesInvoice
     form_class = SalesInvoiceForm
     template_name = 'sales/invoices/form.html'
     permission_required = 'sales.add_salesinvoice'
     success_url = reverse_lazy('sales:invoice-list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        if hasattr(self.request.user, 'salesrepresentative'):
+            rep = self.request.user.salesrepresentative
+            if 'cash_box' in form.fields:
+                form.fields['cash_box'].initial = rep.cash_box
+                form.fields['cash_box'].empty_label = None
+        return form
 
     def get_initial(self):
         initial = super().get_initial()
@@ -440,7 +582,6 @@ class SalesInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
 
     def get_context_data(self, **kwargs):
         data = super().get_context_data(**kwargs)
-        from apps.sales.models import SalesRepresentative
         reps = SalesRepresentative.objects.select_related('warehouse')
         data['rep_warehouse_mapping'] = {rep.id: rep.warehouse.id for rep in reps if rep.warehouse}
         if self.request.POST:
@@ -456,7 +597,6 @@ class SalesInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
         is_valid = False
         with transaction.atomic():
             form.instance.created_by = self.request.user
-            from apps.core.services import DocumentService
             form.instance.number = DocumentService.generate_number(SalesInvoice, 'SINV')
             
             form.instance.subtotal = 0
@@ -464,13 +604,10 @@ class SalesInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
             self.object = form.save()
             
             if lines.is_valid():
-                from apps.core.models import Account
-                from django.conf import settings
                 default_sales_acc = Account.objects.get(code=getattr(settings, 'DEFAULT_SALES_ACCOUNT', '411'))
 
                 lines.instance = self.object
                 instances = lines.save(commit=False)
-                from apps.inventory.services import InventoryService
                 for instance in instances:
                     instance.revenue_account = instance.item.sales_account or default_sales_acc
                     instance.cost_of_goods_account = instance.item.cogs_account
@@ -489,63 +626,106 @@ class SalesInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
                 for obj in lines.deleted_objects:
                     obj.delete()
 
-                # Calculate totals from lines
-                gross_total = 0
-                discount_total = 0
-                tax_total_added = 0      # VAT, Table, etc.
-                tax_total_deducted = 0   # WHT, etc.
+                # Calculate totals from lines using unified tax engine
+                gross_total = Decimal('0')
+                discount_total = Decimal('0')
+                tax_total_added = Decimal('0')
+                tax_total_deducted = Decimal('0')
                 
                 for line in self.object.lines.all():
-                    gross_line = line.quantity * line.unit_price
-                    disc_line = gross_line * (line.discount_percent / 100)
+                    gross_line = Decimal(str(line.quantity * line.unit_price))
+                    disc_line = gross_line * (Decimal(str(line.discount_percent)) / Decimal('100'))
                     net_line = gross_line - disc_line
                     
-                    # Tax 1 logic
-                    tax1 = net_line * (line.tax_percent / 100)
-                    if line.tax_type and line.tax_type.category in ['wht', 'salary', 'insurance']:
-                        tax_total_deducted += tax1
-                        tax1_signed = -tax1
-                    else:
-                        tax_total_added += tax1
-                        tax1_signed = tax1
-
-                    # Tax 2 logic
-                    tax2 = net_line * (line.tax_percent2 / 100)
-                    if line.tax_type2 and line.tax_type2.category in ['wht', 'salary', 'insurance']:
-                        tax_total_deducted += tax2
-                        tax2_signed = -tax2
-                    else:
-                        tax_total_added += tax2
-                        tax2_signed = tax2
+                    res = calculate_line_taxes(
+                        net_line,
+                        line.tax_type,
+                        line.tax_percent,
+                        line.tax_type2,
+                        line.tax_percent2,
+                        is_purchase_or_expense=False
+                    )
                     
                     # Update line total in DB (Net + Additions - Deductions)
-                    line.total = net_line + tax1_signed + tax2_signed
+                    raw_total = net_line + res['tax1_signed'] + res['tax2_signed']
+                    line.total = raw_total.quantize(Decimal('0.01'))
                     line.save()
                     
                     gross_total += gross_line
                     discount_total += disc_line
+                    tax_total_added += res['tax_total_added']
+                    tax_total_deducted += res['tax_total_deducted']
 
-                self.object.subtotal = gross_total
-                self.object.discount_amount = discount_total
-                self.object.tax_amount = tax_total_added - tax_total_deducted
-                self.object.total = gross_total - discount_total + tax_total_added - tax_total_deducted
+                q = Decimal('0.01')
+                self.object.subtotal = gross_total.quantize(q)
+                self.object.discount_amount = discount_total.quantize(q)
+                self.object.tax_amount = (tax_total_added - tax_total_deducted).quantize(q)
+                self.object.total = (gross_total - discount_total + tax_total_added - tax_total_deducted).quantize(q)
                 self.object.save()
                 is_valid = True
+                
+                # Dynamic notification for cash customers on credit terms
+                if self.object.customer.customer_type == 'cash' and self.object.payment_type == 'credit':
+                    title = f"فاتورة بيع استثنائية لعميل نقدي"
+                    message = f"قام المستخدم {self.request.user.username} بإنشاء فاتورة بيع بالآجل رقم {self.object.number} للعميل {self.object.customer.name} بقيمة {self.object.total:.2f} ج.م رغم أن العميل نقدي."
+                    url = reverse('sales:invoice-detail', args=[self.object.id])
+                    SystemNotification.notify_accountants(title, message, url)
+                    messages.warning(self.request, "⚠️ تنبيه: لقد قمت بعمل فاتورة (آجل) لعميل (نقدي). تم إرسال إشعار بذلك للإدارة.")
             else:
                 transaction.set_rollback(True)
                 
         if is_valid:
             messages.success(self.request, f"تم حفظ فاتورة المبيعات {self.object.number} بنجاح (مسودة)")
+            
+            # Send notification and flash warning if invoice date is not today
+            today_date = date_type.today()
+            if self.object.date != today_date:
+                title = "فاتورة بيع بتاريخ استثنائي (سابق/لاحق)"
+                message = f"قام المستخدم {self.request.user.username} بإنشاء فاتورة مبيعات رقم {self.object.number} للعميل {self.object.customer.name} بقيمة {self.object.total:.2f} ج.م بتاريخ استثنائي {self.object.date} (سابق أو لاحق لتاريخ اليوم {today_date})."
+                url = reverse('sales:invoice-detail', args=[self.object.id])
+                SystemNotification.notify_accountants(title, message, url)
+                
+                # Warning message for the representative
+                messages.warning(
+                    self.request,
+                    f"تنبيه: تم إنشاء الفاتورة بتاريخ استثنائي {self.object.date} (سابق أو لاحق لتاريخ اليوم)، وتم إخطار المحاسب والمدير بذلك تلقائياً."
+                )
+
+            if hasattr(self.request.user, 'salesrepresentative'):
+                return redirect('reports:rep_dashboard')
             return redirect('sales:invoice-list')
         else:
             return self.form_invalid(form)
 
-class SalesInvoiceUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class SalesInvoiceUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
     model = SalesInvoice
     form_class = SalesInvoiceForm
     template_name = 'sales/invoices/form.html'
     success_url = reverse_lazy('sales:invoice-list')
     permission_required = 'sales.change_salesinvoice'
+
+    def has_permission(self):
+        if super().has_permission():
+            return True
+        if hasattr(self.request.user, 'salesrepresentative'):
+            invoice = get_object_or_404(SalesInvoice, pk=self.kwargs.get('pk'))
+            if invoice.sales_rep == self.request.user.salesrepresentative and invoice.status == SalesInvoice.Status.DRAFT:
+                return True
+        return False
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        if hasattr(self.request.user, 'salesrepresentative'):
+            rep = self.request.user.salesrepresentative
+            if 'cash_box' in form.fields:
+                form.fields['cash_box'].initial = rep.cash_box
+                form.fields['cash_box'].empty_label = None
+        return form
 
     def get_queryset(self):
         # Only allow editing draft invoices
@@ -572,89 +752,146 @@ class SalesInvoiceUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Update
             if lines.is_valid():
                 self.object = form.save()
                 lines.instance = self.object
-                lines.save()
+                instances = lines.save(commit=False)
                 
-                # Calculate totals from lines (Standardized logic)
-                gross_total = 0
-                discount_total = 0
-                tax_total_added = 0
-                tax_total_deducted = 0
+                try:
+                    default_sales_acc = Account.objects.get(code=getattr(settings, 'DEFAULT_SALES_ACCOUNT', '411'))
+                except Account.DoesNotExist:
+                    default_sales_acc = None
+
+                for instance in instances:
+                    if not instance.pk:
+                        # It's a newly added line during update
+                        if not hasattr(instance, 'revenue_account') or not instance.revenue_account_id:
+                            instance.revenue_account = instance.item.sales_account or default_sales_acc
+                        if not hasattr(instance, 'cost_of_goods_account') or not instance.cost_of_goods_account_id:
+                            instance.cost_of_goods_account = instance.item.cogs_account
+                        if not hasattr(instance, 'cost') or not instance.cost:
+                            instance.cost = InventoryService.get_item_cost(instance.item, instance.warehouse)
+                            
+                    # Calculate base quantity on update
+                    if instance.unit:
+                        instance.base_quantity = instance.item.convert_to_base(instance.quantity, instance.unit)
+                    else:
+                        instance.base_quantity = instance.quantity
+                        
+                    instance.save()
+                    
+                # Handle deleted lines
+                for obj in lines.deleted_objects:
+                    obj.delete()
+                
+                # Calculate totals from lines using unified tax engine
+                gross_total = Decimal('0')
+                discount_total = Decimal('0')
+                tax_total_added = Decimal('0')
+                tax_total_deducted = Decimal('0')
                 
                 for line in self.object.lines.all():
-                    # ✅ Fix: Calculate base quantity on update
-                    if line.unit:
-                        line.base_quantity = line.item.convert_to_base(line.quantity, line.unit)
-                    else:
-                        line.base_quantity = line.quantity
-
-                    gross_line = line.quantity * line.unit_price
-                    disc_line = gross_line * (line.discount_percent / 100)
+                    gross_line = Decimal(str(line.quantity * line.unit_price))
+                    disc_line = gross_line * (Decimal(str(line.discount_percent)) / Decimal('100'))
                     net_line = gross_line - disc_line
                     
-                    # Tax logic ... (rest is same)
-                    
-                    # Tax 1 logic
-                    tax1 = net_line * (line.tax_percent / 100)
-                    if line.tax_type and line.tax_type.category in ['wht', 'salary', 'insurance']:
-                        tax_total_deducted += tax1
-                        tax1_signed = -tax1
-                    else:
-                        tax_total_added += tax1
-                        tax1_signed = tax1
-
-                    # Tax 2 logic
-                    tax2 = net_line * (line.tax_percent2 / 100)
-                    if line.tax_type2 and line.tax_type2.category in ['wht', 'salary', 'insurance']:
-                        tax_total_deducted += tax2
-                        tax2_signed = -tax2
-                    else:
-                        tax_total_added += tax2
-                        tax2_signed = tax2
+                    res = calculate_line_taxes(
+                        net_line,
+                        line.tax_type,
+                        line.tax_percent,
+                        line.tax_type2,
+                        line.tax_percent2,
+                        is_purchase_or_expense=False
+                    )
                     
                     # Update line in DB (Total + Base Quantity)
-                    line.total = net_line + tax1_signed + tax2_signed
+                    raw_total = net_line + res['tax1_signed'] + res['tax2_signed']
+                    line.total = raw_total.quantize(Decimal('0.01'))
                     line.save()
                     
                     gross_total += gross_line
                     discount_total += disc_line
+                    tax_total_added += res['tax_total_added']
+                    tax_total_deducted += res['tax_total_deducted']
 
-                self.object.subtotal = gross_total
-                self.object.discount_amount = discount_total
-                self.object.tax_amount = tax_total_added - tax_total_deducted
-                self.object.total = gross_total - discount_total + tax_total_added - tax_total_deducted
+                q = Decimal('0.01')
+                self.object.subtotal = gross_total.quantize(q)
+                self.object.discount_amount = discount_total.quantize(q)
+                self.object.tax_amount = (tax_total_added - tax_total_deducted).quantize(q)
+                self.object.total = (gross_total - discount_total + tax_total_added - tax_total_deducted).quantize(q)
                 self.object.save()
                 is_valid = True
+                
+                # Dynamic notification for cash customers on credit terms
+                if self.object.customer.customer_type == 'cash' and self.object.payment_type == 'credit':
+                    title = f"تعديل فاتورة بيع استثنائية لعميل نقدي"
+                    message = f"قام المستخدم {self.request.user.username} بتعديل فاتورة بيع بالآجل رقم {self.object.number} للعميل {self.object.customer.name} بقيمة {self.object.total:.2f} ج.م رغم أن العميل نقدي."
+                    url = reverse('sales:invoice-detail', args=[self.object.id])
+                    SystemNotification.notify_accountants(title, message, url)
+                    messages.warning(self.request, "⚠️ تنبيه: لقد قمت بعمل فاتورة (آجل) لعميل (نقدي). تم إرسال إشعار بذلك للإدارة.")
             else:
                 transaction.set_rollback(True)
                 
         if is_valid:
             messages.success(self.request, f"تم تحديث الفاتورة {self.object.number} بنجاح")
+            
+            # Send notification and flash warning if invoice date is not today
+            today_date = date_type.today()
+            if self.object.date != today_date:
+                title = "تعديل فاتورة بيع بتاريخ استثنائي (سابق/لاحق)"
+                message = f"قام المستخدم {self.request.user.username} بتعديل فاتورة مبيعات رقم {self.object.number} للعميل {self.object.customer.name} بقيمة {self.object.total:.2f} ج.م بتاريخ استثنائي {self.object.date} (سابق أو لاحق لتاريخ اليوم {today_date})."
+                url = reverse('sales:invoice-detail', args=[self.object.id])
+                SystemNotification.notify_accountants(title, message, url)
+                
+                # Warning message for the representative
+                messages.warning(
+                    self.request,
+                    f"تنبيه: تم تعديل الفاتورة بتاريخ استثنائي {self.object.date} (سابق أو لاحق لتاريخ اليوم)، وتم إخطار المحاسب والمدير بذلك تلقائياً."
+                )
+
             return redirect('sales:invoice-list')
         else:
             return self.form_invalid(form)
 
-class SalesInvoiceReverseView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class SalesInvoiceReverseView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'sales.change_salesinvoice'
     
     def post(self, request, pk):
-        invoice = get_object_or_404(SalesInvoice, pk=pk)
+        invoice = get_object_or_404(SalesInvoice.objects.select_for_update(), pk=pk)
         if invoice.status == SalesInvoice.Status.DRAFT:
             invoice.status = SalesInvoice.Status.CANCELLED
             invoice.save()
             messages.success(request, f"تم إلغاء الفاتورة {invoice.number} (مسودة)")
+            SystemNotification.notify_accountants(
+                title="إلغاء فاتورة مبيعات",
+                message=f"قام {request.user.username} بإلغاء فاتورة المبيعات رقم {invoice.number} للعميل {invoice.customer.name} بقيمة {invoice.total:.2f} ج.م.",
+                url=reverse('sales:invoice-detail', args=[invoice.id])
+            )
         elif invoice.status == SalesInvoice.Status.POSTED:
             try:
                 SalesService.reverse_invoice(invoice, request.user)
                 messages.success(request, f"تم عكس الفاتورة {invoice.number} وإنشاء قيد عكسي")
+                SystemNotification.notify_accountants(
+                    title="عكس فاتورة مبيعات",
+                    message=f"قام {request.user.username} بعكس فاتورة المبيعات رقم {invoice.number} للعميل {invoice.customer.name} بقيمة {invoice.total:.2f} ج.م.",
+                    url=reverse('sales:invoice-detail', args=[invoice.id])
+                )
             except Exception as e:
+                logger.exception("Error reversing invoice")
                 messages.error(request, f"خطأ أثناء العكس: {e}")
         else:
             messages.warning(request, "لا يمكن عكس هذه الفاتورة")
             
         return redirect('sales:invoice-detail', pk=pk)
 
-class SalesInvoicePostView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class SalesInvoicePostView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'sales.change_salesinvoice'
+    
+    def has_permission(self):
+        if super().has_permission():
+            return True
+        if hasattr(self.request.user, 'salesrepresentative'):
+            invoice = get_object_or_404(SalesInvoice, pk=self.kwargs.get('pk'))
+            if invoice.sales_rep == self.request.user.salesrepresentative and invoice.status == SalesInvoice.Status.DRAFT:
+                return True
+        return False
     
     def post(self, request, pk):
         invoice = get_object_or_404(SalesInvoice, pk=pk)
@@ -663,24 +900,43 @@ class SalesInvoicePostView(LoginRequiredMixin, PermissionRequiredMixin, View):
             messages.success(request, f'تم ترحيل الفاتورة {invoice.number} بنجاح')
         except Exception as e:
             messages.error(request, f'خطأ أثناء الترحيل: {e}')
+        if hasattr(request.user, 'salesrepresentative'):
+            return redirect('reports:rep_dashboard')
         return redirect('sales:invoice-list')
 
-class CustomerReceiptListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class CustomerReceiptListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = CustomerReceipt
     template_name = 'sales/receipts/list.html'
     context_object_name = 'receipts'
     permission_required = 'sales.view_customerreceipt'
+    paginate_by = 25
 
-class CustomerReceiptCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    def get_queryset(self):
+        return super().get_queryset().select_related('customer')
+
+class CustomerReceiptCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = CustomerReceipt
     form_class = CustomerReceiptForm
     template_name = 'sales/receipts/form.html'
     success_url = reverse_lazy('sales:receipt-list')
     permission_required = 'sales.add_customerreceipt'
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        if hasattr(self.request.user, 'salesrepresentative'):
+            rep = self.request.user.salesrepresentative
+            if 'cash_box' in form.fields:
+                form.fields['cash_box'].initial = rep.cash_box
+                form.fields['cash_box'].empty_label = None
+        return form
+
     def form_valid(self, form):
         with transaction.atomic():
-            from apps.core.services import DocumentService
             form.instance.number = DocumentService.generate_number(CustomerReceipt, 'RCPT')
             form.instance.created_by = self.request.user
             self.object = form.save()
@@ -689,20 +945,27 @@ class CustomerReceiptCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cre
             messages.success(self.request, f'تم تسجيل السند {self.object.number} وترحيله بنجاح')
         return redirect('sales:receipt-detail', pk=self.object.pk)
 
-class CustomerReceiptDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class CustomerReceiptDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = CustomerReceipt
     template_name = 'sales/receipts/detail.html'
     context_object_name = 'receipt'
     permission_required = 'sales.view_customerreceipt'
 
-class ChequeCollectionView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['banks'] = BankAccount.objects.filter(is_active=True).select_related('account')
+        return ctx
+
+class CustomerReceiptPrintView(LoginRequiredMixin, PermRequiredMixin, DetailView):
+    model = CustomerReceipt
+    template_name = 'sales/receipts/print.html'
+    context_object_name = 'receipt'
+    permission_required = 'sales.view_customerreceipt'
+
+class ChequeCollectionView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'sales.change_customerreceipt'
 
     def post(self, request, pk):
-        from .services import SalesService
-        from apps.treasury.models import BankAccount
-        from datetime import date as date_type
-        
         receipt = get_object_or_404(CustomerReceipt, pk=pk)
         bank_id = request.POST.get('bank')
         collection_date_str = request.POST.get('date')
@@ -717,19 +980,41 @@ class ChequeCollectionView(LoginRequiredMixin, PermissionRequiredMixin, View):
             SalesService.collect_cheque(receipt, bank, collection_date, request.user)
             messages.success(request, f'تم تحصيل الشيك {receipt.cheque_number} بنجاح')
         except Exception as e:
+            logger.exception("Error collecting cheque")
             messages.error(request, f'خطأ أثناء التحصيل: {e}')
             
         return redirect('sales:receipt-detail', pk=pk)
 
-class CustomerStatementView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class ChequeBounceView(LoginRequiredMixin, PermRequiredMixin, View):
+    permission_required = 'sales.change_customerreceipt'
+
+    def post(self, request, pk):
+        receipt = get_object_or_404(CustomerReceipt, pk=pk)
+        bounce_date_str = request.POST.get('date')
+        penalty_str = request.POST.get('penalty', '0')
+        
+        if not bounce_date_str:
+            messages.error(request, "يجب تحديد تاريخ الإرجاع")
+            return redirect('sales:receipt-detail', pk=pk)
+            
+        try:
+            bounce_date = date_type.fromisoformat(bounce_date_str)
+            penalty = Decimal(penalty_str) if penalty_str else Decimal('0')
+            SalesService.bounce_cheque(receipt, bounce_date, request.user, penalty)
+            messages.success(request, f'تم إرجاع الشيك {receipt.cheque_number} كشيك مرتجع')
+        except Exception as e:
+            logger.exception("Error bouncing cheque")
+            messages.error(request, f'خطأ أثناء إرجاع الشيك: {e}')
+            
+        return redirect('sales:receipt-detail', pk=pk)
+
+class CustomerStatementView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = Customer
     template_name = 'sales/customers/statement.html'
     context_object_name = 'customer'
     permission_required = 'sales.view_customer'
 
     def get_context_data(self, **kwargs):
-        from apps.reports.services import ReportService
-        from datetime import date
         ctx = super().get_context_data(**kwargs)
         customer = self.get_object()
         
@@ -756,17 +1041,36 @@ class CustomerStatementView(LoginRequiredMixin, PermissionRequiredMixin, DetailV
         ctx['closing_balance'] = report['closing_balance']
         return ctx
 
-class SalesInvoiceDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class SalesInvoiceDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = SalesInvoice
     template_name = 'sales/invoices/detail.html'
     context_object_name = 'invoice'
     permission_required = 'sales.view_salesinvoice'
 
-from decimal import Decimal
-from django.shortcuts import render
-from apps.treasury.models import CashBox
+    def get_queryset(self):
+        return super().get_queryset().select_related('customer', 'sales_rep', 'cash_box').prefetch_related('lines__item', 'lines__unit')
 
-class RepDailySettlementListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class SalesInvoicePrintView(LoginRequiredMixin, PermRequiredMixin, DetailView):
+    model = SalesInvoice
+    template_name = 'sales/invoices/print.html'
+    context_object_name = 'invoice'
+    permission_required = 'sales.view_salesinvoice'
+
+    def get_queryset(self):
+        return super().get_queryset().select_related('customer', 'sales_rep', 'cash_box').prefetch_related('lines__item', 'lines__unit')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from apps.e_invoice.models import CompanySettings
+        settings = CompanySettings.objects.filter(is_active=True).first()
+        if settings:
+            context['company_name'] = settings.company_name_ar
+            context['company_address'] = settings.address
+            context['company_tax_number'] = settings.tax_id
+            context['company_phone'] = settings.phone
+        return context
+
+class RepDailySettlementListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = RepDailySettlement
     template_name = 'sales/settlements/list.html'
     permission_required = 'sales.view_repdailysettlement'
@@ -784,7 +1088,7 @@ class RepDailySettlementListView(LoginRequiredMixin, PermissionRequiredMixin, Li
             qs = qs.filter(date=date)
         return qs
 
-class RepDailySettlementCreateView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class RepDailySettlementCreateView(LoginRequiredMixin, PermRequiredMixin, View):
     """
     صفحة إنشاء تسوية المندوب.
     تعرض: المندوب + التاريخ + الفواتير النقدية تلقائياً + حقل النقدية المستلمة.
@@ -793,13 +1097,16 @@ class RepDailySettlementCreateView(LoginRequiredMixin, PermissionRequiredMixin, 
     permission_required = 'sales.add_repdailysettlement'
 
     def get(self, request):
-        from datetime import date as today_date
         reps = SalesRepresentative.objects.filter(is_active=True)
-        cash_boxes = CashBox.objects.filter(is_active=True)
+        cash_boxes = get_available_cash_boxes(request.user)
+        banks = BankAccount.objects.filter(is_active=True)
+        wallets = MobileWallet.objects.filter(is_active=True)
         return render(request, self.template_name, {
             'reps': reps,
             'cash_boxes': cash_boxes,
-            'today': today_date.today().isoformat(),
+            'banks': banks,
+            'wallets': wallets,
+            'today': date.today().isoformat(),
         })
 
     def post(self, request):
@@ -808,17 +1115,15 @@ class RepDailySettlementCreateView(LoginRequiredMixin, PermissionRequiredMixin, 
         cash_delivered = Decimal(request.POST.get('cash_delivered', '0'))
         to_cash_box_id = request.POST.get('to_cash_box')
         to_bank_id     = request.POST.get('to_bank')
+        to_wallet_id   = request.POST.get('to_wallet')
         invoice_ids    = request.POST.getlist('invoice_ids')  # checkboxes
 
         if not invoice_ids:
             messages.error(request, 'يجب اختيار فاتورة واحدة على الأقل لإجراء التسوية')
             return redirect('sales:settlement-create')
 
-        from django.db import transaction
         try:
             with transaction.atomic():
-                from apps.core.services import DocumentService
-                
                 rep  = SalesRepresentative.objects.get(pk=rep_id)
                 date = date_type.fromisoformat(date_val)
 
@@ -829,6 +1134,7 @@ class RepDailySettlementCreateView(LoginRequiredMixin, PermissionRequiredMixin, 
                     cash_delivered=cash_delivered,
                     to_cash_box_id=to_cash_box_id or None,
                     to_bank_id=to_bank_id or None,
+                    to_wallet_id=to_wallet_id or None,
                     created_by=request.user,
                 )
 
@@ -850,29 +1156,50 @@ class RepDailySettlementCreateView(LoginRequiredMixin, PermissionRequiredMixin, 
             return redirect('sales:settlement-list')
 
         except Exception as e:
+            logger.exception("Error creating settlement")
             messages.error(request, f'خطأ: {e}')
             return redirect('sales:settlement-create')
 
-class RepDailySettlementDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class RepDailySettlementDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = RepDailySettlement
     template_name = 'sales/settlements/detail.html'
     context_object_name = 'settlement'
     permission_required = 'sales.view_repdailysettlement'
 
-class RepUnsettledInvoicesView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    def get_queryset(self):
+        return super().get_queryset().select_related('sales_rep', 'to_cash_box', 'to_bank', 'to_wallet', 'journal_entry')
+
+class RepDailySettlementPostView(LoginRequiredMixin, PermRequiredMixin, View):
+    permission_required = 'sales.change_repdailysettlement'
+
+    def post(self, request, pk):
+        settlement = get_object_or_404(RepDailySettlement, pk=pk)
+        
+        # Verify a destination cashbox or bank is set (POS leaves it as session.station.cash_box by default, but it might need selection)
+        if not settlement.to_cash_box and not settlement.to_bank and not settlement.to_wallet:
+            messages.error(request, 'يجب تحديد خزينة، بنك أو محفظة استلام لتتمكن من ترحيل التسوية.')
+            return redirect('sales:settlement-detail', pk=pk)
+
+        try:
+            RepSettlementService.post_settlement(settlement, request.user)
+            messages.success(request, f'تم ترحيل التسوية {settlement.number} بنجاح وتم إنشاء القيود المحاسبية.')
+        except Exception as e:
+            logger.exception("Error posting settlement")
+            messages.error(request, f'حدث خطأ أثناء الترحيل: {str(e)}')
+            
+        return redirect('sales:settlement-detail', pk=pk)
+
+class RepUnsettledInvoicesView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'sales.view_repdailysettlement'
     """
     HTMX endpoint — يجيب الفواتير غير المسواة للمندوب في يوم معين
     يُستدعى عند تغيير المندوب أو التاريخ في الـ form
     """
     def get(self, request):
-        from .services import RepSettlementService
         rep_id   = request.GET.get('rep')
         date_val = request.GET.get('date')
         if not rep_id or not date_val:
-            from django.http import HttpResponse
             return HttpResponse('')
-        from datetime import date as date_type
         rep  = get_object_or_404(SalesRepresentative, pk=rep_id)
         date = date_type.fromisoformat(date_val)
         invoices = RepSettlementService.get_unsettled_invoices(rep, date)
@@ -883,44 +1210,41 @@ class RepUnsettledInvoicesView(LoginRequiredMixin, PermissionRequiredMixin, View
             'rep': rep,
         })
 
-class RepReceivableCollectView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class RepReceivableCollectView(LoginRequiredMixin, PermRequiredMixin, View):
     """تحصيل ذمة متراكمة على مندوب"""
     permission_required = 'sales.change_repdailysettlement'
     template_name = 'sales/reps/collect_form.html'
 
     def get(self, request, rep_pk):
-        from apps.treasury.models import CashBox, BankAccount
-        from datetime import date as today_date
         rep = get_object_or_404(SalesRepresentative, pk=rep_pk)
-        cash_boxes = CashBox.objects.filter(is_active=True)
+        cash_boxes = get_available_cash_boxes(request.user)
         banks = BankAccount.objects.filter(is_active=True)
         return render(request, self.template_name, {
             'rep': rep,
             'cash_boxes': cash_boxes,
             'banks': banks,
-            'today': today_date.today().isoformat(),
+            'today': date.today().isoformat(),
         })
 
     def post(self, request, rep_pk):
-        from decimal import Decimal
-        from datetime import date as date_type
-        from .services import RepSettlementService
         rep      = get_object_or_404(SalesRepresentative, pk=rep_pk)
         amount   = Decimal(request.POST.get('amount', '0'))
         date     = date_type.fromisoformat(request.POST.get('date'))
         cash_box_id = request.POST.get('cash_box')
         bank_id     = request.POST.get('bank')
 
+        if amount <= 0:
+            messages.error(request, 'يجب أن يكون المبلغ أكبر من صفر')
+            return redirect('sales:rep-receivable-collect', rep_pk=rep_pk)
+
         if not cash_box_id and not bank_id:
             messages.error(request, 'يجب تحديد خزنة أو حساب بنكي لاستلام المبلغ')
-            return redirect('sales:rep-detail', pk=rep_pk)
+            return redirect('sales:rep-receivable-collect', rep_pk=rep_pk)
 
         if cash_box_id:
-            from apps.treasury.models import CashBox
-            dest = CashBox.objects.get(pk=cash_box_id).account
+            dest = get_object_or_404(CashBox, pk=cash_box_id).account
         else:
-            from apps.treasury.models import BankAccount
-            dest = BankAccount.objects.get(pk=bank_id).account
+            dest = get_object_or_404(BankAccount, pk=bank_id).account
 
         try:
             RepSettlementService.collect_rep_receivable(
@@ -928,31 +1252,103 @@ class RepReceivableCollectView(LoginRequiredMixin, PermissionRequiredMixin, View
             )
             messages.success(request, f'تم تحصيل {amount} من ذمة المندوب {rep.name}')
         except Exception as e:
+            logger.exception("Error collecting rep receivable")
             messages.error(request, f'خطأ: {e}')
 
         return redirect('sales:rep-detail', pk=rep_pk)
 
-class SalesReturnListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class SalesReturnListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = SalesReturn
     template_name = 'sales/returns/list.html'
     context_object_name = 'returns'
     permission_required = 'sales.view_salesreturn'
+    paginate_by = 25
     ordering = ['-date', '-id']
 
-class SalesReturnCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    def get_queryset(self):
+        return super().get_queryset().select_related('customer', 'sales_rep')
+
+class SalesReturnCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = SalesReturn
-    fields = ['date', 'invoice', 'customer', 'sales_rep', 'notes']
+    fields = ['date', 'invoice', 'customer', 'payment_type', 'cash_box', 'sales_rep', 'notes']
     template_name = 'sales/returns/form.html'
     permission_required = 'sales.add_salesreturn'
-    success_url = reverse_lazy('sales:return-list')
+
+    def get_success_url(self):
+        if hasattr(self.request.user, 'salesrepresentative'):
+            return reverse_lazy('reports:rep_dashboard')
+        return reverse_lazy('sales:return-list')
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        # Apply premium Bootstrap 5 form classes
+        for field_name, field in form.fields.items():
+            if not isinstance(field.widget, (forms.CheckboxInput, forms.RadioSelect)):
+                if isinstance(field.widget, forms.Select):
+                    field.widget.attrs.update({'class': 'form-select'})
+                else:
+                    field.widget.attrs.update({'class': 'form-control'})
+                    
+        if hasattr(self.request.user, 'salesrepresentative'):
+            rep = self.request.user.salesrepresentative
+            if 'sales_rep' in form.fields:
+                form.fields['sales_rep'].queryset = SalesRepresentative.objects.filter(id=rep.id)
+                form.fields['sales_rep'].initial = rep
+                form.fields['sales_rep'].empty_label = None
+            if 'cash_box' in form.fields:
+                form.fields['cash_box'].queryset = get_available_cash_boxes(self.request.user)
+                form.fields['cash_box'].initial = rep.cash_box
+                form.fields['cash_box'].empty_label = None
+                
+        # Lock date field to calendar picker widget
+        if 'date' in form.fields:
+            form.fields['date'].widget = forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            })
+                
+        # Dynamically restrict original invoice selection to the chosen customer
+        if 'invoice' in form.fields:
+            # Customize option label to show invoice payment type, date, and amount
+            form.fields['invoice'].label_from_instance = lambda obj: f"{obj.number} ({obj.get_payment_type_display()} - {obj.date} - {obj.total:.2f} ج.م)"
+
+            customer_id = form.data.get('customer') or form.initial.get('customer')
+            if customer_id:
+                qs = SalesInvoice.objects.filter(customer_id=customer_id, status=SalesInvoice.Status.POSTED)
+                form.fields['invoice'].queryset = qs
+            else:
+                form.fields['invoice'].queryset = SalesInvoice.objects.none()
+                
+        return form
+
+    def get_initial(self):
+        initial = super().get_initial()
+        initial['date'] = date.today().isoformat()
+        if hasattr(self.request.user, 'salesrepresentative'):
+            rep = self.request.user.salesrepresentative
+            initial['sales_rep'] = rep
+            if rep.cash_box:
+                initial['cash_box'] = rep.cash_box
+        return initial
 
     def get_context_data(self, **kwargs):
-        from .forms import SalesReturnLineFormSet
         data = super().get_context_data(**kwargs)
         if self.request.POST:
-            data['lines'] = SalesReturnLineFormSet(self.request.POST)
+            lines = SalesReturnLineFormSet(self.request.POST)
         else:
-            data['lines'] = SalesReturnLineFormSet()
+            lines = SalesReturnLineFormSet()
+            
+        # Restrict warehouse to only show the representative's own warehouse
+        if hasattr(self.request.user, 'salesrepresentative'):
+            rep = self.request.user.salesrepresentative
+            warehouse_qs = Warehouse.objects.filter(id=rep.warehouse_id)
+            for form in lines.forms:
+                if 'warehouse' in form.fields:
+                    form.fields['warehouse'].queryset = warehouse_qs
+                    form.fields['warehouse'].initial = rep.warehouse
+                    form.fields['warehouse'].empty_label = None
+                    
+        data['lines'] = lines
         return data
 
     def form_valid(self, form):
@@ -960,30 +1356,86 @@ class SalesReturnCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateV
         lines = context['lines']
         with transaction.atomic():
             form.instance.created_by = self.request.user
-            from apps.core.services import DocumentService
             form.instance.number = DocumentService.generate_number(SalesReturn, 'SRET')
             
             form.instance.subtotal = 0
             form.instance.total = 0
             
             if lines.is_valid():
+                # Strict invoice-to-return validation
+                if form.instance.invoice_id:
+                    invoice_id = form.instance.invoice_id
+                    
+                    has_error = False
+                    for line_form in lines.forms:
+                        if line_form.cleaned_data and not line_form.cleaned_data.get('DELETE', False):
+                            item = line_form.cleaned_data.get('item')
+                            qty = line_form.cleaned_data.get('quantity')
+                            unit = line_form.cleaned_data.get('unit')
+                            
+                            if not item or qty is None:
+                                continue
+                                
+                            try:
+                                entered_base_qty = item.convert_to_base(qty, unit)
+                            except ValueError as e:
+                                line_form.add_error('unit', str(e))
+                                has_error = True
+                                continue
+                                
+                            # Get original invoice line base quantity
+                            inv_line = SalesInvoiceLine.objects.filter(invoice_id=invoice_id, item=item).first()
+                            if not inv_line:
+                                line_form.add_error('item', f"هذا الصنف ({item.name}) غير موجود في الفاتورة الأصلية.")
+                                has_error = True
+                                continue
+                                
+                            # Sum already returned base quantity (excluding cancelled returns)
+                            returned_base = SalesReturnLine.objects.filter(
+                                sales_return__invoice_id=invoice_id,
+                                item=item
+                            ).exclude(sales_return__status='cancelled').aggregate(
+                                total=Coalesce(Sum('base_quantity'), Decimal('0'))
+                            )['total']
+                            
+                            max_base_allowed = inv_line.base_quantity - returned_base
+                            if entered_base_qty > max_base_allowed:
+                                # Convert max allowed base qty back to the return unit
+                                # standard: base quantity = unit quantity * factor
+                                factor = Decimal('1.0')
+                                if unit == item.sales_unit:
+                                    factor = item.conversion_factor
+                                elif unit == item.purchase_unit:
+                                    factor = item.purchase_conversion_factor
+                                    
+                                max_allowed_in_unit = max_base_allowed / factor
+                                line_form.add_error('quantity', f"الكمية تتجاوز الحد الأقصى المسموح بمرتجعه لهذه الفاتورة وهو {max_allowed_in_unit:.2f} {unit.name if unit else ''}.")
+                                has_error = True
+                                
+                    if has_error:
+                        return self.form_invalid(form)
+
                 self.object = form.save()
-                from apps.core.models import Account
-                from django.conf import settings
                 default_ret_acc = Account.objects.get(code=getattr(settings, 'DEFAULT_SALES_RETURN_ACCOUNT', '413'))
                 default_cogs_acc = Account.objects.get(code=getattr(settings, 'DEFAULT_COGS_ACCOUNT', '511'))
 
                 lines.instance = self.object
                 instances = lines.save(commit=False)
-                from apps.inventory.services import InventoryService
                 for instance in instances:
                     if not instance.return_account_id:
                         instance.return_account = default_ret_acc
                     if not instance.cogs_account_id:
                         instance.cogs_account = instance.item.cogs_account or default_cogs_acc
                     
-                    # Store current cost for accurate reversal
-                    instance.cost = InventoryService.get_item_cost(instance.item, instance.warehouse)
+                    # Store historical cost if linked return, else current cost
+                    if self.object.invoice_id:
+                        inv_line = SalesInvoiceLine.objects.filter(invoice_id=self.object.invoice_id, item=instance.item).first()
+                        if inv_line:
+                            instance.cost = inv_line.cost
+                        else:
+                            instance.cost = InventoryService.get_item_cost(instance.item, instance.warehouse)
+                    else:
+                        instance.cost = InventoryService.get_item_cost(instance.item, instance.warehouse)
                     
                     # ✅ Fix: Calculate base quantity
                     if hasattr(instance, 'unit') and instance.unit:
@@ -996,51 +1448,77 @@ class SalesReturnCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateV
                 for obj in lines.deleted_objects:
                     obj.delete()
 
-                # Calculate totals from lines (Standardized logic)
-                gross_total = 0
-                discount_total = 0
-                tax_total_added = 0
-                tax_total_deducted = 0
+                # Calculate totals from lines using unified tax engine
+                gross_total = Decimal('0')
+                discount_total = Decimal('0')
+                tax_total_added = Decimal('0')
+                tax_total_deducted = Decimal('0')
                 
                 for line in self.object.lines.all():
-                    gross_line = line.quantity * line.unit_price
-                    disc_line = gross_line * (line.discount_percent / Decimal('100'))
+                    gross_line = Decimal(str(line.quantity * line.unit_price))
+                    disc_line = gross_line * (Decimal(str(line.discount_percent)) / Decimal('100'))
                     net_line = gross_line - disc_line
                     
-                    # Tax logic
-                    tax_val = net_line * (line.tax_percent / Decimal('100'))
-                    if line.tax_type and line.tax_type.category in ['wht', 'salary', 'insurance']:
-                        tax_total_deducted += tax_val
-                        tax_signed = -tax_val
-                    else:
-                        tax_total_added += tax_val
-                        tax_signed = tax_val
-
+                    res = calculate_line_taxes(
+                        net_line,
+                        line.tax_type,
+                        line.tax_percent,
+                        line.tax_type2,
+                        line.tax_percent2,
+                        is_purchase_or_expense=False
+                    )
+                    
                     # Update line total in DB
-                    line.total = net_line + tax_signed
+                    raw_total = net_line + res['tax1_signed'] + res['tax2_signed']
+                    line.total = raw_total.quantize(Decimal('0.01'))
                     line.save()
                     
                     gross_total += gross_line
                     discount_total += disc_line
+                    tax_total_added += res['tax_total_added']
+                    tax_total_deducted += res['tax_total_deducted']
 
-                self.object.subtotal = gross_total
-                self.object.discount_amount = discount_total
-                self.object.tax_amount = tax_total_added - tax_total_deducted
-                self.object.total = gross_total - discount_total + tax_total_added - tax_total_deducted
+                q = Decimal('0.01')
+                self.object.subtotal = gross_total.quantize(q)
+                self.object.discount_amount = discount_total.quantize(q)
+                self.object.tax_amount = (tax_total_added - tax_total_deducted).quantize(q)
+                self.object.total = (gross_total - discount_total + tax_total_added - tax_total_deducted).quantize(q)
                 self.object.save()
+                
+                # تنبيه ديناميكي محاسبي عند إرجاع آجل لعميل نقدي
+                if self.object.customer.customer_type == 'cash' and self.object.payment_type == 'credit':
+                    title = f"مرتجع مبيعات استثنائي بالآجل لعميل نقدي"
+                    message = f"قام المستخدم {self.request.user.username} بإنشاء مرتجع مبيعات بالآجل رقم {self.object.number} للعميل {self.object.customer.name} بقيمة {self.object.total:.2f} ج.م رغم أن العميل نقدي."
+                    url = reverse('sales:return-detail', args=[self.object.id])
+                    SystemNotification.notify_accountants(title, message, url)
+                    messages.warning(self.request, "⚠️ تنبيه: لقد قمت بعمل مرتجع (آجل) لعميل (نقدي). تم إرسال إشعار بذلك للإدارة.")
+                
                 messages.success(self.request, f"تم إنشاء مرتجع المبيعات {self.object.number} بنجاح (مسودة)")
             else:
                 return self.form_invalid(form)
-        return redirect(self.success_url)
+        return redirect(self.get_success_url())
 
-class SalesReturnDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+
+class SalesReturnDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = SalesReturn
     template_name = 'sales/returns/detail.html'
     context_object_name = 'sales_return'
     permission_required = 'sales.view_salesreturn'
 
-class SalesReturnPostView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    def get_queryset(self):
+        return super().get_queryset().select_related('customer', 'sales_rep', 'cash_box', 'invoice').prefetch_related('lines__item', 'lines__unit')
+
+class SalesReturnPostView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'sales.change_salesreturn'
+    
+    def has_permission(self):
+        if super().has_permission():
+            return True
+        if hasattr(self.request.user, 'salesrepresentative'):
+            sales_return = get_object_or_404(SalesReturn, pk=self.kwargs.get('pk'))
+            if sales_return.sales_rep == self.request.user.salesrepresentative and sales_return.status == 'draft':
+                return True
+        return False
     
     def post(self, request, pk):
         sales_return = get_object_or_404(SalesReturn, pk=pk)
@@ -1048,12 +1526,39 @@ class SalesReturnPostView(LoginRequiredMixin, PermissionRequiredMixin, View):
             SalesService.post_return(sales_return, request.user)
             messages.success(request, f'تم ترحيل المرتجع {sales_return.number} بنجاح')
         except Exception as e:
+            logger.exception("Error posting sales return")
             messages.error(request, f'خطأ أثناء الترحيل: {e}')
+        if hasattr(request.user, 'salesrepresentative'):
+            return redirect('reports:rep_dashboard')
         return redirect('sales:return-detail', pk=pk)
 
-from django.http import JsonResponse
+class SalesReturnDeleteView(LoginRequiredMixin, PermRequiredMixin, View):
+    permission_required = 'sales.delete_salesreturn'
+    
+    def has_permission(self):
+        if super().has_permission():
+            return True
+        if hasattr(self.request.user, 'salesrepresentative'):
+            sales_return = get_object_or_404(SalesReturn, pk=self.kwargs.get('pk'))
+            if sales_return.sales_rep == self.request.user.salesrepresentative and sales_return.status == 'draft':
+                return True
+        return False
+        
+    def post(self, request, pk):
+        sales_return = get_object_or_404(SalesReturn, pk=pk)
+        if sales_return.status != 'draft':
+            messages.error(request, 'لا يمكن حذف المرتجع لأنه مرحل أو ملغي.')
+        else:
+            number = sales_return.number
+            sales_return.delete()
+            messages.success(request, f'تم حذف المرتجع {number} بنجاح.')
+            
+        if hasattr(request.user, 'salesrepresentative'):
+            return redirect('reports:rep_dashboard')
+        return redirect('sales:return-list')
 
-class RepDetailsAPIView(LoginRequiredMixin, PermissionRequiredMixin, View):
+
+class RepDetailsAPIView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'sales.view_salesrepresentative'
     def get(self, request, pk):
         rep = get_object_or_404(SalesRepresentative, pk=pk)
@@ -1061,7 +1566,68 @@ class RepDetailsAPIView(LoginRequiredMixin, PermissionRequiredMixin, View):
             'warehouse_id': rep.warehouse_id,
             'cash_box_id': rep.cash_box_id
         })
-class RepStockStatusView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+
+class CustomerInvoicesAPIView(LoginRequiredMixin, PermRequiredMixin, View):
+    permission_required = 'sales.view_salesinvoice'
+    def get(self, request, customer_id):
+        # Fetch posted invoices for this customer
+        invoices = SalesInvoice.objects.filter(
+            customer_id=customer_id,
+            status=SalesInvoice.Status.POSTED
+        ).order_by('-date', '-id')
+            
+        data = [
+            {
+                'id': inv.id,
+                'number': inv.number,
+                'date': inv.date.isoformat(),
+                'payment_type': inv.payment_type,
+                'payment_type_display': inv.get_payment_type_display(),
+                'cash_box_id': inv.cash_box_id,
+                'total': float(inv.total)
+            }
+            for inv in invoices
+        ]
+        return JsonResponse({'invoices': data})
+
+class SalesInvoiceLinesAPIView(LoginRequiredMixin, PermRequiredMixin, View):
+    permission_required = 'sales.view_salesinvoice'
+    def get(self, request, invoice_id):
+        lines = SalesInvoiceLine.objects.filter(invoice_id=invoice_id).select_related('item', 'unit', 'warehouse')
+
+        # Single aggregate query for all returned quantities per item
+        returned_qties = SalesReturnLine.objects.filter(
+            sales_return__invoice_id=invoice_id,
+        ).exclude(sales_return__status='cancelled').values('item_id').annotate(
+            total=Coalesce(Sum('base_quantity'), Decimal('0'))
+        )
+        returned_map = {r['item_id']: r['total'] for r in returned_qties}
+
+        data = []
+        for line in lines:
+            returned_base_qty = returned_map.get(line.item_id, Decimal('0'))
+            max_base_returnable = max(0.0, float(line.base_quantity) - float(returned_base_qty))
+
+            data.append({
+                'item_id': line.item_id,
+                'item_name': line.item.name,
+                'unit_id': line.unit_id,
+                'unit_name': line.unit.name if line.unit else '',
+                'warehouse_id': line.warehouse_id,
+                'warehouse_name': line.warehouse.name if line.warehouse else '',
+                'quantity': float(line.quantity),
+                'base_quantity': float(line.base_quantity),
+                'returned_base_quantity': float(returned_base_qty),
+                'max_base_returnable': max_base_returnable,
+                'unit_price': float(line.unit_price),
+                'discount_percent': float(line.discount_percent),
+                'tax_type_id': line.tax_type_id,
+                'tax_percent': float(line.tax_percent or 0),
+                'tax_type2_id': line.tax_type2_id,
+                'tax_percent2': float(line.tax_percent2 or 0),
+            })
+        return JsonResponse({'lines': data})
+class RepStockStatusView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     """عرض بضاعة المندوب الحالية في مخزنه الخاص"""
     template_name = 'sales/reps/my_stock.html'
     permission_required = 'sales.view_salesrepresentative'
@@ -1071,7 +1637,6 @@ class RepStockStatusView(LoginRequiredMixin, PermissionRequiredMixin, TemplateVi
         try:
             # التأكد من أن المستخدم مرتبط بملف مندوب
             rep = self.request.user.salesrepresentative
-            from apps.reports.services import ReportService
             context['rep'] = rep
             context['report'] = ReportService.stock_status(warehouse_id=rep.warehouse_id)
         except SalesRepresentative.DoesNotExist:

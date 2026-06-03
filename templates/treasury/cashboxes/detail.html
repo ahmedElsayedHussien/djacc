@@ -28,7 +28,7 @@
                         </td>
                     </tr>
                 </table>
-                <a href="{% url 'treasury:cashbox-update' cashbox.pk %}" class="btn btn-outline-secondary w-100 mt-2">تعديل البيانات</a>
+                {% if perms.treasury.change_cashbox %}<a href="{% url 'treasury:cashbox-update' cashbox.pk %}" class="btn btn-outline-secondary w-100 mt-2">تعديل البيانات</a>{% endif %}
             </div>
         </div>
     </div>
@@ -39,7 +39,9 @@
             <div class="card-body">
                 <p class="text-muted">لعرض كشف حساب تفصيلي، يرجى الانتقال إلى التقارير المالية.</p>
                 <div class="d-grid gap-2">
-                    <a href="{% url 'reports:trial_balance' %}?account={{ cashbox.account.pk }}" class="btn btn-info">عرض ميزان المراجعة لهذا الحساب</a>
+                    <a href="{% url 'reports:account_statement' %}?account={{ cashbox.account.pk }}" class="btn btn-primary text-white">
+                        <i class="bi bi-file-earmark-text me-1"></i> عرض كشف الحساب المالي (دفتر الأستاذ)
+                    </a>
                 </div>
             </div>
         </div>

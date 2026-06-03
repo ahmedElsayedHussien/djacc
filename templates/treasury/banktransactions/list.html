@@ -4,9 +4,11 @@
 
 {% block content %}
 <div class="mb-4 d-flex justify-content-between align-items-center">
+    {% if perms.treasury.add_banktransaction %}
     <a href="{% url 'treasury:banktransaction-create' %}" class="btn btn-primary">
         <i class="bi bi-plus-lg"></i> تسجيل حركة بنكية جديدة
     </a>
+    {% endif %}
 </div>
 
 <div class="card">
@@ -56,5 +58,6 @@
             </table>
         </div>
     </div>
+    {% include 'partials/pagination.html' %}
 </div>
 {% endblock %}

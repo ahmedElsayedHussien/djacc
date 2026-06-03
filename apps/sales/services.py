@@ -1,40 +1,43 @@
+from datetime import date
 from decimal import Decimal
 from django.db import transaction
+from django.db.models import Max, F, Sum
 from django.conf import settings
 from apps.core.models import JournalEntry, Account
-from apps.core.services import JournalService, AuditService
-from apps.inventory.models import Item, Warehouse
+from apps.core.services import JournalService, AuditService, DocumentService
+from apps.core.tax_utils import calculate_line_taxes
+from apps.inventory.models import Item, Warehouse, StockMovement
 from apps.treasury.models import CashBox
 from apps.treasury.services import TreasuryService
 from apps.inventory.services import InventoryService
-from .models import SalesInvoice, Customer, SalesRepresentative, CustomerReceipt, IntermediaryCompany, ReceiptAllocation
+from .models import SalesInvoice, Customer, SalesRepresentative, CustomerReceipt, IntermediaryCompany, ReceiptAllocation, SalesReturn, RepSettlementInvoice, RepDailySettlement
 
 class CustomerService:
     CUSTOMERS_PARENT_CODE = getattr(settings, 'CUSTOMERS_PARENT_ACCOUNT', '1121')
 
     @staticmethod
     def generate_customer_code():
-        from .models import Customer
-        last_customer = Customer.objects.filter(code__startswith='cus-').order_by('-code').first()
-        if last_customer:
-            try:
-                # Extract number from 'cus-XXXXX'
-                parts = last_customer.code.split('-')
-                if len(parts) > 1:
-                    last_num = int(parts[1])
-                    next_num = last_num + 1
-                else:
+        with transaction.atomic():
+            last_customer = Customer.objects.select_for_update().filter(
+                code__regex=r'^cus-\d+$'
+            ).order_by('-code').first()
+            if last_customer:
+                try:
+                    parts = last_customer.code.split('-')
+                    if len(parts) > 1:
+                        next_num = int(parts[1]) + 1
+                    else:
+                        next_num = Customer.objects.count() + 1
+                except (IndexError, ValueError):
                     next_num = Customer.objects.count() + 1
-            except (IndexError, ValueError):
-                next_num = Customer.objects.count() + 1
-        else:
-            next_num = Customer.objects.count() + 1
-        
-        code = f"cus-{next_num:05d}"
-        while Customer.objects.filter(code=code).exists():
-            next_num += 1
+            else:
+                next_num = 1
+
             code = f"cus-{next_num:05d}"
-        return code
+            while Customer.objects.filter(code=code).exists():
+                next_num += 1
+                code = f"cus-{next_num:05d}"
+            return code
 
     @staticmethod
     @transaction.atomic
@@ -46,7 +49,6 @@ class CustomerService:
         parent = Account.objects.select_for_update().get(code=CustomerService.CUSTOMERS_PARENT_CODE)
 
         # Generate account code: parent_code + sequential number (Safe Max+1 logic)
-        from django.db.models import Max
         last_code = Account.objects.filter(parent=parent).aggregate(Max('code'))['code__max']
         if last_code:
             try:
@@ -118,26 +120,27 @@ class SalesRepresentativeService:
 
     @staticmethod
     def generate_rep_code():
-        from .models import SalesRepresentative
-        last_rep = SalesRepresentative.objects.filter(code__startswith='sr-').order_by('-code').first()
-        if last_rep:
-            try:
-                parts = last_rep.code.split('-')
-                if len(parts) > 1:
-                    last_num = int(parts[1])
-                    next_num = last_num + 1
-                else:
+        with transaction.atomic():
+            last_rep = SalesRepresentative.objects.select_for_update().filter(
+                code__regex=r'^sr-\d+$'
+            ).order_by('-code').first()
+            if last_rep:
+                try:
+                    parts = last_rep.code.split('-')
+                    if len(parts) > 1:
+                        next_num = int(parts[1]) + 1
+                    else:
+                        next_num = SalesRepresentative.objects.count() + 1
+                except (IndexError, ValueError):
                     next_num = SalesRepresentative.objects.count() + 1
-            except (IndexError, ValueError):
-                next_num = SalesRepresentative.objects.count() + 1
-        else:
-            next_num = SalesRepresentative.objects.count() + 1
-        
-        code = f"sr-{next_num:05d}"
-        while SalesRepresentative.objects.filter(code=code).exists():
-            next_num += 1
+            else:
+                next_num = 1
+
             code = f"sr-{next_num:05d}"
-        return code
+            while SalesRepresentative.objects.filter(code=code).exists():
+                next_num += 1
+                code = f"sr-{next_num:05d}"
+            return code
 
     @staticmethod
     @transaction.atomic
@@ -161,12 +164,18 @@ class SalesRepresentativeService:
             rep_code = SalesRepresentativeService.generate_rep_code()
 
         # 1. Create Warehouse Account
-        parent_inv = Account.objects.get_or_create(
-            code=SalesRepresentativeService.REP_INVENTORY_PARENT,
-            defaults={'name': 'بضاعة المندوبين', 'account_type': 'asset', 'is_leaf': False}
-        )[0]
-        
-        next_seq = Account.objects.filter(parent=parent_inv).count() + 1
+        parent_inv = Account.objects.select_for_update().get(
+            code=SalesRepresentativeService.REP_INVENTORY_PARENT
+        )
+
+        last_code = Account.objects.filter(parent=parent_inv).aggregate(Max('code'))['code__max']
+        if last_code:
+            try:
+                next_seq = int(last_code[len(parent_inv.code):]) + 1
+            except (ValueError, TypeError):
+                next_seq = Account.objects.filter(parent=parent_inv).count() + 1
+        else:
+            next_seq = 1
         warehouse_account = Account.objects.create(
             code=f'{parent_inv.code}{next_seq:03d}',
             name=f'مخزن مندوب - {rep_name}',
@@ -275,6 +284,9 @@ class SalesService:
             
             # COGS entry (✅ Fix #1: استخدام الكمية الأساسية من السطر)
             cost = line_costs.get(line.id, line.cost)
+            if cost <= 0:
+                raise ValueError(f"تكلفة الصنف {line.item.name} تساوي صفراً، لا يمكن ترحيل الفاتورة وتجاهل حساب التكلفة للمخزون.")
+                
             base_qty = getattr(line, 'base_quantity', line.quantity) or line.quantity
             
             lines.append({
@@ -292,43 +304,26 @@ class SalesService:
                 'cost_center': invoice.cost_center
             })
 
-        # Group taxes by account (using net before tax after discount)
-        # Group taxes by account (Professional logic: VAT on Net + Table Tax)
+        # Group taxes by account using unified tax engine
         tax_account_totals = {}
         for line in invoice.lines.all():
-            net_before_tax = line.quantity * line.unit_price * (Decimal('1') - (line.discount_percent / Decimal('100')))
+            net_before_tax = Decimal(str(line.quantity * line.unit_price)) * (Decimal('1') - (Decimal(str(line.discount_percent)) / Decimal('100')))
+            res = calculate_line_taxes(
+                net_before_tax,
+                line.tax_type,
+                line.tax_percent,
+                line.tax_type2,
+                line.tax_percent2,
+                is_purchase_or_expense=False
+            )
             
-            # 1. Identify Table Tax first (as it might affect VAT)
-            table_tax_val = Decimal('0')
-            taxes_to_process = []
-            if line.tax_type: taxes_to_process.append({'type': line.tax_type, 'rate': line.tax_percent})
-            if line.tax_type2: taxes_to_process.append({'type': line.tax_type2, 'rate': line.tax_percent2})
-            
-            for tx_info in taxes_to_process:
-                tx = tx_info['type']
-                if tx.category == 'table':
-                    rate = tx_info['rate'] if tx_info['rate'] is not None else tx.rate
-                    table_tax_val += net_before_tax * (rate / Decimal('100'))
-            
-            # 2. Calculate all taxes
-            for tx_info in taxes_to_process:
-                tx = tx_info['type']
-                rate = tx_info['rate'] if tx_info['rate'] is not None else tx.rate
-                
-                if tx.category == 'vat':
-                    # VAT is on (Net + Table Tax)
-                    tx_val = (net_before_tax + table_tax_val) * (rate / Decimal('100'))
-                else:
-                    # Others are on Net
-                    tx_val = net_before_tax * (rate / Decimal('100'))
-                
-                if tx_val == 0: continue
-                
-                acc = tx.account
-                if acc:
-                    if acc.id not in tax_account_totals:
-                        tax_account_totals[acc.id] = {'account': acc, 'amount': Decimal('0'), 'category': tx.category}
-                    tax_account_totals[acc.id]['amount'] += tx_val
+            for tx_type, tx_val in [(line.tax_type, res['tax1_value']), (line.tax_type2, res['tax2_value'])]:
+                if tx_type and tx_val > 0:
+                    acc = tx_type.account
+                    if acc:
+                        if acc.id not in tax_account_totals:
+                            tax_account_totals[acc.id] = {'account': acc, 'amount': Decimal('0'), 'category': tx_type.category}
+                        tax_account_totals[acc.id]['amount'] += tx_val
 
         for tax_info in tax_account_totals.values():
             if tax_info['amount'] > 0:
@@ -363,7 +358,6 @@ class SalesService:
                 raise ValueError("يجب تحديد الخزنة للفواتير النقدية لعمل التسوية الآلية")
             
             # Create a receipt automatically
-            from apps.core.services import DocumentService
             receipt = CustomerReceipt.objects.create(
                 number=DocumentService.generate_number(CustomerReceipt, 'RCPT'),
                 date=invoice.date,
@@ -392,13 +386,16 @@ class SalesService:
         Reverses a posted invoice by creating a reversal journal entry 
         and restoring inventory stock.
         """
+        invoice = SalesInvoice.objects.select_for_update().get(pk=invoice.pk)
         if invoice.status != SalesInvoice.Status.POSTED:
             raise ValueError("يمكن فقط عكس الفواتير المرحلة")
         
         if not invoice.journal_entry:
             raise ValueError("الفاتورة لا تملك قيداً محاسبياً لعكسه")
 
-        from datetime import date
+        if invoice.journal_entry.is_reversed:
+            raise ValueError(f"هذه الفاتورة تم عكسها مسبقاً")
+
         # 1. Reverse the Journal Entry
         reversal_entry = JournalService.reverse_entry(
             invoice.journal_entry, 
@@ -427,16 +424,22 @@ class SalesService:
         DR  Inventory                       → cost
         CR  Cost of Goods Sold (Reverse)    → cost
         """
+        sales_return = SalesReturn.objects.select_for_update().get(pk=sales_return.pk)
         if sales_return.status == 'posted':
             raise ValueError("هذا المرتجع مرحل بالفعل")
 
         lines = []
+        return_lines = list(sales_return.lines.select_related('item', 'tax_type', 'tax_type2', 'return_account', 'cogs_account', 'warehouse').all())
+        
+        # Determine Cost Center (Project) from the linked sales invoice
+        cost_center = sales_return.invoice.cost_center if sales_return.invoice else None
         
         # 1. Determine Credit Account (Customer vs CashBox)
-        # If it's a cash return (linked to cash invoice), refund to cash box
         credit_account = sales_return.customer.account
-        if sales_return.invoice and sales_return.invoice.payment_type == SalesInvoice.PaymentType.CASH:
-            if sales_return.invoice.cash_box:
+        if sales_return.payment_type == 'cash':
+            if sales_return.cash_box:
+                credit_account = sales_return.cash_box.account
+            elif sales_return.invoice and sales_return.invoice.cash_box:
                 credit_account = sales_return.invoice.cash_box.account
 
         # Credit: Refund Source
@@ -444,13 +447,14 @@ class SalesService:
             'account': credit_account,
             'debit': 0,
             'credit': sales_return.total,
-            'description': f"Sales Return {sales_return.number} - Refund"
+            'description': f"مرتجع كاش {sales_return.number}",
+            'cost_center': cost_center
         })
 
-        for line in sales_return.lines.all():
+        for line in return_lines:
             # Compute net amount before tax (price after discount, before tax)
             gross = line.quantity * line.unit_price
-            discount = gross * (line.discount_percent / 100)
+            discount = gross * (line.discount_percent / Decimal('100'))
             net = gross - discount
             
             # Debit: Sales Returns Account
@@ -458,49 +462,68 @@ class SalesService:
                 'account': line.return_account,
                 'debit': net,
                 'credit': 0,
-                'description': f'مردودات مبيعات - {line.item.name}'
+                'description': f'مردودات مبيعات - {line.item.name}',
+                'cost_center': cost_center
             })
             
             # Inventory reversal entry (✅ Fix #2: استخدام الكمية الأساسية من السطر)
             cost = line.cost # Use stored cost
-            base_qty = line.base_quantity
+            if cost <= 0:
+                raise ValueError(f"تكلفة المرتجع للصنف {line.item.name} تساوي صفراً، لا يمكن إنشاء قيد المرتجع بدون قيمة التكلفة.")
+                
+            base_qty = line.base_quantity or line.quantity
 
             lines.append({
                 'account': line.item.inventory_account, 
                 'debit': cost * base_qty, 
                 'credit': 0,
-                'description': f'إعادة للمخزون (مرتجع) - {line.item.name}'
+                'description': f'إعادة للمخزون (مرتجع) - {line.item.name}',
+                'cost_center': cost_center
             })
             lines.append({
                 'account': line.cogs_account, 
                 'debit': 0, 
                 'credit': cost * base_qty,
-                'description': f'عكس تكلفة مبيعات - {line.item.name}'
+                'description': f'عكس تكلفة مبيعات - {line.item.name}',
+                'cost_center': cost_center
             })
 
-        # Group taxes by account
-        tax_lines = {}
-        for line in sales_return.lines.all():
-                # Compute net amount (price after discount, before tax)
-                net_before_tax = line.quantity * line.unit_price * (1 - (line.discount_percent / 100))
-                # Determine applicable tax rate
-                tax_rate = line.tax_percent if line.tax_percent else (line.tax_type.rate if line.tax_type else 0)
-                tax_val = net_before_tax * (tax_rate / 100)
-                acc = line.tax_type.account if line.tax_type else None
-                if acc and acc.id not in tax_lines:
-                    tax_lines[acc.id] = {'account': acc, 'amount': 0, 'category': line.tax_type.category if line.tax_type else ''}
-                if acc:
-                    tax_lines[acc.id]['amount'] += tax_val
+        # Group taxes by account using unified tax engine
+        tax_account_totals = {}
+        for line in return_lines:
+            net_before_tax = Decimal(str(line.quantity * line.unit_price)) * (Decimal('1') - (Decimal(str(line.discount_percent)) / Decimal('100')))
+            res = calculate_line_taxes(
+                net_before_tax,
+                line.tax_type,
+                line.tax_percent,
+                line.tax_type2,
+                line.tax_percent2,
+                is_purchase_or_expense=False
+            )
+            
+            for tx_type, tx_val in [(line.tax_type, res['tax1_value']), (line.tax_type2, res['tax2_value'])]:
+                if tx_type and tx_val > 0:
+                    acc = tx_type.account
+                    if acc:
+                        if acc.id not in tax_account_totals:
+                            tax_account_totals[acc.id] = {
+                                'account': acc,
+                                'amount': Decimal('0'),
+                                'category': tx_type.category
+                            }
+                        tax_account_totals[acc.id]['amount'] += tx_val
 
-        for tax_info in tax_lines.values():
+        for tax_info in tax_account_totals.values():
             if tax_info['amount'] > 0:
-                # In returns, VAT is a DEBIT (reverse of credit in sales)
-                is_debit = (tax_info['category'] != 'wht') # Normal VAT is debited in returns
+                # In returns, VAT and Table Tax are DEBIT (reverse of credit in sales)
+                # WHT, salary, and insurance are CREDIT
+                is_debit = (tax_info['category'] not in ['wht', 'salary', 'insurance'])
                 lines.append({
                     'account': tax_info['account'],
                     'debit': tax_info['amount'] if is_debit else 0,
                     'credit': 0 if is_debit else tax_info['amount'],
-                    'description': f"عكس ضريبة {tax_info['account'].name} (مرتجع)"
+                    'description': f"عكس ضريبة {tax_info['account'].name} (مرتجع)",
+                    'cost_center': cost_center
                 })
 
         entry = JournalService.create_entry(
@@ -517,15 +540,13 @@ class SalesService:
         sales_return.save()
         
         # Increase stock
-        from apps.inventory.services import InventoryService
-        from apps.inventory.models import StockMovement
-        for line in sales_return.lines.all():
+        for line in return_lines:
             base_qty = line.base_quantity or line.quantity
             InventoryService.record_movement(
                 date_val=sales_return.date,
                 item=line.item,
                 warehouse=line.warehouse,
-                movement_type=StockMovement.MovementType.SALES_RETURN,
+                movement_type=StockMovement.MovementType.SALE_RETURN,
                 quantity=base_qty,
                 unit_cost=line.cost,
                 source=sales_return,
@@ -543,6 +564,13 @@ class SalesService:
         DR  Cash/Bank Account           → receipt.amount
         CR  Customer Receivable         → receipt.amount
         """
+        # Validate sum of allocations does not exceed receipt amount
+        allocations_total = receipt.receiptallocation_set.aggregate(s=Sum('amount'))['s'] or 0
+        if allocations_total > receipt.amount:
+            raise ValueError(
+                f'مجموع مبالغ التوزيعات ({allocations_total}) يتجاوز مبلغ السند ({receipt.amount})'
+            )
+
         lines = []
         
         # Determine source account (Bank, Cash, Cheque, or Intermediary)
@@ -556,12 +584,17 @@ class SalesService:
         else:
             source_account = receipt.cash_box.account
             
+        # Custom description for cash invoices
+        is_cash_invoice = bool(receipt.reference and receipt.reference.startswith("Settlement for"))
+        debit_desc = f'فاتورة كاش - {receipt.customer.name}' if is_cash_invoice else f'تحصيل من عميل {receipt.customer.name}'
+        credit_desc = f'فاتورة كاش رقم {receipt.reference.replace("Settlement for ", "")}' if is_cash_invoice else f'سند قبض رقم {receipt.number}'
+        
         # Debit Bank/Cash
         lines.append({
             'account': source_account,
             'debit': receipt.amount,
             'credit': 0,
-            'description': f'تحصيل من عميل {receipt.customer.name}'
+            'description': debit_desc
         })
         
         # Credit Customer
@@ -569,13 +602,13 @@ class SalesService:
             'account': receipt.customer.account,
             'debit': 0,
             'credit': receipt.amount,
-            'description': f'سند قبض رقم {receipt.number}'
+            'description': credit_desc
         })
         
         entry = JournalService.create_entry(
             date_val=receipt.date,
             entry_type=JournalEntry.EntryType.RECEIPT,
-            description=f'سند قبض رقم {receipt.number}',
+            description=credit_desc,
             lines=lines,
             source_document=receipt,
             created_by=posted_by,
@@ -584,18 +617,13 @@ class SalesService:
         receipt.journal_entry = entry
         receipt.save()
 
-        # Update paid_amount in related invoices
-        for allocation in receipt.receiptallocation_set.all():
-            invoice = allocation.invoice
-            remaining = invoice.total - invoice.paid_amount
-            if allocation.amount > remaining:
-                # Limit allocation to remaining balance to prevent overpayment
-                actual_alloc = remaining
-            else:
-                actual_alloc = allocation.amount
-                
-            invoice.paid_amount += actual_alloc
-            invoice.save()
+        # Update paid_amount in related invoices with row lock
+        for allocation in receipt.receiptallocation_set.select_related('invoice').all():
+            invoice = SalesInvoice.objects.select_for_update().get(pk=allocation.invoice.pk)
+            invoice.paid_amount += allocation.amount
+            if invoice.paid_amount > invoice.total:
+                invoice.paid_amount = invoice.total
+            invoice.save(update_fields=['paid_amount'])
         
         AuditService.log(posted_by, 'Record', receipt, f'تسجيل سند قبض رقم {receipt.number}')
         
@@ -609,14 +637,18 @@ class SalesService:
         DR  Bank Account                → receipt.amount
         CR  Cheques Under Collection    → receipt.amount
         """
+        receipt = CustomerReceipt.objects.select_for_update().get(pk=receipt.pk)
+
         if receipt.payment_method != 'cheque':
             raise ValueError("هذا السند ليس شيكاً")
 
-        if receipt.is_collected:
+        if receipt.cheque_status == CustomerReceipt.ChequeStatus.COLLECTED:
             raise ValueError("هذا الشيك محصل بالفعل")
-            
+        if receipt.cheque_status == CustomerReceipt.ChequeStatus.BOUNCED:
+            raise ValueError("هذا الشيك مرتجع ولا يمكن تحصيله")
+
         collection_account = Account.objects.get(code=getattr(settings, 'CHEQUES_UNDER_COLLECTION_ACCOUNT', '1151'))
-        
+
         lines = [
             {
                 'account': bank_account.account,
@@ -631,7 +663,7 @@ class SalesService:
                 'description': f'إقفال شيك رقم {receipt.cheque_number} (تحصيل)'
             }
         ]
-        
+
         entry = JournalService.create_entry(
             date_val=collection_date,
             entry_type=JournalEntry.EntryType.BANK,
@@ -640,13 +672,85 @@ class SalesService:
             source_document=receipt,
             created_by=created_by,
         )
-        
-        receipt.is_collected = True
+
+        receipt.cheque_status = CustomerReceipt.ChequeStatus.COLLECTED
         receipt.collected_at = collection_date
         receipt.reference += f" | محصل بتاريخ {collection_date}"
-        receipt.save()
-        
+        receipt.save(update_fields=['cheque_status', 'collected_at', 'reference'])
+
         return entry
+
+    @staticmethod
+    @transaction.atomic
+    def bounce_cheque(receipt, bounce_date, created_by, penalty_amount=0) -> JournalEntry:
+        """
+        Reverse Entry for a Bounced Cheque:
+        DR  Customer Account                 → receipt.amount
+        CR  Cheques Under Collection         → receipt.amount
+        (Optional) DR Customer Account       → penalty_amount (غرامة)
+        (Optional) CR Penalty Income Account  → penalty_amount
+        """
+        receipt = CustomerReceipt.objects.select_for_update().get(pk=receipt.pk)
+
+        if receipt.payment_method != 'cheque':
+            raise ValueError("هذا السند ليس شيكاً")
+        if receipt.cheque_status != CustomerReceipt.ChequeStatus.COLLECTED:
+            raise ValueError("هذا الشيك لم يتم تحصيله بعد أو ملغي بالفعل")
+
+        collection_account = Account.objects.get(code=getattr(settings, 'CHEQUES_UNDER_COLLECTION_ACCOUNT', '1151'))
+
+        lines = [
+            {
+                'account': receipt.customer.account,
+                'debit': receipt.amount,
+                'credit': 0,
+                'description': f'إرجاع شيك رقم {receipt.cheque_number} (مرتجع)'
+            },
+            {
+                'account': collection_account,
+                'debit': 0,
+                'credit': receipt.amount,
+                'description': f'إقفال شيك رقم {receipt.cheque_number} (إرجاع)'
+            }
+        ]
+
+        if penalty_amount > 0:
+            penalty_account = Account.objects.get(code=getattr(settings, 'PENALTY_INCOME_ACCOUNT', '42'))
+            lines.append({
+                'account': receipt.customer.account,
+                'debit': penalty_amount,
+                'credit': 0,
+                'description': f'غرامة شيك مرتجع رقم {receipt.cheque_number}'
+            })
+            lines.append({
+                'account': penalty_account,
+                'debit': 0,
+                'credit': penalty_amount,
+                'description': f'إيراد غرامة شيك مرتجع رقم {receipt.cheque_number}'
+            })
+
+        reversal_entry = JournalService.create_entry(
+            date_val=bounce_date,
+            entry_type=JournalEntry.EntryType.ADJUSTMENT,
+            description=f'إرجاع شيك مرتجع رقم {receipt.cheque_number}',
+            lines=lines,
+            source_document=receipt,
+            created_by=created_by,
+        )
+
+        receipt.cheque_status = CustomerReceipt.ChequeStatus.BOUNCED
+        receipt.save(update_fields=['cheque_status'])
+
+        for allocation in receipt.receiptallocation_set.select_related('invoice').all():
+            invoice = SalesInvoice.objects.select_for_update().get(pk=allocation.invoice.pk)
+            invoice.paid_amount -= allocation.amount
+            if invoice.paid_amount < 0:
+                invoice.paid_amount = 0
+            invoice.save(update_fields=['paid_amount'])
+
+        AuditService.log(created_by, 'Bounce', receipt, f'إرجاع شيك مرتجع رقم {receipt.cheque_number}')
+
+        return reversal_entry
 
 
 class RepSettlementService:
@@ -663,7 +767,14 @@ class RepSettlementService:
         parent = Account.objects.select_for_update().get(
             code=RepSettlementService.REP_RECEIVABLE_PARENT
         )
-        next_seq = Account.objects.filter(parent=parent).count() + 1
+        last_code = Account.objects.filter(parent=parent).aggregate(Max('code'))['code__max']
+        if last_code:
+            try:
+                next_seq = int(last_code[len(parent.code):]) + 1
+            except (ValueError, TypeError):
+                next_seq = Account.objects.filter(parent=parent).count() + 1
+        else:
+            next_seq = 1
         account = Account.objects.create(
             code=f'{parent.code}{next_seq:03d}',
             name=f'ذمة مندوب — {rep.name}',
@@ -679,7 +790,6 @@ class RepSettlementService:
         يجيب الفواتير النقدية للمندوب في يوم معين
         اللي لم تدرج في تسوية مُرحَّلة بعد
         """
-        from .models import RepSettlementInvoice
         settled_invoice_ids = RepSettlementInvoice.objects.filter(
             settlement__sales_rep=rep,
             settlement__status='posted',
@@ -699,6 +809,7 @@ class RepSettlementService:
         """
         ترحيل تسوية المندوب.
         """
+        settlement = RepDailySettlement.objects.select_for_update().get(pk=settlement.pk)
         if settlement.status == 'posted':
             raise ValueError('هذه التسوية مرحلة مسبقاً')
 
@@ -712,8 +823,10 @@ class RepSettlementService:
             dest_account = settlement.to_cash_box.account
         elif settlement.to_bank:
             dest_account = settlement.to_bank.account
+        elif settlement.to_wallet:
+            dest_account = settlement.to_wallet.account
         else:
-            raise ValueError('يجب تحديد الخزنة أو البنك الذي استلم منه')
+            raise ValueError('يجب تحديد الخزنة، البنك أو المحفظة التي استلمت النقدية')
 
         rep_cashbox_account = rep.cash_box.account
         rep_receivable_account = rep.account  # حساب ذمة المندوب

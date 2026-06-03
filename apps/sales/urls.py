@@ -18,6 +18,7 @@ urlpatterns = [
     path('invoices/', views.SalesInvoiceListView.as_view(), name='invoice-list'),
     path('invoices/create/', views.SalesInvoiceCreateView.as_view(), name='invoice-create'),
     path('invoices/<int:pk>/', views.SalesInvoiceDetailView.as_view(), name='invoice-detail'),
+    path('invoices/<int:pk>/print/', views.SalesInvoicePrintView.as_view(), name='invoice-print'),
     path('invoices/<int:pk>/edit/', views.SalesInvoiceUpdateView.as_view(), name='invoice-edit'),
     path('invoices/<int:pk>/reverse/', views.SalesInvoiceReverseView.as_view(), name='invoice-reverse'),
     path('invoices/<int:pk>/post/', views.SalesInvoicePostView.as_view(), name='invoice-post'),
@@ -25,7 +26,9 @@ urlpatterns = [
     path('receipts/', views.CustomerReceiptListView.as_view(), name='receipt-list'),
     path('receipts/create/', views.CustomerReceiptCreateView.as_view(), name='receipt-create'),
     path('receipts/<int:pk>/', views.CustomerReceiptDetailView.as_view(), name='receipt-detail'),
+    path('receipts/<int:pk>/print/', views.CustomerReceiptPrintView.as_view(), name='receipt-print'),
     path('receipts/<int:pk>/collect/', views.ChequeCollectionView.as_view(), name='collect-cheque'),
+    path('receipts/<int:pk>/bounce/', views.ChequeBounceView.as_view(), name='bounce-cheque'),
     
     # Representatives
     path('reps/', views.SalesRepresentativeListView.as_view(), name='rep-list'),
@@ -39,12 +42,14 @@ urlpatterns = [
     path('settlements/create/', views.RepDailySettlementCreateView.as_view(), name='settlement-create'),
     path('settlements/unsettled-invoices/', views.RepUnsettledInvoicesView.as_view(), name='unsettled-invoices'),
     path('settlements/<int:pk>/', views.RepDailySettlementDetailView.as_view(), name='settlement-detail'),
+    path('settlements/<int:pk>/post/', views.RepDailySettlementPostView.as_view(), name='settlement-post'),
 
     # Returns
     path('returns/', views.SalesReturnListView.as_view(), name='return-list'),
     path('returns/create/', views.SalesReturnCreateView.as_view(), name='return-create'),
     path('returns/<int:pk>/', views.SalesReturnDetailView.as_view(), name='return-detail'),
     path('returns/<int:pk>/post/', views.SalesReturnPostView.as_view(), name='return-post'),
+    path('returns/<int:pk>/delete/', views.SalesReturnDeleteView.as_view(), name='return-delete'),
 
     # Quotations
     path('quotations/', views.QuotationListView.as_view(), name='quotation-list'),
@@ -56,6 +61,8 @@ urlpatterns = [
     
     # API
     path('api/rep/<int:pk>/', views.RepDetailsAPIView.as_view(), name='rep-api'),
+    path('api/customer/<int:customer_id>/invoices/', views.CustomerInvoicesAPIView.as_view(), name='customer-invoices-api'),
+    path('api/invoice/<int:invoice_id>/lines/', views.SalesInvoiceLinesAPIView.as_view(), name='invoice-lines-api'),
     
     # Sectors
     path('sectors/', views.CustomerSectorListView.as_view(), name='sector-list'),

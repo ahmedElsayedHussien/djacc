@@ -86,7 +86,7 @@
                         <a href="{% url 'inventory:report-dashboard' %}" class="btn btn-sm btn-success me-2">
                             <i class="bi bi-bar-chart"></i> تقارير المخازن
                         </a>
-                        <a href="{% url 'inventory:item-list' %}?stock_alert=1" class="btn btn-sm btn-outline-primary">عرض الكل</a>
+                        <a href="{% url 'inventory:item-list' %}" class="btn btn-sm btn-outline-primary">عرض الكل</a>
                     </div>
                 </div>
 
@@ -156,26 +156,34 @@
                             <div>
                                 <i class="bi bi-arrow-left-right me-2 text-info"></i> تحويلات بانتظار التنفيذ
                             </div>
-                            <span class="badge rounded-pill bg-info text-white">0</span>
+                            <span class="badge rounded-pill bg-info text-white">{{ pending_transfers }}</span>
                         </a>
                     </div>
                     
                     <div class="mt-4">
                         <h6 class="fw-bold mb-3">إجراءات سريعة</h6>
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <a href="{% url 'inventory:voucher-create' %}" class="btn btn-outline-dark w-100 py-2 btn-sm"><i class="bi bi-plus-circle d-block mb-1"></i>إذن مخزني</a>
-                            </div>
-                            <div class="col-6">
-                                <a href="{% url 'inventory:item-create' %}" class="btn btn-outline-dark w-100 py-2 btn-sm"><i class="bi bi-plus-circle d-block mb-1"></i>إضافة صنف</a>
-                            </div>
-                            <div class="col-6">
-                                <a href="{% url 'inventory:transfer-create' %}" class="btn btn-outline-dark w-100 py-2 btn-sm"><i class="bi bi-plus-circle d-block mb-1"></i>طلب تحويل</a>
-                            </div>
-                            <div class="col-6">
-                                <a href="{% url 'inventory:warehouse-create' %}" class="btn btn-outline-dark w-100 py-2 btn-sm"><i class="bi bi-plus-circle d-block mb-1"></i>مستودع جديد</a>
-                            </div>
+                    <div class="row g-2">
+                        {% if perms.inventory.add_stockvoucher %}
+                        <div class="col-6">
+                            <a href="{% url 'inventory:voucher-create' %}" class="btn btn-outline-dark w-100 py-2 btn-sm"><i class="bi bi-plus-circle d-block mb-1"></i>إذن مخزني</a>
                         </div>
+                        {% endif %}
+                        {% if perms.inventory.add_item %}
+                        <div class="col-6">
+                            <a href="{% url 'inventory:item-create' %}" class="btn btn-outline-dark w-100 py-2 btn-sm"><i class="bi bi-plus-circle d-block mb-1"></i>إضافة صنف</a>
+                        </div>
+                        {% endif %}
+                        {% if perms.inventory.add_warehousetransfer %}
+                        <div class="col-6">
+                            <a href="{% url 'inventory:transfer-create' %}" class="btn btn-outline-dark w-100 py-2 btn-sm"><i class="bi bi-plus-circle d-block mb-1"></i>طلب تحويل</a>
+                        </div>
+                        {% endif %}
+                        {% if perms.inventory.add_warehouse %}
+                        <div class="col-6">
+                            <a href="{% url 'inventory:warehouse-create' %}" class="btn btn-outline-dark w-100 py-2 btn-sm"><i class="bi bi-plus-circle d-block mb-1"></i>مستودع جديد</a>
+                        </div>
+                        {% endif %}
+                    </div>
                     </div>
 
                     <div class="mt-4">
@@ -270,7 +278,7 @@
     new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: [{% for w in warehouse_stats %}'{{ w.name }}',{% endfor %}],
+            labels: [{% for w in warehouse_stats %}'{{ w.name|escapejs }}',{% endfor %}],
             datasets: [{
                 data: [{% for w in warehouse_stats %}{{ w.total_val|default:0 }},{% endfor %}],
                 backgroundColor: [

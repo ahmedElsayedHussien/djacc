@@ -112,7 +112,7 @@
                                             </div>
                                         {% else %}
                                             <small class="text-muted">في انتظار تأكيد استلام المبلغ في الجهة المحول إليها.</small>
-                                            {% if transfer.status == 'pending' %}
+                                            {% if transfer.status == 'pending' and perms.treasury.change_cashtransfer %}
                                             <div class="mt-3">
                                                 <form action="{% url 'treasury:transfer-receive' transfer.pk %}" method="post">
                                                     {% csrf_token %}
@@ -145,8 +145,11 @@
                     <button class="btn btn-outline-dark" onclick="window.print()">
                         <i class="bi bi-printer"></i> طباعة السند
                     </button>
-                    {% if transfer.status != 'cancelled' %}
-                    <form action="{% url 'treasury:transfer-reverse' transfer.pk %}" method="post" class="d-inline" onsubmit="return confirm('هل أنت متأكد من إلغاء هذا التحويل وعكس قيوده؟')">
+                    {% if transfer.status != 'cancelled' and perms.treasury.delete_cashtransfer %}
+                    <form action="{% url 'treasury:transfer-reverse' transfer.pk %}" method="post" class="d-inline"
+                          data-reverse-type="cash-transfer"
+                          data-reverse-doc="عكس تحويل نقدي رقم {{ transfer.number }}"
+                          data-reverse-detail="من: {{ transfer.from_source }} — إلى: {{ transfer.to_destination }}">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-outline-danger">
                             <i class="bi bi-x-circle"></i> إلغاء التحويل

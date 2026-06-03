@@ -5,9 +5,11 @@
 <div class="card shadow-sm">
     <div class="card-header d-flex justify-content-between align-items-center bg-white py-3">
         <h5 class="mb-0 fw-bold text-primary">طلبات التحميل</h5>
+        {% if perms.inventory.add_loadingorder %}
         <a href="{% url 'inventory:loading-create' %}" class="btn btn-primary rounded-pill">
             <i class="bi bi-plus-lg"></i> إنشاء طلب جديد
         </a>
+        {% endif %}
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -61,5 +63,6 @@
             </table>
         </div>
     </div>
+    {% include 'partials/pagination.html' %}
 </div>
 {% endblock %}

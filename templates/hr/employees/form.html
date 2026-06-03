@@ -146,11 +146,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     .then(response => response.json())
                     .then(data => {
                         if (!data.error) {
-                            // فقط نملأ الخانات إذا كانت فارغة، للسماح للمستخدم بالتعديل إذا أراد
-                            if (firstNameInput && !firstNameInput.value) {
+                            if (firstNameInput) {
                                 firstNameInput.value = data.first_name;
                             }
-                            if (lastNameInput && !lastNameInput.value) {
+                            if (lastNameInput) {
                                 lastNameInput.value = data.last_name;
                             }
                         }

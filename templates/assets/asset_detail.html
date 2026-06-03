@@ -44,10 +44,10 @@
                     <p class="small bg-light p-2 rounded">{{ asset.notes|default:"لا يوجد ملاحظات." }}</p>
                 </div>
                 <div class="d-grid gap-2 mt-4">
-                    <a href="{% url 'assets:asset-update' asset.pk %}" class="btn btn-outline-secondary">
+                    {% if perms.assets.change_asset %}<a href="{% url 'assets:asset-update' asset.pk %}" class="btn btn-outline-secondary">
                         <i class="bi bi-pencil me-1"></i> تعديل البيانات
-                    </a>
-                    {% if asset.status == 'active' %}
+                    </a>{% endif %}
+                    {% if asset.status == 'active' and perms.assets.change_asset %}
                     <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#disposeModal">
                         <i class="bi bi-trash me-1"></i> استبعاد الأصل
                     </button>

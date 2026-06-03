@@ -1,7 +1,16 @@
 from datetime import date
 from decimal import Decimal
-from django.db.models import Sum
-from apps.core.models import Account, JournalLine, JournalEntry, FiscalYear, AccountType
+from django.db.models import Sum, Q, F, Func, Value, Count, Case, When, IntegerField
+from django.db.models.functions import TruncMonth, Coalesce
+from django.utils import timezone
+from apps.core.models import Account, JournalLine, JournalEntry, FiscalYear, AccountType, CostCenter
+from apps.sales.models import Customer, SalesInvoice, SalesInvoiceLine, SalesReturn, SalesReturnLine, CustomerReceipt, SalesRepresentative, RepDailySettlement, IntermediaryCompany
+from apps.purchases.models import Supplier, PurchaseInvoice, PurchaseInvoiceLine, PurchaseReturn, PurchaseReturnLine, SupplierPayment
+from apps.hr.models import Employee, PayrollPeriod, Payslip, LeaveRequest, Loan
+from apps.inventory.models import Item, ItemLedger, Warehouse, StockVoucher, StockMovement
+from apps.expenses.models import Expense, Custody
+from apps.treasury.models import CashBox, BankAccount
+
 
 class ReportService:
 
@@ -124,9 +133,8 @@ class ReportService:
         net_other = total_other_rev - total_finance_exp - total_other_exp
         net_profit_before_tax = operating_profit + net_other
         
-        # 5. الضرائب
-        tax_items, tax_total = get_dynamic_section('2122', 'credit') # Assuming income tax liability movements or a specific expense account. If they use 55: get_dynamic_section('55', 'debit')
-        tax_exp = get_balance('55', 'debit') # Standard approach for tax expense
+        # 5. الضرائب - مصروف ضريبة الدخل من حساب المصروفات (55)
+        tax_exp = get_balance('55', 'debit')
         net_income = net_profit_before_tax - tax_exp
         
         return {
@@ -231,7 +239,6 @@ class ReportService:
         """
         كشف حساب عميل
         """
-        from apps.sales.models import Customer
         customer = Customer.objects.get(id=customer_id)
         account = customer.account
         
@@ -291,7 +298,6 @@ class ReportService:
         """
         كشف حساب مندوب
         """
-        from apps.sales.models import SalesRepresentative
         rep = SalesRepresentative.objects.get(id=rep_id)
         account = rep.account
         
@@ -350,7 +356,6 @@ class ReportService:
         """
         تقرير حالة المخزون
         """
-        from apps.inventory.models import ItemLedger, Warehouse
         qs = ItemLedger.objects.select_related('item', 'warehouse', 'item__base_unit', 'item__category')
         
         if warehouse_id:
@@ -368,7 +373,6 @@ class ReportService:
         """
         تقرير عمولات المناديب بناءً على المبيعات (أو التحصيلات)
         """
-        from apps.sales.models import SalesRepresentative, SalesInvoice
         reps = SalesRepresentative.objects.filter(is_active=True)
         rows = []
         for rep in reps:
@@ -394,7 +398,6 @@ class ReportService:
         """
         كشف حساب مركز تكلفة (المصروفات والإيرادات المحملة عليه)
         """
-        from apps.core.models import CostCenter
         cost_center = CostCenter.objects.get(id=cost_center_id)
         
         movements = JournalLine.objects.filter(
@@ -493,7 +496,6 @@ class ReportService:
         تقرير ضريبة القيمة المضافة (VAT Report)
         يُظهر: المبيعات + المشتريات + صافي الضريبة المستحقة
         """
-        from apps.core.models import JournalLine, AccountType
         
         base_filter = {
             'entry__is_posted': True,
@@ -564,7 +566,6 @@ class ReportService:
         تقرير ضريبة الخصم والتحصيل (WHT Report)
         يُظهر: WHT على المبيعات + WHT على المشتريات + صافي القيمة
         """
-        from apps.core.models import JournalLine, AccountType
         
         base_filter = {
             'entry__is_posted': True,
@@ -609,7 +610,6 @@ class ReportService:
         """
         تقرير تقييم المخزون المالي
         """
-        from apps.inventory.models import ItemLedger
         qs = ItemLedger.objects.select_related('item', 'warehouse', 'item__category')
         if warehouse_id:
             qs = qs.filter(warehouse_id=warehouse_id)
@@ -627,9 +627,6 @@ class ReportService:
         """
         تقرير نواقص المخزون (الأصناف التي وصلت لحد الطلب)
         """
-        from apps.inventory.models import Item
-        from django.db.models import Sum, F
-        from django.db.models.functions import Coalesce
         
         # Annotate items with total current stock
         items = Item.objects.filter(is_active=True).annotate(
@@ -643,7 +640,6 @@ class ReportService:
         """
         كارت الصنف التفصيلي (Stock Card)
         """
-        from apps.inventory.models import Item, StockMovement
         item = Item.objects.get(id=item_id)
         
         qs = StockMovement.objects.filter(item=item).select_related('warehouse')
@@ -676,7 +672,6 @@ class ReportService:
         """
         تقرير التوالف والتسويات المخزنية
         """
-        from apps.inventory.models import StockVoucher
         vouchers = StockVoucher.objects.filter(
             status='posted',
             date__range=[from_date, to_date]
@@ -689,8 +684,6 @@ class ReportService:
         """
         تقرير العهدة الحالية للمندوب (جرد السيارة)
         """
-        from apps.sales.models import SalesRepresentative
-        from apps.inventory.models import ItemLedger
         rep = SalesRepresentative.objects.select_related('warehouse').get(id=rep_id)
         
         if not rep.warehouse:
@@ -712,8 +705,6 @@ class ReportService:
         تقرير معدل دوران المخزون
         Turnover = COGS / Average Inventory
         """
-        from apps.inventory.models import Item, StockMovement, ItemLedger
-        from django.db.models import Sum, Q
         
         # 1. Total COGS per item (from Sales Issues)
         # Assuming movement_type.SALES_ISSUE or calculation based on StockMovement
@@ -749,9 +740,6 @@ class ReportService:
 
     @staticmethod
     def net_sales_profitability_report(from_date, to_date):
-        from apps.sales.models import SalesInvoice, SalesReturn, SalesInvoiceLine
-        from django.db.models import Sum, F
-        from decimal import Decimal
         
         # Gross Sales & Discounts
         sales_data = SalesInvoice.objects.filter(
@@ -798,8 +786,6 @@ class ReportService:
 
     @staticmethod
     def product_profitability_report(from_date, to_date):
-        from apps.sales.models import SalesInvoice, SalesInvoiceLine
-        from django.db.models import Sum, F, ExpressionWrapper, DecimalField
         
         lines = SalesInvoiceLine.objects.filter(
             invoice__status=SalesInvoice.Status.POSTED,
@@ -818,8 +804,6 @@ class ReportService:
 
     @staticmethod
     def sales_by_sector_report(from_date, to_date):
-        from apps.sales.models import SalesInvoice
-        from django.db.models import Count, Sum
         
         sectors = SalesInvoice.objects.filter(
             status=SalesInvoice.Status.POSTED,
@@ -836,9 +820,6 @@ class ReportService:
 
     @staticmethod
     def rep_performance_report_enhanced(from_date, to_date):
-        from apps.sales.models import SalesRepresentative, SalesInvoice, SalesReturn, SalesTarget
-        from django.db.models import Sum, Q
-        from decimal import Decimal
         
         reps = SalesRepresentative.objects.filter(is_active=True)
         results = []
@@ -871,11 +852,6 @@ class ReportService:
 
     @staticmethod
     def customer_aging_summary_report(customer_id=None):
-        from apps.sales.models import Customer, SalesInvoice
-        from django.db.models import Sum, F, Q
-        from django.db.models.functions import Coalesce
-        from django.utils import timezone
-        from decimal import Decimal
         
         today = timezone.now().date()
         
@@ -921,9 +897,6 @@ class ReportService:
 
     @staticmethod
     def quotation_analysis_report(from_date, to_date):
-        from apps.sales.models import Quotation
-        from django.db.models import Count, Sum
-        from decimal import Decimal
         
         qs = Quotation.objects.filter(date__range=[from_date, to_date])
         total_count = qs.count()
@@ -947,9 +920,6 @@ class ReportService:
         }
     @staticmethod
     def purchases_summary_report(from_date, to_date):
-        from apps.purchases.models import PurchaseInvoice, PurchaseReturn
-        from django.db.models import Sum
-        from decimal import Decimal
         
         # Gross Purchases & Discounts
         purchases_data = PurchaseInvoice.objects.filter(
@@ -987,8 +957,6 @@ class ReportService:
 
     @staticmethod
     def item_purchase_cost_report(from_date, to_date):
-        from apps.purchases.models import PurchaseInvoiceLine, PurchaseInvoice
-        from django.db.models import Sum, F, Max, Min, Avg
         
         report = PurchaseInvoiceLine.objects.filter(
             invoice__status=PurchaseInvoice.Status.POSTED,
@@ -1007,9 +975,6 @@ class ReportService:
 
     @staticmethod
     def supplier_balances_report(from_date, to_date):
-        from apps.purchases.models import Supplier, PurchaseInvoice, SupplierPayment
-        from django.db.models import Sum, Q
-        from decimal import Decimal
         
         suppliers = Supplier.objects.all()
         results = []
@@ -1032,11 +997,6 @@ class ReportService:
 
     @staticmethod
     def supplier_aging_report(supplier_id=None):
-        from apps.purchases.models import Supplier, PurchaseInvoice
-        from django.db.models import Sum, F
-        from django.db.models.functions import Coalesce
-        from django.utils import timezone
-        from decimal import Decimal
         
         today = timezone.now().date()
         suppliers = Supplier.objects.all()
@@ -1077,16 +1037,12 @@ class ReportService:
 
     @staticmethod
     def open_purchase_orders_report():
-        from apps.purchases.models import PurchaseOrder
         return PurchaseOrder.objects.filter(
             status__in=[PurchaseOrder.Status.APPROVED, PurchaseOrder.Status.RECEIVED]
         ).select_related('supplier').order_by('date')
 
     @staticmethod
     def purchase_returns_analysis_report(from_date, to_date):
-        from apps.purchases.models import Supplier, PurchaseInvoice, PurchaseReturn
-        from django.db.models import Sum
-        from decimal import Decimal
         
         suppliers = Supplier.objects.all()
         results = []
@@ -1111,22 +1067,30 @@ class ReportService:
         return sorted(results, key=lambda x: x['total_returns'], reverse=True)
     @staticmethod
     def supplier_statement(supplier_id, from_date, to_date):
-        from apps.purchases.models import Supplier, PurchaseInvoice, SupplierPayment, PurchaseReturn
-        from apps.core.models import JournalLine
-        from django.db.models import Q, F, Sum
-        from decimal import Decimal
-        
         supplier = Supplier.objects.get(id=supplier_id)
         account = supplier.account
-        
-        # 1. Opening Balance
-        op_balance = JournalLine.objects.filter(
+
+        init_debit = Decimal('0')
+        init_credit = Decimal('0')
+        has_opening_entry = JournalLine.objects.filter(
+            account=account,
+            entry__entry_type=JournalEntry.EntryType.OPENING,
+            entry__is_posted=True
+        ).exists()
+        if not has_opening_entry:
+            if account.initial_balance_type == 'debit':
+                init_debit = account.initial_balance
+            else:
+                init_credit = account.initial_balance
+
+        pre_movements = JournalLine.objects.filter(
             account=account,
             entry__date__lt=from_date,
             entry__is_posted=True
-        ).aggregate(
-            bal=Sum(F('debit') - F('credit'))
-        )['bal'] or Decimal('0')
+        ).aggregate(d=Sum('debit'), c=Sum('credit'))
+        op_debit = init_debit + (pre_movements['d'] or Decimal('0'))
+        op_credit = init_credit + (pre_movements['c'] or Decimal('0'))
+        op_balance = op_debit - op_credit
         
         # 2. Movements
         lines = JournalLine.objects.filter(
@@ -1159,8 +1123,6 @@ class ReportService:
 
     @staticmethod
     def live_liquidity_position():
-        from apps.treasury.models import CashBox, BankAccount
-        from decimal import Decimal
         
         cash_boxes = CashBox.objects.filter(is_active=True).select_related('responsible_user', 'account')
         bank_accounts = BankAccount.objects.filter(is_active=True).select_related('account')
@@ -1193,8 +1155,6 @@ class ReportService:
 
     @staticmethod
     def cash_in_transit_report():
-        from apps.treasury.models import CashTransfer
-        from django.utils import timezone
         
         pending_transfers = CashTransfer.objects.filter(
             status=CashTransfer.Status.PENDING
@@ -1212,7 +1172,6 @@ class ReportService:
 
     @staticmethod
     def internal_transfers_summary(from_date, to_date):
-        from apps.treasury.models import CashTransfer
         
         transfers = CashTransfer.objects.filter(
             status=CashTransfer.Status.COMPLETED,
@@ -1223,7 +1182,6 @@ class ReportService:
 
     @staticmethod
     def bank_reconciliation_report(reconciliation_id):
-        from apps.treasury.models import BankReconciliation, BankTransaction
         recon = BankReconciliation.objects.get(id=reconciliation_id)
         
         unreconciled_transactions = BankTransaction.objects.filter(
@@ -1239,8 +1197,6 @@ class ReportService:
 
     @staticmethod
     def bank_charges_interest_report(from_date, to_date):
-        from apps.treasury.models import BankTransaction
-        from django.db.models import Sum
         
         report = BankTransaction.objects.filter(
             date__range=[from_date, to_date],
@@ -1253,8 +1209,6 @@ class ReportService:
 
     @staticmethod
     def expenses_by_category(from_date, to_date):
-        from apps.expenses.models import Expense
-        from django.db.models import Sum, Count
         
         report = Expense.objects.filter(
             date__range=[from_date, to_date],
@@ -1270,8 +1224,6 @@ class ReportService:
 
     @staticmethod
     def expenses_by_cost_center(from_date, to_date):
-        from apps.expenses.models import Expense
-        from django.db.models import Sum
         
         report = Expense.objects.filter(
             date__range=[from_date, to_date],
@@ -1284,7 +1236,6 @@ class ReportService:
 
     @staticmethod
     def expense_tax_report(from_date, to_date):
-        from apps.expenses.models import Expense
         
         report = Expense.objects.filter(
             date__range=[from_date, to_date],
@@ -1296,8 +1247,6 @@ class ReportService:
 
     @staticmethod
     def outstanding_custodies_summary():
-        from apps.expenses.models import Custody
-        from django.db.models import F
         
         report = Custody.objects.filter(
             status__in=[Custody.Status.OPEN, Custody.Status.PARTIALLY_SETTLED]
@@ -1309,7 +1258,6 @@ class ReportService:
 
     @staticmethod
     def custody_settlement_detail(settlement_id):
-        from apps.expenses.models import CustodySettlement, Expense
         settlement = CustodySettlement.objects.select_related('custody', 'custody__employee', 'cash_box').get(id=settlement_id)
         expenses = Expense.objects.filter(settlement=settlement)
         
@@ -1320,8 +1268,6 @@ class ReportService:
 
     @staticmethod
     def aged_custodies_report():
-        from apps.expenses.models import Custody
-        from django.utils import timezone
         
         now = timezone.now().date()
         report = Custody.objects.filter(
@@ -1339,8 +1285,6 @@ class ReportService:
 
     @staticmethod
     def expenses_by_payment_method(from_date, to_date):
-        from apps.expenses.models import Expense
-        from django.db.models import Sum, Count
         
         report = Expense.objects.filter(
             date__range=[from_date, to_date],
@@ -1354,12 +1298,10 @@ class ReportService:
 
     @staticmethod
     def hr_org_chart_summary():
-        from apps.hr.models import Employee, Department
-        from django.db.models import Count, Sum
         
         report = Department.objects.annotate(
-            employee_count=Count('employees', filter=models.Q(employees__status='active')),
-            total_basic_salary=Sum('employees__basic_salary', filter=models.Q(employees__status='active'))
+            employee_count=Count('employees', filter=Q(employees__status='active')),
+            total_basic_salary=Sum('employees__basic_salary', filter=Q(employees__status='active'))
         ).order_by('-employee_count')
         
         contract_distribution = Employee.objects.filter(status='active').values('contract_type').annotate(
@@ -1373,9 +1315,6 @@ class ReportService:
 
     @staticmethod
     def hr_document_expiry_report(days=30):
-        from apps.hr.models import EmployeeDocument
-        from django.utils import timezone
-        from datetime import timedelta
         
         limit_date = timezone.now().date() + timedelta(days=days)
         report = EmployeeDocument.objects.filter(
@@ -1387,14 +1326,12 @@ class ReportService:
 
     @staticmethod
     def hr_attendance_summary(from_date, to_date):
-        from apps.hr.models import AttendanceRecord
-        from django.db.models import Count, Sum
         
         report = AttendanceRecord.objects.filter(
             date__range=[from_date, to_date]
         ).values('employee__first_name', 'employee__last_name').annotate(
-            absent_count=Count('id', filter=models.Q(status='absent')),
-            late_count=Count('id', filter=models.Q(status='late')),
+            absent_count=Count('id', filter=Q(status='absent')),
+            late_count=Count('id', filter=Q(status='late')),
             total_overtime=Sum('overtime_hours')
         )
         
@@ -1402,22 +1339,17 @@ class ReportService:
 
     @staticmethod
     def hr_leave_balances_report():
-        from apps.hr.models import LeaveBalance
-        from django.db.models import F
         
         report = LeaveBalance.objects.select_related('employee', 'leave_type').order_by('employee__first_name')
         return report
 
     @staticmethod
     def payroll_register_report(period_id):
-        from apps.hr.models import Payslip
         report = Payslip.objects.filter(period_id=period_id).select_related('employee', 'employee__department', 'employee__job_title')
         return report
 
     @staticmethod
     def payroll_by_cost_center_report(period_id):
-        from apps.hr.models import Payslip
-        from django.db.models import Sum
         
         report = Payslip.objects.filter(period_id=period_id).values(
             'employee__department__cost_center__name'
@@ -1430,8 +1362,6 @@ class ReportService:
 
     @staticmethod
     def payroll_tax_insurance_report(period_id):
-        from apps.hr.models import Payslip
-        from django.db.models import Sum
         
         report = Payslip.objects.filter(period_id=period_id).aggregate(
             total_social_insurance=Sum('social_insurance'),
@@ -1441,8 +1371,6 @@ class ReportService:
 
     @staticmethod
     def hr_loans_balance_report():
-        from apps.hr.models import Loan, LoanInstallment
-        from django.db.models import Sum, F
         
         report = Loan.objects.filter(
             status__in=['approved', 'paid']
@@ -1455,12 +1383,10 @@ class ReportService:
 
     @staticmethod
     def hr_employee_assets_report():
-        from apps.hr.models import EmployeeAsset
         report = EmployeeAsset.objects.filter(is_returned=False).select_related('employee')
         return report
 
     @staticmethod
     def hr_eos_settlements_report():
-        from apps.hr.models import EndOfService
         report = EndOfService.objects.select_related('employee').order_by('-termination_date')
         return report

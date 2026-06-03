@@ -3,6 +3,45 @@
 {% block header %}قيد رقم: {{ entry.number }}{% endblock %}
 
 {% block content %}
+
+{% if entry.is_reversed %}
+<div class="alert alert-danger border-0 shadow-sm d-flex align-items-center gap-3 mb-4 py-3" style="border-radius: 12px; background-color: #fff5f5; border-right: 5px solid #dc3545 !important;">
+    <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; min-width: 44px;">
+        <i class="bi bi-arrow-counterclockwise fs-4"></i>
+    </div>
+    <div>
+        <h6 class="alert-heading fw-bold mb-1 text-danger" style="font-family: 'Cairo', sans-serif;">هذا القيد تم عكسه وإلغاؤه</h6>
+        <p class="mb-0 small text-dark" style="font-family: 'Cairo', sans-serif;">
+            تم عكس هذا القيد بواسطة القيد العكسي رقم: 
+            <a href="{% url 'core:journal-detail' entry.reversed_by.pk %}" class="fw-bold text-danger text-decoration-underline">
+                {{ entry.reversed_by.number }}
+            </a> 
+            في تاريخ <strong>{{ entry.reversed_at|date:"Y-m-d H:i:s" }}</strong> 
+            بواسطة المستخدم: <strong>{{ entry.reversed_by.created_by.get_full_name|default:entry.reversed_by.created_by.username }}</strong>.
+        </p>
+    </div>
+</div>
+{% endif %}
+
+{% if entry.is_reversal %}
+{% with parent_entry=entry.journalentry_set.first %}
+<div class="alert alert-warning border-0 shadow-sm d-flex align-items-center gap-3 mb-4 py-3" style="border-radius: 12px; background-color: #fffaf0; border-right: 5px solid #ffc107 !important;">
+    <div class="bg-warning text-dark rounded-circle d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; min-width: 44px;">
+        <i class="bi bi-exclamation-triangle-fill fs-4"></i>
+    </div>
+    <div>
+        <h6 class="alert-heading fw-bold mb-1 text-warning-dark" style="font-family: 'Cairo', sans-serif; color: #856404;">هذا القيد هو قيد عكسي (إلغاء)</h6>
+        <p class="mb-0 small text-dark" style="font-family: 'Cairo', sans-serif;">
+            هذا القيد تم إنشاؤه تلقائياً لعكس وإلغاء القيد الأصلي رقم: 
+            <a href="{% url 'core:journal-detail' parent_entry.pk %}" class="fw-bold text-warning-dark text-decoration-underline" style="color: #856404;">
+                {{ parent_entry.number }}
+            </a>.
+        </p>
+    </div>
+</div>
+{% endwith %}
+{% endif %}
+
 <div class="row">
     <div class="col-md-4">
         <div class="card mb-4">
@@ -63,7 +102,7 @@
                         <i class="bi bi-printer"></i> طباعة القيد
                     </button>
                     
-                    {% if not entry.is_posted %}
+                    {% if not entry.is_posted and perms.core.change_journalentry %}
                     <form method="post" action="{% url 'core:journal-post' entry.pk %}">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-success w-100" onclick="return confirm('هل أنت متأكد من ترحيل هذا القيد؟ لن يمكنك تعديله بعد الترحيل.')">
@@ -72,10 +111,13 @@
                     </form>
                     {% endif %}
                     
-                    {% if entry.is_posted and not entry.is_reversed %}
-                    <form method="post" action="{% url 'core:journal-reverse' entry.pk %}">
+                    {% if entry.is_posted and not entry.is_reversed and not entry.is_reversal and perms.core.delete_journalentry %}
+                    <form method="post" action="{% url 'core:journal-reverse' entry.pk %}"
+                          data-reverse-type="journal-entry"
+                          data-reverse-doc="عكس قيد رقم {{ entry.number }}"
+                          data-reverse-detail="التاريخ: {{ entry.date|date:'Y-m-d' }} — {{ entry.description }}">
                         {% csrf_token %}
-                        <button type="submit" class="btn btn-danger w-100" onclick="return confirm('تأكيد عكس القيد؟ سيتم إنشاء قيد عكسي وتصفير أثر هذا القيد.')">
+                        <button type="submit" class="btn btn-danger w-100">
                             <i class="bi bi-arrow-counterclockwise"></i> عكس القيد
                         </button>
                     </form>

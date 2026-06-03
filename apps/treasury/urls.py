@@ -16,6 +16,17 @@ urlpatterns = [
     path('banks/<int:pk>/', views.BankAccountDetailView.as_view(), name='bank-detail'),
     path('banks/<int:pk>/update/', views.BankAccountUpdateView.as_view(), name='bank-update'),
 
+    # Wallets
+    path('wallets/', views.MobileWalletListView.as_view(), name='wallet-list'),
+    path('wallets/create/', views.MobileWalletCreateView.as_view(), name='wallet-create'),
+    path('wallets/<int:pk>/', views.MobileWalletDetailView.as_view(), name='wallet-detail'),
+    path('wallets/<int:pk>/update/', views.MobileWalletUpdateView.as_view(), name='wallet-update'),
+
+    # Intermediary Companies
+    path('intermediary/', views.IntermediaryCompanyListView.as_view(), name='intermediary-list'),
+    path('intermediary/create/', views.IntermediaryCompanyCreateView.as_view(), name='intermediary-create'),
+    path('intermediary/<int:pk>/update/', views.IntermediaryCompanyUpdateView.as_view(), name='intermediary-update'),
+
     # Transfers
     path('transfers/', views.CashTransferListView.as_view(), name='transfer-list'),
     path('transfers/create/', views.CashTransferCreateView.as_view(), name='transfer-create'),

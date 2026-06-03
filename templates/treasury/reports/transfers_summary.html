@@ -47,7 +47,7 @@
                         <td>{{ t.from_cash_box|default:t.from_bank }}</td>
                         <td>{{ t.to_cash_box|default:t.to_bank }}</td>
                         <td class="text-center fw-bold">{{ t.amount|floatformat:2|intcomma }}</td>
-                        <td>{{ t.received_by.username|default:"-" }}</td>
+                        <td>{% if t.received_by %}{{ t.received_by.username }}{% else %}-{% endif %}</td>
                         <td class="text-center">
                             <span class="badge bg-success">مكتمل</span>
                         </td>

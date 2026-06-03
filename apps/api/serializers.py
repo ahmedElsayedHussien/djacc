@@ -1,6 +1,6 @@
 from rest_framework import serializers
-from apps.core.models import Account, JournalEntry, JournalLine
-from apps.sales.models import Customer, SalesInvoice, PriceList, PriceListItem
+from apps.core.models import Account, JournalEntry, JournalLine, TaxType
+from apps.sales.models import Customer, SalesInvoice, PriceList, PriceListItem, Quotation, QuotationLine
 from apps.purchases.models import Supplier, PurchaseInvoice
 
 class AccountSerializer(serializers.ModelSerializer):
@@ -24,17 +24,17 @@ class CustomerSerializer(serializers.ModelSerializer):
         model = Customer
         fields = '__all__'
 
-from apps.sales.models import Quotation, QuotationLine
 class QuotationLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuotationLine
-        fields = ['item', 'discount_percent']
+        fields = ['item', 'unit', 'quantity', 'base_quantity', 'unit_price', 'discount_percent', 'tax_type', 'tax_percent', 'total']
 
 class QuotationSerializer(serializers.ModelSerializer):
     lines = QuotationLineSerializer(many=True, read_only=True)
     class Meta:
         model = Quotation
-        fields = ['id', 'name', 'sector', 'start_date', 'end_date', 'lines']
+        fields = ['id', 'number', 'name', 'customer', 'sector', 'sales_rep', 'start_date', 'end_date',
+                  'status', 'is_active', 'subtotal', 'discount_amount', 'tax_amount', 'total', 'notes', 'lines']
 
 class SalesInvoiceSerializer(serializers.ModelSerializer):
     class Meta:
@@ -51,7 +51,6 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
         model = PurchaseInvoice
         fields = '__all__'
 
-from apps.core.models import TaxType
 class TaxTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaxType

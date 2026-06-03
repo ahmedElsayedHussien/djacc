@@ -8,14 +8,14 @@
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">بيانات العهدة</h5>
-                {% if custody.status != 'settled' %}
+                {% if custody.status != 'settled' and perms.expenses.add_custodysettlement %}
                 <a href="{% url 'expenses:custody-settle' custody.pk %}" class="btn btn-sm btn-success">تسوية العهدة</a>
                 {% endif %}
             </div>
             <div class="card-body">
                 <table class="table table-sm">
                     <tr><th>التاريخ:</th><td>{{ custody.date|date:'Y-m-d' }}</td></tr>
-                    <tr><th>الموظف:</th><td>{{ custody.employee.get_full_name|default:custody.employee.username }}</td></tr>
+                    <tr><th>الموظف:</th><td>{{ custody.employee.full_name }}</td></tr>
                     <tr><th>صرفت من خزنة:</th><td>{{ custody.cash_box.name }}</td></tr>
                     <tr><th>إجمالي العهدة:</th><td class="fw-bold">{{ custody.amount }}</td></tr>
                     <tr><th>تمت تسويته:</th><td class="text-success">{{ custody.settled_amount }}</td></tr>

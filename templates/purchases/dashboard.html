@@ -158,15 +158,21 @@
                 </div>
                 <div class="card-body">
                     <div class="d-grid gap-2 mb-4">
+                        {% if perms.purchases.add_purchaseinvoice %}
                         <a href="{% url 'purchases:invoice-create' %}" class="btn btn-primary py-2 text-start">
                             <i class="bi bi-plus-circle me-2"></i>فاتورة مشتريات جديدة
                         </a>
+                        {% endif %}
+                        {% if perms.purchases.add_supplierpayment %}
                         <a href="{% url 'purchases:payment-create' %}" class="btn btn-success py-2 text-start">
                             <i class="bi bi-plus-circle me-2"></i>تسجيل سداد لمورد
                         </a>
+                        {% endif %}
+                        {% if perms.purchases.add_supplier %}
                         <a href="{% url 'purchases:supplier-create' %}" class="btn btn-dark py-2 text-start">
                             <i class="bi bi-plus-circle me-2"></i>إضافة مورد جديد
                         </a>
+                        {% endif %}
                         <a href="{% url 'purchases:report-dashboard' %}" class="btn btn-outline-primary py-2 text-start">
                             <i class="bi bi-graph-up-arrow me-2"></i>لوحة تقارير المشتريات
                         </a>

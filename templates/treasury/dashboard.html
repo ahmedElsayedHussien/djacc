@@ -91,9 +91,13 @@
                             <span><i class="bi bi-circle-fill text-success me-2" style="font-size: 10px;"></i>النقدية (الخزن)</span>
                             <span class="fw-bold">{{ total_cash|floatformat:0|intcomma }}</span>
                         </div>
-                        <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
                             <span><i class="bi bi-circle-fill text-info me-2" style="font-size: 10px;"></i>الحسابات البنكية</span>
                             <span class="fw-bold">{{ total_bank|floatformat:0|intcomma }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-circle-fill text-warning me-2" style="font-size: 10px;"></i>المحافظ الإلكترونية</span>
+                            <span class="fw-bold">{{ total_wallet|floatformat:0|intcomma }}</span>
                         </div>
                     </div>
                 </div>
@@ -107,7 +111,8 @@
                     <h5 class="mb-0 fw-bold">الأرصدة الحالية للحسابات</h5>
                     <div>
                         <a href="{% url 'treasury:cashbox-list' %}" class="btn btn-sm btn-outline-success me-2">الخزن</a>
-                        <a href="{% url 'treasury:bank-list' %}" class="btn btn-sm btn-outline-info">البنوك</a>
+                        <a href="{% url 'treasury:bank-list' %}" class="btn btn-sm btn-outline-info me-2">البنوك</a>
+                        <a href="{% url 'treasury:wallet-list' %}" class="btn btn-sm btn-outline-warning">المحافظ</a>
                     </div>
                 </div>
                 <div class="card-body p-0">
@@ -144,6 +149,17 @@
                                     <td class="text-end px-4 fw-bold">{{ item.balance|floatformat:2|intcomma }}</td>
                                 </tr>
                                 {% endfor %}
+                                {% for item in wallets_data %}
+                                <tr class="account-row" onclick="window.location='{% url 'treasury:wallet-detail' item.obj.pk %}'">
+                                    <td class="px-4">
+                                        <div class="fw-bold text-warning"><i class="bi bi-phone-vibrate me-2"></i>{{ item.obj.get_provider_display }} - {{ item.obj.name }}</div>
+                                        <small class="text-muted">{{ item.obj.mobile_number }}</small>
+                                    </td>
+                                    <td>محفظة إلكترونية</td>
+                                    <td>{{ item.obj.currency }}</td>
+                                    <td class="text-end px-4 fw-bold">{{ item.balance|floatformat:2|intcomma }}</td>
+                                </tr>
+                                {% endfor %}
                             </tbody>
                         </table>
                     </div>
@@ -161,12 +177,16 @@
                 </div>
                 <div class="card-body">
                     <div class="d-grid gap-2">
+                        {% if perms.treasury.add_cashtransfer %}
                         <a href="{% url 'treasury:transfer-create' %}" class="btn btn-primary py-2 text-start">
                             <i class="bi bi-send-plus me-2"></i>إنشاء أمر تحويل جديد
                         </a>
+                        {% endif %}
+                        {% if perms.treasury.add_bankreconciliation %}
                         <a href="{% url 'treasury:bankreconciliation-create' %}" class="btn btn-outline-info py-2 text-start">
                             <i class="bi bi-clipboard-check me-2"></i>بدء تسوية بنكية
                         </a>
+                        {% endif %}
                         <a href="{% url 'treasury:report-dashboard' %}" class="btn btn-dark py-2 text-start mt-2">
                             <i class="bi bi-bar-chart-line me-2"></i>مركز تقارير النقدية والبنوك
                         </a>
@@ -181,8 +201,16 @@
                                 <span><i class="bi bi-bank me-2 text-info"></i>سجل الحسابات البنكية</span>
                                 <i class="bi bi-chevron-left small"></i>
                             </a>
+                            <a href="{% url 'treasury:wallet-list' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-phone-vibrate me-2 text-warning"></i>سجل المحافظ الإلكترونية</span>
+                                <i class="bi bi-chevron-left small"></i>
+                            </a>
                             <a href="{% url 'treasury:transfer-list' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
                                 <span><i class="bi bi-arrow-left-right me-2 text-primary"></i>سجل التحويلات المالية</span>
+                                <i class="bi bi-chevron-left small"></i>
+                            </a>
+                            <a href="{% url 'treasury:intermediary-list' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-building me-2 text-danger"></i>سجل الشركات الوسيطة (فوري)</span>
                                 <i class="bi bi-chevron-left small"></i>
                             </a>
                             <a href="{% url 'treasury:movement-report' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
@@ -192,12 +220,26 @@
                         </div>
                         
                         <div class="row g-2 mt-2">
+                            {% if perms.treasury.add_cashbox %}
                             <div class="col-6">
-                                <a href="{% url 'treasury:cashbox-create' %}" class="btn btn-sm btn-light border w-100">إضافة خزنة</a>
+                                <a href="{% url 'treasury:cashbox-create' %}" class="btn btn-sm btn-light border w-100 px-1 text-nowrap">إضافة خزنة</a>
                             </div>
+                            {% endif %}
+                            {% if perms.treasury.add_bankaccount %}
                             <div class="col-6">
-                                <a href="{% url 'treasury:bank-create' %}" class="btn btn-sm btn-light border w-100">إضافة بنك</a>
+                                <a href="{% url 'treasury:bank-create' %}" class="btn btn-sm btn-light border w-100 px-1 text-nowrap">إضافة بنك</a>
                             </div>
+                            {% endif %}
+                            {% if perms.treasury.add_mobilewallet %}
+                            <div class="col-6">
+                                <a href="{% url 'treasury:wallet-create' %}" class="btn btn-sm btn-light border w-100 px-1 text-nowrap">إضافة محفظة</a>
+                            </div>
+                            {% endif %}
+                            {% if perms.sales.add_intermediarycompany %}
+                            <div class="col-6">
+                                <a href="{% url 'treasury:intermediary-create' %}" class="btn btn-sm btn-light border w-100 px-1 text-nowrap">إضافة شركة وسيطة</a>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -230,8 +272,8 @@
                                         <div class="fw-bold">{{ x.number }}</div>
                                         <small class="text-muted">{{ x.date|date:"Y-m-d" }}</small>
                                     </td>
-                                    <td>{{ x.from_cash_box.name|default:x.from_bank.name }}</td>
-                                    <td>{{ x.to_cash_box.name|default:x.to_bank.name }}</td>
+                                    <td>{% if x.from_cash_box %}{{ x.from_cash_box.name }}{% else %}{{ x.from_bank.name }}{% endif %}</td>
+                                    <td>{% if x.to_cash_box %}{{ x.to_cash_box.name }}{% else %}{{ x.to_bank.name }}{% endif %}</td>
                                     <td class="fw-bold">{{ x.amount|floatformat:2|intcomma }}</td>
                                     <td>
                                         {% if x.status == 'completed' %}
@@ -253,6 +295,170 @@
             </div>
         </div>
     </div>
+
+    <div class="row g-4 mt-2">
+        <!-- الشيكات الواردة تحت التحصيل -->
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold"><i class="bi bi-cash-stack text-warning me-1"></i> شيكات تحت التحصيل</h5>
+                    <span class="badge bg-warning text-dark fs-6">{{ pending_cheques_count }}</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-custom mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="px-4">رقم السند</th>
+                                    <th>العميل</th>
+                                    <th>رقم الشيك</th>
+                                    <th>المبلغ</th>
+                                    <th>تاريخ الاستحقاق</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for ch in pending_cheques %}
+                                <tr onclick="window.location='{% url 'sales:receipt-detail' ch.pk %}'" style="cursor:pointer;">
+                                    <td class="px-4"><a href="{% url 'sales:receipt-detail' ch.pk %}">{{ ch.number }}</a></td>
+                                    <td>{{ ch.customer.name }}</td>
+                                    <td>{{ ch.cheque_number|default:"—" }}</td>
+                                    <td class="fw-bold">{{ ch.amount|floatformat:2|intcomma }}</td>
+                                    <td>{{ ch.cheque_due_date|date:"Y-m-d"|default:"—" }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="5" class="text-center py-3 text-muted">لا توجد شيكات تحت التحصيل</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- الشيكات المرتجعة -->
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold"><i class="bi bi-exclamation-triangle text-danger me-1"></i> شيكات مرتجعة</h5>
+                    <span class="badge bg-danger fs-6">{{ bounced_cheques|length }}</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-custom mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="px-4">رقم السند</th>
+                                    <th>العميل</th>
+                                    <th>رقم الشيك</th>
+                                    <th>المبلغ</th>
+                                    <th>الحالة</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for ch in bounced_cheques %}
+                                <tr onclick="window.location='{% url 'sales:receipt-detail' ch.pk %}'" style="cursor:pointer;">
+                                    <td class="px-4"><a href="{% url 'sales:receipt-detail' ch.pk %}">{{ ch.number }}</a></td>
+                                    <td>{{ ch.customer.name }}</td>
+                                    <td>{{ ch.cheque_number|default:"—" }}</td>
+                                    <td class="fw-bold text-danger">{{ ch.amount|floatformat:2|intcomma }}</td>
+                                    <td><span class="badge bg-danger">شيك مرتجع</span></td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="5" class="text-center py-3 text-muted">لا توجد شيكات مرتجعة</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mt-2">
+        <!-- الشيكات الصادرة للموردين -->
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold"><i class="bi bi-cash text-info me-1"></i> شيكات صادرة للموردين (لم تصرف)</h5>
+                    <span class="badge bg-info fs-6">{{ outgoing_cheques_count }}</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-custom mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="px-4">رقم السند</th>
+                                    <th>المورد</th>
+                                    <th>رقم الشيك</th>
+                                    <th>المبلغ</th>
+                                    <th>تاريخ الاستحقاق</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for ch in outgoing_cheques %}
+                                <tr onclick="window.location='{% url 'purchases:payment-detail' ch.pk %}'" style="cursor:pointer;">
+                                    <td class="px-4"><a href="{% url 'purchases:payment-detail' ch.pk %}">{{ ch.number }}</a></td>
+                                    <td>{{ ch.supplier.name }}</td>
+                                    <td>{{ ch.cheque_number|default:"—" }}</td>
+                                    <td class="fw-bold">{{ ch.amount|floatformat:2|intcomma }}</td>
+                                    <td>{{ ch.cheque_due_date|date:"Y-m-d"|default:"—" }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="5" class="text-center py-3 text-muted">لا توجد شيكات صادرة</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ملخص إحصائيات الشيكات -->
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0 fw-bold"><i class="bi bi-pie-chart me-1"></i> ملخص إحصائيات الشيكات</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <div class="p-3 border rounded bg-soft-warning">
+                                <h6 class="text-muted small mb-1">شيكات تحت التحصيل</h6>
+                                <h3 class="mb-0 fw-bold">{{ pending_cheques_count }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 border rounded bg-soft-danger">
+                                <h6 class="text-muted small mb-1">شيكات مرتجعة</h6>
+                                <h3 class="mb-0 fw-bold">{{ bounced_cheques|length }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 border rounded bg-soft-info">
+                                <h6 class="text-muted small mb-1">شيكات صادرة (معلقة)</h6>
+                                <h3 class="mb-0 fw-bold">{{ outgoing_cheques_count }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 border rounded bg-soft-danger">
+                                <h6 class="text-muted small mb-1">شيكات متأخرة ( overdue )</h6>
+                                <h3 class="mb-0 fw-bold">{{ overdue_cheques_count }}</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'sales:receipt-list' %}" class="btn btn-outline-warning btn-sm">
+                            <i class="bi bi-eye me-1"></i> عرض كل سندات القبض
+                        </a>
+                        <a href="{% url 'purchases:payment-list' %}" class="btn btn-outline-info btn-sm">
+                            <i class="bi bi-eye me-1"></i> عرض كل سندات الصرف
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -262,10 +468,10 @@
     new Chart(document.getElementById('liquidityChart'), {
         type: 'doughnut',
         data: {
-            labels: ['نقدية', 'بنوك'],
+            labels: ['نقدية', 'بنوك', 'محافظ'],
             datasets: [{
-                data: [{{ total_cash }}, {{ total_bank }}],
-                backgroundColor: ['#22c55e', '#06b6d4'],
+                data: [{{ total_cash }}, {{ total_bank }}, {{ total_wallet }}],
+                backgroundColor: ['#22c55e', '#06b6d4', '#eab308'],
                 hoverOffset: 10,
                 borderWidth: 0
             }]

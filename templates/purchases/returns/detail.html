@@ -24,6 +24,7 @@
                             {% endif %}
                         </td>
                     </tr>
+                    {% if perms.core.view_journalentry and not request.user.salesrepresentative %}
                     <tr><th>القيد المحاسبي:</th>
                         <td>
                             {% if purchase_return.journal_entry %}
@@ -33,9 +34,10 @@
                             {% endif %}
                         </td>
                     </tr>
+                    {% endif %}
                 </table>
 
-                {% if purchase_return.status == 'draft' %}
+                {% if purchase_return.status == 'draft' and perms.purchases.change_purchasereturn %}
                 <form method="post" action="{% url 'purchases:return-post' purchase_return.pk %}" class="mt-3">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-success w-100" onclick="return confirm('تأكيد ترحيل المرتجع؟ سيتم خصم المخزون وتعديل حساب المورد.');">

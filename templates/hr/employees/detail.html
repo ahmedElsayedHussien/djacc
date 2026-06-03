@@ -32,8 +32,41 @@
                     <p class="mb-0"><i class="bi bi-geo-alt text-primary me-2"></i> {{ employee.address|default:"غير مسجل" }}</p>
                 </div>
                 
-                <div class="mt-4">
-                    <a href="{% url 'hr:employee-edit' employee.pk %}" class="btn btn-outline-primary w-100"><i class="bi bi-pencil"></i> تعديل بيانات الموظف</a>
+                <div class="mt-4 d-grid gap-2">
+                    {% if perms.hr.change_employee %}<a href="{% url 'hr:employee-edit' employee.pk %}" class="btn btn-outline-primary w-100"><i class="bi bi-pencil"></i> تعديل بيانات الموظف</a>{% endif %}
+                </div>
+
+                <hr class="my-4">
+                
+                <div class="text-start bg-light p-3 rounded border text-end">
+                    <h6 class="fw-bold mb-3 text-start"><i class="bi bi-shield-lock text-primary me-2"></i>حساب تسجيل الدخول</h6>
+                    {% if employee.user %}
+                        <div class="mb-2 text-start">
+                            <small class="text-muted d-block">اسم المستخدم:</small>
+                            <span class="fw-bold text-dark font-monospace" id="usernameText">{{ employee.user.username }}</span>
+                            <button class="btn btn-sm btn-link p-0 ms-2 text-decoration-none" onclick="copyUsername()" title="نسخ اسم المستخدم">
+                                <i class="bi bi-clipboard"></i> نسخ
+                            </button>
+                        </div>
+                        <div class="mb-3 text-start">
+                            <small class="text-muted d-block">البريد الإلكتروني:</small>
+                            <span class="text-dark">{{ employee.user.email|default:"غير مسجل" }}</span>
+                        </div>
+                        <div class="mb-1 text-center">
+                            <span class="badge bg-success text-white w-100 py-2 mb-2"><i class="bi bi-check-circle me-1"></i>حساب نشط - صلاحية {{ employee.department.name }}</span>
+                        </div>
+                        <button class="btn btn-sm btn-warning w-100 mt-2 fw-bold" data-bs-toggle="modal" data-bs-target="#resetPasswordModal">
+                            <i class="bi bi-key"></i> إعادة تعيين كلمة المرور
+                        </button>
+                    {% else %}
+                        <div class="text-center py-2">
+                            <span class="badge bg-danger text-white w-100 py-2 mb-2"><i class="bi bi-exclamation-triangle me-1"></i>غير مربوط بمستخدم نظام</span>
+                            <p class="text-muted small mb-3">هذا الموظف لا يمتلك حساب لتسجيل الدخول للوحة التحكم.</p>
+                            <button class="btn btn-sm btn-success w-100 fw-bold" data-bs-toggle="modal" data-bs-target="#createUserModal">
+                                <i class="bi bi-person-plus"></i> إنشاء حساب مستخدم وربطه
+                            </button>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -248,4 +281,199 @@
         </div>
     </div>
 </div>
+
+<!-- Modal: Reset Password -->
+<div class="modal fade" id="resetPasswordModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-end">
+            <div class="modal-header bg-warning text-dark flex-row-reverse">
+                <h5 class="modal-title fw-bold"><i class="bi bi-key me-2"></i>إعادة تعيين كلمة المرور</h5>
+                <button type="button" class="btn-close ms-0 me-auto" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning text-start">
+                    <i class="bi bi-info-circle me-1"></i> سيتم تغيير كلمة المرور للمستخدم <strong>{{ employee.user.username }}</strong> فوراً. يرجى كتابة كلمة المرور الجديدة أدناه.
+                </div>
+                <div class="mb-3 text-start">
+                    <label class="form-label fw-bold">كلمة المرور الجديدة:</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control font-monospace" id="newPasswordInput" placeholder="أدخل 6 أحرف على الأقل">
+                        <button class="btn btn-outline-secondary" type="button" onclick="generateRandomPassword('newPasswordInput')">توليد تلقائي</button>
+                    </div>
+                </div>
+                <div id="resetErrorMsg" class="alert alert-danger d-none text-start"></div>
+                <div id="resetSuccessMsg" class="alert alert-success d-none text-start"></div>
+            </div>
+            <div class="modal-footer flex-row-reverse">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+                <button type="button" class="btn btn-warning fw-bold" onclick="submitPasswordReset()">حفظ كلمة المرور الجديدة</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Create User -->
+<div class="modal fade" id="createUserModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-end">
+            <div class="modal-header bg-success text-white flex-row-reverse">
+                <h5 class="modal-title fw-bold"><i class="bi bi-person-plus me-2"></i>إنشاء حساب مستخدم وربطه</h5>
+                <button type="button" class="btn-close ms-0 me-auto" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-start">
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle me-1"></i> سيتم إنشاء مستخدم نظام جديد وربطه بالموظف تلقائياً، وإسناد صلاحيات **إدارة {{ employee.department.name }}** له فوراً.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">اسم المستخدم (Username):</label>
+                    <input type="text" class="form-control font-monospace" id="createUsernameInput" value="{{ employee.phone|default:'' }}" placeholder="مثال: ahmed123">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">البريد الإلكتروني (Email):</label>
+                    <input type="email" class="form-control" id="createEmailInput" value="{% if employee.phone %}{{ employee.phone }}@company.com{% endif %}" placeholder="مثال: ahmed@company.com">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">كلمة المرور (Password):</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control font-monospace" id="createUserPasswordInput" placeholder="أدخل 6 أحرف على الأقل">
+                        <button class="btn btn-outline-secondary" type="button" onclick="generateRandomPassword('createUserPasswordInput')">توليد تلقائي</button>
+                    </div>
+                </div>
+                <div id="createErrorMsg" class="alert alert-danger d-none"></div>
+                <div id="createSuccessMsg" class="alert alert-success d-none"></div>
+            </div>
+            <div class="modal-footer flex-row-reverse">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+                <button type="button" class="btn btn-success fw-bold" onclick="submitCreateUser()">إنشاء الحساب وتفعيل الصلاحيات</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyUsername() {
+    var text = document.getElementById("usernameText").innerText;
+    navigator.clipboard.writeText(text).then(function() {
+        alert("تم نسخ اسم المستخدم: " + text);
+    }, function(err) {
+        console.error('Could not copy text: ', err);
+    });
+}
+
+function generateRandomPassword(inputId) {
+    var chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%";
+    var pass = "";
+    for (var i = 0; i < 10; i++) {
+        var idx = Math.floor(Math.random() * chars.length);
+        pass += chars[idx];
+    }
+    document.getElementById(inputId).value = pass;
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function submitPasswordReset() {
+    var newPassword = document.getElementById("newPasswordInput").value;
+    var errorDiv = document.getElementById("resetErrorMsg");
+    var successDiv = document.getElementById("resetSuccessMsg");
+    
+    errorDiv.classList.add("d-none");
+    successDiv.classList.add("d-none");
+    
+    if (!newPassword || newPassword.length < 6) {
+        errorDiv.innerText = "كلمة المرور يجب أن لا تقل عن 6 أحرف.";
+        errorDiv.classList.remove("d-none");
+        return;
+    }
+    
+    var formData = new FormData();
+    formData.append("new_password", newPassword);
+    
+    fetch("{% url 'hr:employee-reset-password' employee.pk %}", {
+        method: "POST",
+        body: formData,
+        headers: {
+            "X-CSRFToken": getCookie("csrftoken")
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            successDiv.innerText = data.message;
+            successDiv.classList.remove("d-none");
+            setTimeout(function() {
+                location.reload();
+            }, 1500);
+        } else {
+            errorDiv.innerText = data.error;
+            errorDiv.classList.remove("d-none");
+        }
+    })
+    .catch(err => {
+        errorDiv.innerText = "حدث خطأ غير متوقع أثناء إعادة تعيين كلمة المرور.";
+        errorDiv.classList.remove("d-none");
+    });
+}
+
+function submitCreateUser() {
+    var username = document.getElementById("createUsernameInput").value;
+    var email = document.getElementById("createEmailInput").value;
+    var password = document.getElementById("createUserPasswordInput").value;
+    var errorDiv = document.getElementById("createErrorMsg");
+    var successDiv = document.getElementById("createSuccessMsg");
+    
+    errorDiv.classList.add("d-none");
+    successDiv.classList.add("d-none");
+    
+    if (!username || !password) {
+        errorDiv.innerText = "اسم المستخدم وكلمة المرور مطلوبان.";
+        errorDiv.classList.remove("d-none");
+        return;
+    }
+    
+    var formData = new FormData();
+    formData.append("username", username);
+    formData.append("email", email);
+    formData.append("password", password);
+    
+    fetch("{% url 'hr:employee-create-user' employee.pk %}", {
+        method: "POST",
+        body: formData,
+        headers: {
+            "X-CSRFToken": getCookie("csrftoken")
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            successDiv.innerText = data.message;
+            successDiv.classList.remove("d-none");
+            setTimeout(function() {
+                location.reload();
+            }, 1500);
+        } else {
+            errorDiv.innerText = data.error;
+            errorDiv.classList.remove("d-none");
+        }
+    })
+    .catch(err => {
+        errorDiv.innerText = "حدث خطأ غير متوقع أثناء إنشاء حساب المستخدم.";
+        errorDiv.classList.remove("d-none");
+    });
+}
+</script>
+
 {% endblock %}

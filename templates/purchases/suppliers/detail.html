@@ -13,7 +13,7 @@
                 <p><strong>الهاتف:</strong> {{ object.phone|default:"---" }}</p>
                 <p><strong>البريد:</strong> {{ object.email|default:"---" }}</p>
                 <p><strong>الرصيد الحالي:</strong> <span class="h4 text-danger">{{ balance|default:"0.00" }}</span></p>
-                <a href="{% url 'purchases:supplier-edit' object.pk %}" class="btn btn-outline-primary w-100 mt-3">تعديل البيانات</a>
+                {% if perms.purchases.change_supplier %}<a href="{% url 'purchases:supplier-edit' object.pk %}" class="btn btn-outline-primary w-100 mt-3">تعديل البيانات</a>{% endif %}
             </div>
         </div>
     </div>

@@ -20,4 +20,10 @@ class CertificateAdmin(admin.ModelAdmin):
 class EInvoiceLogAdmin(admin.ModelAdmin):
     list_display = ['internal_id', 'status', 'submitted_at', 'uuid']
     list_filter = ['status']
-    readonly_fields = ['raw_request', 'raw_response']
+    readonly_fields = [f.name for f in EInvoiceLog._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

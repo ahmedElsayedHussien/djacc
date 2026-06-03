@@ -8,7 +8,7 @@
         <div class="card shadow">
             <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">سند تحصيل</h5>
-                <button class="btn btn-sm btn-light" onclick="window.print()"><i class="bi bi-printer"></i> طباعة</button>
+                <a href="{% url 'sales:receipt-print' receipt.pk %}" target="_blank" class="btn btn-sm btn-light"><i class="bi bi-printer"></i> طباعة السند (حراري)</a>
             </div>
             <div class="card-body">
                 <div class="row mb-4 border-bottom pb-3">
@@ -39,18 +39,136 @@
                             <h6 class="text-muted small">طريقة التحصيل:</h6>
                             <p class="mb-0 fw-bold">{{ receipt.get_payment_method_display }}</p>
                         </div>
-                        <div class="col-sm-8 text-sm-end">
+                        <div class="col-sm-4">
                             <h6 class="text-muted small">حُصل في:</h6>
                             <p class="mb-0 fw-bold">
                                 {% if receipt.payment_method == 'cash' %}
                                 {{ receipt.cash_box.name }}
+                                {% elif receipt.payment_method == 'cheque' %}
+                                شيك تحت التحصيل
+                                {% elif receipt.payment_method == 'intermediary' %}
+                                {{ receipt.intermediary_company.name }}
                                 {% else %}
                                 {{ receipt.bank_account.name }}
                                 {% endif %}
                             </p>
                         </div>
+                        <div class="col-sm-4 text-sm-end">
+                            {% if receipt.payment_method == 'cheque' %}
+                            <h6 class="text-muted small">حالة الشيك:</h6>
+                            <p class="mb-0 fw-bold">
+                                {% if receipt.cheque_status == 'pending' %}
+                                <span class="badge bg-warning text-dark">قيد التحصيل</span>
+                                {% elif receipt.cheque_status == 'collected' %}
+                                <span class="badge bg-success">تم التحصيل</span>
+                                {% elif receipt.cheque_status == 'bounced' %}
+                                <span class="badge bg-danger">شيك مرتجع</span>
+                                {% elif receipt.cheque_status == 'cancelled' %}
+                                <span class="badge bg-secondary">ملغي</span>
+                                {% endif %}
+                            </p>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
+
+                {% if receipt.payment_method == 'cheque' %}
+                <div class="p-3 bg-light rounded mb-4">
+                    <div class="row">
+                        <div class="col-sm-4">
+                            <h6 class="text-muted small">رقم الشيك:</h6>
+                            <p class="mb-0 fw-bold">{{ receipt.cheque_number|default:"—" }}</p>
+                        </div>
+                        <div class="col-sm-4">
+                            <h6 class="text-muted small">تاريخ الاستحقاق:</h6>
+                            <p class="mb-0 fw-bold">{{ receipt.cheque_due_date|date:'Y-m-d'|default:"—" }}</p>
+                        </div>
+                        <div class="col-sm-4 text-sm-end">
+                            <h6 class="text-muted small">تاريخ الإيداع:</h6>
+                            <p class="mb-0 fw-bold">{{ receipt.collected_at|date:'Y-m-d'|default:"—" }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                {% if receipt.cheque_status == 'pending' %}
+                {% if perms.sales.change_customerreceipt %}
+                <div class="card mb-4 border-warning">
+                    <div class="card-header bg-warning text-dark">
+                        <i class="bi bi-bank me-1"></i> تحصيل الشيك
+                    </div>
+                    <div class="card-body">
+                        <form method="post" action="{% url 'sales:collect-cheque' receipt.pk %}" class="row g-2 align-items-end">
+                            {% csrf_token %}
+                            <div class="col-md-5">
+                                <label class="form-label small">البنك المستلم</label>
+                                <select name="bank" class="form-select form-select-sm" required>
+                                    <option value="">اختر البنك...</option>
+                                    {% for bank in banks %}
+                                    <option value="{{ bank.pk }}">{{ bank.bank_name }} - {{ bank.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small">تاريخ التحصيل</label>
+                                <input type="date" name="date" class="form-control form-control-sm" required value="{% now 'Y-m-d' %}">
+                            </div>
+                            <div class="col-md-3">
+                                <button type="submit" class="btn btn-success btn-sm w-100">تأكيد التحصيل</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if perms.sales.change_customerreceipt %}
+                <div class="card mb-4 border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <i class="bi bi-arrow-return-left me-1"></i> إرجاع الشيك (شيك مرتجع)
+                    </div>
+                    <div class="card-body">
+                        <form method="post" action="{% url 'sales:bounce-cheque' receipt.pk %}" class="row g-2 align-items-end">
+                            {% csrf_token %}
+                            <div class="col-md-5">
+                                <label class="form-label small">تاريخ الإرجاع</label>
+                                <input type="date" name="date" class="form-control form-control-sm" required value="{% now 'Y-m-d' %}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small">غرامة (اختياري)</label>
+                                <input type="number" name="penalty" class="form-control form-control-sm" step="any" value="0" min="0">
+                            </div>
+                            <div class="col-md-3">
+                                <button type="submit" class="btn btn-danger btn-sm w-100" onclick="return confirm('تأكيد إرجاع الشيك كشيك مرتجع؟')">تأكيد الإرجاع</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+                {% elif receipt.cheque_status == 'collected' %}
+                {% if perms.sales.change_customerreceipt %}
+                <div class="card mb-4 border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <i class="bi bi-arrow-return-left me-1"></i> إرجاع الشيك (شيك مرتجع)
+                    </div>
+                    <div class="card-body">
+                        <form method="post" action="{% url 'sales:bounce-cheque' receipt.pk %}" class="row g-2 align-items-end">
+                            {% csrf_token %}
+                            <div class="col-md-5">
+                                <label class="form-label small">تاريخ الإرجاع</label>
+                                <input type="date" name="date" class="form-control form-control-sm" required value="{% now 'Y-m-d' %}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small">غرامة (اختياري)</label>
+                                <input type="number" name="penalty" class="form-control form-control-sm" step="any" value="0" min="0">
+                            </div>
+                            <div class="col-md-3">
+                                <button type="submit" class="btn btn-danger btn-sm w-100" onclick="return confirm('تأكيد إرجاع الشيك كشيك مرتجع؟')">تأكيد الإرجاع</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+                {% endif %}
+                {% endif %}
 
                 {% if receipt.notes %}
                 <div class="mb-4">
@@ -59,6 +177,7 @@
                 </div>
                 {% endif %}
 
+                {% if perms.core.view_journalentry and not request.user.salesrepresentative %}
                 <div class="alert alert-success d-flex justify-content-between align-items-center py-2 mb-0">
                     <div>
                         <i class="bi bi-journal-check me-2"></i>
@@ -73,6 +192,7 @@
                         بواسطة: {{ receipt.created_by.username|default:"نظام" }}
                     </div>
                 </div>
+                {% endif %}
             </div>
             <div class="card-footer bg-white text-center">
                 <p class="text-muted small mb-0">شكراً لتعاملكم معنا</p>

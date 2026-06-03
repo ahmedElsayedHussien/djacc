@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     Department, JobTitle, Employee, EmployeeDocument,
     Shift, AttendanceRecord, LeaveType, LeaveBalance, LeaveRequest,
-    PayrollPeriod, Payslip, Loan, EmployeeAsset, EndOfService
+    PayrollPeriod, Payslip, PayslipItem, Loan, LoanInstallment, EmployeeAsset, EndOfService
 )
 
 @admin.register(Department)
@@ -13,7 +13,8 @@ class DepartmentAdmin(admin.ModelAdmin):
 
 @admin.register(JobTitle)
 class JobTitleAdmin(admin.ModelAdmin):
-    list_display = ('name',)
+    list_display = ('name', 'department')
+    list_filter = ('department',)
     search_fields = ('name',)
 
 class EmployeeDocumentInline(admin.TabularInline):
@@ -65,6 +66,27 @@ class PayrollPeriodAdmin(admin.ModelAdmin):
 class LoanAdmin(admin.ModelAdmin):
     list_display = ('employee', 'amount', 'installments_count', 'monthly_installment', 'status')
     list_filter = ('status',)
+    search_fields = ('employee__first_name', 'employee__last_name')
+
+class PayslipItemInline(admin.TabularInline):
+    model = PayslipItem
+    extra = 1
+
+class LoanInstallmentInline(admin.TabularInline):
+    model = LoanInstallment
+    extra = 1
+
+@admin.register(Payslip)
+class PayslipAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'period', 'basic_salary', 'net_salary')
+    list_filter = ('period',)
+    search_fields = ('employee__first_name', 'employee__last_name')
+    inlines = [PayslipItemInline]
+
+@admin.register(LoanInstallment)
+class LoanInstallmentAdmin(admin.ModelAdmin):
+    list_display = ('loan', 'payslip', 'amount', 'month')
+    list_filter = ('month',)
 
 @admin.register(EmployeeAsset)
 class EmployeeAssetAdmin(admin.ModelAdmin):

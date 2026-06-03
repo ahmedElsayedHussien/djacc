@@ -5,9 +5,11 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">قائمة الخزن</h5>
+        {% if perms.treasury.add_cashbox %}
         <a href="{% url 'treasury:cashbox-create' %}" class="btn btn-primary">
             <i class="bi bi-plus-lg"></i> إضافة خزنة جديدة
         </a>
+        {% endif %}
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -33,7 +35,7 @@
                         <td>{{ box.responsible_user.username|default:"---" }}</td>
                         <td><strong>{{ box.current_balance|default:"0.00" }}</strong></td>
                         <td>
-                            <a href="{% url 'treasury:cashbox-update' box.pk %}" class="btn btn-sm btn-outline-primary">تعديل</a>
+                            {% if perms.treasury.change_cashbox %}<a href="{% url 'treasury:cashbox-update' box.pk %}" class="btn btn-sm btn-outline-primary">تعديل</a>{% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -45,5 +47,6 @@
             </table>
         </div>
     </div>
+    {% include 'partials/pagination.html' %}
 </div>
 {% endblock %}

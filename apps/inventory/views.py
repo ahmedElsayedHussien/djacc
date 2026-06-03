@@ -1,21 +1,35 @@
-from django.views.generic import ListView, CreateView, UpdateView, DetailView
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.urls import reverse_lazy
+import logging
+
+from django.views.generic import ListView, CreateView, UpdateView, DetailView, TemplateView
+from django.contrib.auth.mixins import LoginRequiredMixin
+from apps.core.mixins import PermRequiredMixin
+from django.urls import reverse_lazy, reverse
 from django.contrib import messages
-from django.db.models import Sum
+from django.db.models import Sum, F, OuterRef, Subquery
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, redirect
 from django.db import transaction
+from django.utils import timezone
 from django.views import View
-from .models import Item, ItemCategory, Warehouse, UnitOfMeasure, ItemLedger, WarehouseTransfer, LoadingOrder, LoadingOrderLine, StockMovement, StockVoucher
-from .forms import ItemForm, ItemCategoryForm, WarehouseForm, WarehouseTransferForm, WarehouseTransferLineFormSet, LoadingOrderForm, LoadingOrderLineFormSet, UnitOfMeasureForm
-
-from .services import InventoryService, LoadingService
-from django.db.models import F, ExpressionWrapper, DecimalField
-from django.db.models.functions import Coalesce
+from django.http import JsonResponse
+from apps.core.services import DocumentService
+from apps.core.models import SystemNotification
+from apps.sales.models import SalesRepresentative
+from .models import (
+    Item, ItemCategory, Warehouse, UnitOfMeasure, ItemLedger, WarehouseTransfer,
+    LoadingOrder, LoadingOrderLine, StockMovement, StockVoucher, StockVoucherLine,
+)
+from .forms import (
+    ItemForm, ItemCategoryForm, WarehouseForm, WarehouseTransferForm,
+    WarehouseTransferLineFormSet, LoadingOrderForm, LoadingOrderLineFormSet,
+    UnitOfMeasureForm, StockVoucherForm, StockVoucherLineFormSet,
+)
+from .services import InventoryService, LoadingService, StockVoucherService
 from decimal import Decimal
 
-class InventoryDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
-    model = StockMovement
+logger = logging.getLogger(__name__)
+
+class InventoryDashboardView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'inventory/dashboard.html'
     permission_required = 'inventory.view_stockmovement'
 
@@ -38,8 +52,10 @@ class InventoryDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListVi
         low_stock_items = Item.objects.annotate(
             current_stock=Coalesce(Sum('itemledger__quantity_on_hand'), Decimal('0'))
         ).filter(current_stock__lt=F('minimum_stock'), is_active=True).order_by('current_stock')
-        ctx['low_stock_items'] = low_stock_items[:10]
-        ctx['low_stock_count'] = low_stock_items.count()
+        
+        low_stock_list = list(low_stock_items)
+        ctx['low_stock_items'] = low_stock_list[:10]
+        ctx['low_stock_count'] = len(low_stock_list)
 
         # 3. Recent Movements
         ctx['recent_movements'] = StockMovement.objects.select_related('item', 'warehouse').order_by('-date', '-id')[:10]
@@ -53,10 +69,11 @@ class InventoryDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListVi
         # 5. Pending Tasks
         ctx['pending_loadings'] = LoadingOrder.objects.filter(status=LoadingOrder.Status.PENDING).count()
         ctx['draft_vouchers'] = StockVoucher.objects.filter(status=StockVoucher.Status.DRAFT).count()
+        ctx['pending_transfers'] = WarehouseTransfer.objects.filter(status=WarehouseTransfer.Status.DRAFT).count()
 
         return ctx
 
-class ItemListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class ItemListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = Item
     template_name = 'inventory/items/list.html'
     context_object_name = 'items'
@@ -76,57 +93,66 @@ class ItemListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx['categories'] = ItemCategory.objects.all()
-        # Annotate with current stock from ItemLedger
-        stock_map = {
-            l['item_id']: l['total_qty']
-            for l in ItemLedger.objects.values('item_id').annotate(total_qty=Sum('quantity_on_hand'))
-        }
-        for item in ctx['items']:
-            item.current_stock = stock_map.get(item.id, 0)
         return ctx
 
-class ItemCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class ItemCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = Item
     form_class = ItemForm
     template_name = 'inventory/items/form.html'
     permission_required = 'inventory.add_item'
-    success_url = reverse_lazy('inventory:item-list')
+
+    def get_success_url(self):
+        return reverse('inventory:item-detail', kwargs={'pk': self.object.pk})
 
     def form_valid(self, form):
         form.instance.code = InventoryService.generate_item_code()
         messages.success(self.request, f'تم إضافة الصنف "{form.instance.name}" بنجاح بالكود {form.instance.code}')
         return super().form_valid(form)
 
-class ItemUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class ItemUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
     model = Item
     form_class = ItemForm
     template_name = 'inventory/items/form.html'
     permission_required = 'inventory.change_item'
     success_url = reverse_lazy('inventory:item-list')
 
-class ItemDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class ItemDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = Item
     template_name = 'inventory/items/detail.html'
     permission_required = 'inventory.view_item'
 
-class WarehouseListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class WarehouseListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = Warehouse
     template_name = 'inventory/warehouses/list.html'
     permission_required = 'inventory.view_warehouse'
+    paginate_by = 25
 
-class WarehouseCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class WarehouseCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = Warehouse
     form_class = WarehouseForm
     template_name = 'inventory/warehouses/form.html'
     success_url = reverse_lazy('inventory:warehouse-list')
     permission_required = 'inventory.add_warehouse'
 
-class ItemCategoryListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class WarehouseToggleActiveView(LoginRequiredMixin, PermRequiredMixin, View):
+    permission_required = 'inventory.change_warehouse'
+    
+    def post(self, request, pk):
+        warehouse = get_object_or_404(Warehouse, pk=pk)
+        warehouse.is_active = not warehouse.is_active
+        warehouse.save(update_fields=['is_active'])
+        
+        status_str = "نشط" if warehouse.is_active else "غير نشط"
+        messages.success(request, f'تم تغيير حالة المستودع "{warehouse.name}" إلى {status_str} بنجاح!')
+        return redirect('inventory:warehouse-list')
+
+class ItemCategoryListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = ItemCategory
     template_name = 'inventory/categories/list.html'
     permission_required = 'inventory.view_itemcategory'
+    paginate_by = 25
 
-class ItemCategoryCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class ItemCategoryCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = ItemCategory
     form_class = ItemCategoryForm
     template_name = 'inventory/categories/form.html'
@@ -139,12 +165,13 @@ class ItemCategoryCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
         messages.success(self.request, f'تم إضافة الفئة "{form.instance.name}" بنجاح بالكود {form.instance.code}')
         return super().form_valid(form)
 
-class UnitListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class UnitListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = UnitOfMeasure
     template_name = 'inventory/units/list.html'
     permission_required = 'inventory.view_unitofmeasure'
+    paginate_by = 25
 
-class UnitCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class UnitCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = UnitOfMeasure
     form_class = UnitOfMeasureForm
     template_name = 'inventory/units/form.html'
@@ -156,13 +183,17 @@ class UnitCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
         messages.success(self.request, f'تم إضافة الوحدة "{form.instance.name}" بنجاح بالكود {form.instance.code}')
         return super().form_valid(form)
 
-class WarehouseTransferListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class WarehouseTransferListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = WarehouseTransfer
     template_name = 'inventory/transfers/list.html'
     context_object_name = 'transfers'
     permission_required = 'inventory.view_warehousetransfer'
+    paginate_by = 25
 
-class WarehouseTransferCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    def get_queryset(self):
+        return WarehouseTransfer.objects.select_related('from_warehouse', 'to_warehouse').prefetch_related('lines__item').order_by('-date', '-id')
+
+class WarehouseTransferCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = WarehouseTransfer
     form_class = WarehouseTransferForm
     template_name = 'inventory/transfers/form.html'
@@ -183,7 +214,6 @@ class WarehouseTransferCreateView(LoginRequiredMixin, PermissionRequiredMixin, C
         
         with transaction.atomic():
             if lines.is_valid():
-                from apps.core.services import DocumentService
                 form.instance.number = DocumentService.generate_number(WarehouseTransfer, 'TRNF')
                 self.object = form.save()
                 lines.instance = self.object
@@ -194,12 +224,19 @@ class WarehouseTransferCreateView(LoginRequiredMixin, PermissionRequiredMixin, C
         messages.success(self.request, f'تم تسجيل طلب التحويل {self.object.number}')
         return redirect(self.success_url)
 
-class WarehouseTransferUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class WarehouseTransferUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
     model = WarehouseTransfer
     form_class = WarehouseTransferForm
     template_name = 'inventory/transfers/form.html'
     success_url = reverse_lazy('inventory:transfer-list')
     permission_required = 'inventory.change_warehousetransfer'
+
+    def get_object(self, queryset=None):
+        obj = super().get_object(queryset)
+        if obj.status != WarehouseTransfer.Status.DRAFT:
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("لا يمكن تعديل طلب تحويل مخزني غير مسودة.")
+        return obj
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -220,49 +257,55 @@ class WarehouseTransferUpdateView(LoginRequiredMixin, PermissionRequiredMixin, U
             return redirect(self.success_url)
         return self.form_invalid(form)
 
-class WarehouseTransferDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class WarehouseTransferDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = WarehouseTransfer
     template_name = 'inventory/transfers/detail.html'
     context_object_name = 'transfer'
     permission_required = 'inventory.view_warehousetransfer'
 
 
-class WarehouseTransferPostView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class WarehouseTransferPostView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'inventory.change_warehousetransfer'
     
     def post(self, request, pk):
         transfer = get_object_or_404(WarehouseTransfer, pk=pk)
         try:
-            from .services import InventoryService
             InventoryService.process_transfer(transfer, request.user)
             messages.success(request, f'تم تنفيذ التحويل {transfer.number} وتحديث المخزون')
         except Exception as e:
             messages.error(request, f'خطأ: {e}')
         return redirect('inventory:transfer-list')
 
-class WarehouseTransferReverseView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class WarehouseTransferReverseView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'inventory.change_warehousetransfer'
     
     def post(self, request, pk):
         transfer = get_object_or_404(WarehouseTransfer, pk=pk)
         try:
-            from .services import InventoryService
             InventoryService.reverse_transfer(transfer, request.user)
             messages.success(request, f'تم عكس التحويل {transfer.number} وتحديث المخزون')
+            SystemNotification.notify_accountants(
+                title="عكس تحويل مخزني",
+                message=f"قام {request.user.username} بعكس التحويل المخزني رقم {transfer.number}.",
+                url=reverse('inventory:transfer-list')
+            )
         except Exception as e:
             messages.error(request, f'خطأ أثناء العكس: {e}')
         return redirect('inventory:transfer-list')
 
 # --- Loading Order Views ---
 
-class LoadingOrderListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class LoadingOrderListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = LoadingOrder
     template_name = 'inventory/loadings/list.html'
     context_object_name = 'orders'
     permission_required = 'inventory.view_loadingorder'
-    ordering = ['-date', '-id']
+    paginate_by = 25
 
-class LoadingOrderCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    def get_queryset(self):
+        return LoadingOrder.objects.select_related('sales_rep', 'from_warehouse', 'to_warehouse', 'requested_by').order_by('-date', '-id')
+
+class LoadingOrderCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = LoadingOrder
     form_class = LoadingOrderForm
     template_name = 'inventory/loadings/form.html'
@@ -270,16 +313,18 @@ class LoadingOrderCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
     permission_required = 'inventory.add_loadingorder'
 
     def get_initial(self):
-        from django.utils import timezone
         initial = super().get_initial()
         initial['date'] = timezone.now().date()
-        if hasattr(self.request.user, 'salesrepresentative'):
+        
+        rep_id = self.request.GET.get('sales_rep')
+        if rep_id:
+            initial['sales_rep'] = rep_id
+        elif hasattr(self.request.user, 'salesrepresentative'):
             initial['sales_rep'] = self.request.user.salesrepresentative
         return initial
 
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
-        from apps.inventory.models import Warehouse
         
         # Exclude representative warehouses from the "From" warehouse list
         # We assume any warehouse linked to a SalesRepresentative is a "Rep Warehouse"
@@ -294,14 +339,15 @@ class LoadingOrderCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        from apps.sales.models import SalesRepresentative
         reps = SalesRepresentative.objects.select_related('warehouse')
         ctx['rep_warehouse_mapping'] = {rep.id: rep.warehouse.id for rep in reps if rep.warehouse}
         
-        if self.request.POST:
-            ctx['lines'] = LoadingOrderLineFormSet(self.request.POST)
+        if 'lines' in kwargs:
+            ctx['lines'] = kwargs['lines']
+        elif self.request.POST:
+            ctx['lines'] = LoadingOrderLineFormSet(self.request.POST, instance=self.object)
         else:
-            ctx['lines'] = LoadingOrderLineFormSet()
+            ctx['lines'] = LoadingOrderLineFormSet(instance=self.object)
         return ctx
 
     def form_valid(self, form):
@@ -310,11 +356,6 @@ class LoadingOrderCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
             messages.error(self.request, 'عذراً، طلبات تحميل البضاعة مخصصة للمناديب فقط. حسابك الحالي غير مرتبط بمندوب مبيعات. يمكنك بدلاً من ذلك عمل طلب تحويل مخزني.')
             return self.form_invalid(form)
 
-
-        ctx = self.get_context_data()
-        lines = ctx['lines']
-
-        
         # Ensure to_warehouse matches rep warehouse
         if form.instance.sales_rep:
             if form.instance.sales_rep.warehouse:
@@ -323,9 +364,11 @@ class LoadingOrderCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
                 form.add_error('sales_rep', 'هذا المندوب ليس لديه مستودع (سيارة) مرتبط به. يرجى ضبط مستودع المندوب في إعدادات المبيعات أولاً.')
                 return self.form_invalid(form)
             
+        # Bind the formset to form.instance (which contains the populated fields) so validation succeeds
+        lines = LoadingOrderLineFormSet(self.request.POST, instance=form.instance)
+            
         with transaction.atomic():
             if lines.is_valid():
-                from apps.core.services import DocumentService
                 form.instance.number = DocumentService.generate_number(LoadingOrder, 'LOAD')
                 form.instance.requested_by = self.request.user
                 self.object = form.save()
@@ -334,17 +377,24 @@ class LoadingOrderCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
                 for obj in lines.deleted_objects:
                     obj.delete()
             else:
-                return self.form_invalid(form)
+                return self.render_to_response(self.get_context_data(form=form, lines=lines))
+                
         messages.success(self.request, f'تم إنشاء طلب التحميل {self.object.number}')
-        return redirect(self.success_url)
+        return redirect('inventory:loading-detail', pk=self.object.pk)
 
-class LoadingOrderDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class LoadingOrderDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = LoadingOrder
     template_name = 'inventory/loadings/detail.html'
     context_object_name = 'order'
     permission_required = 'inventory.view_loadingorder'
 
-class LoadingOrderRequestView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        if 'refresh' in request.GET:
+            messages.success(request, 'تم تحديث كميات المخزون المتاحة بالمستودع الرئيسي بنجاح وفقاً لأحدث الحركات!')
+            return redirect('inventory:loading-detail', pk=self.get_object().pk)
+        return super().get(request, *args, **kwargs)
+
+class LoadingOrderRequestView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'inventory.change_loadingorder'
     
     def post(self, request, pk):
@@ -353,13 +403,27 @@ class LoadingOrderRequestView(LoginRequiredMixin, PermissionRequiredMixin, View)
             with transaction.atomic():
                 order.status = LoadingOrder.Status.PENDING
                 order.save()
+
+            try:
+                title = f"طلب تحميل بانتظار الاعتماد: {order.number}"
+                message = f"قام المندوب {order.sales_rep.name} بتقديم طلب تحميل بضاعة رقم {order.number} وبانتظار اعتمادكم."
+                url = reverse('inventory:loading-detail', args=[order.pk])
+                SystemNotification.notify_accountants(title, message, url)
+            except SystemNotification.DoesNotExist:
+                logger.warning("SystemNotification model not available, skipping notification")
+            except Exception as e:
+                logger.exception("Failed to send notification for loading %s: %s", order.number, e)
+
             messages.success(request, f'تم إرسال طلب التحميل {order.number} للاعتماد')
         return redirect('inventory:loading-detail', pk=pk)
 
-class LoadingOrderApproveView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class LoadingOrderApproveView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'inventory.change_loadingorder'
     
     def post(self, request, pk):
+        if hasattr(request.user, 'salesrepresentative'):
+            messages.error(request, 'عذراً، غير مسموح لمناديب المبيعات اعتماد طلبات التحميل.')
+            return redirect('inventory:loading-detail', pk=pk)
         order = get_object_or_404(LoadingOrder, pk=pk)
         try:
             LoadingService.approve_loading(order, request.user)
@@ -368,10 +432,13 @@ class LoadingOrderApproveView(LoginRequiredMixin, PermissionRequiredMixin, View)
             messages.error(request, f'خطأ: {e}')
         return redirect('inventory:loading-detail', pk=pk)
 
-class LoadingOrderIssueView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class LoadingOrderIssueView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'inventory.change_loadingorder'
     
     def post(self, request, pk):
+        if hasattr(request.user, 'salesrepresentative'):
+            messages.error(request, 'عذراً، غير مسموح لمناديب المبيعات صرف طلبات التحميل.')
+            return redirect('inventory:loading-detail', pk=pk)
         order = get_object_or_404(LoadingOrder, pk=pk)
         try:
             LoadingService.issue_loading(order, request.user)
@@ -380,7 +447,7 @@ class LoadingOrderIssueView(LoginRequiredMixin, PermissionRequiredMixin, View):
             messages.error(request, f'خطأ: {e}')
         return redirect('inventory:loading-detail', pk=pk)
 
-class LoadingOrderCancelView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class LoadingOrderCancelView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'inventory.change_loadingorder'
     
     def post(self, request, pk):
@@ -394,18 +461,18 @@ class LoadingOrderCancelView(LoginRequiredMixin, PermissionRequiredMixin, View):
 
 
 # --- Stock Voucher Views ---
-from .models import StockVoucher, StockVoucherLine
-from .forms import StockVoucherForm, StockVoucherLineFormSet
-from .services import StockVoucherService
 
-class StockVoucherListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class StockVoucherListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = StockVoucher
     template_name = 'inventory/vouchers/list.html'
     context_object_name = 'vouchers'
     permission_required = 'inventory.view_stockvoucher'
-    ordering = ['-date', '-id']
+    paginate_by = 25
 
-class StockVoucherCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    def get_queryset(self):
+        return StockVoucher.objects.select_related('warehouse', 'created_by').order_by('-date', '-id')
+
+class StockVoucherCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
     model = StockVoucher
     form_class = StockVoucherForm
     template_name = 'inventory/vouchers/form.html'
@@ -425,7 +492,6 @@ class StockVoucherCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
         lines = ctx['lines']
         with transaction.atomic():
             if lines.is_valid():
-                from apps.core.services import DocumentService
                 vt_prefix = 'REC' if form.instance.voucher_type == StockVoucher.VoucherType.RECEIPT else 'ISS'
                 form.instance.number = DocumentService.generate_number(StockVoucher, f'V-{vt_prefix}')
                 form.instance.created_by = self.request.user
@@ -439,13 +505,13 @@ class StockVoucherCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
         messages.success(self.request, f'تم إنشاء الإذن {self.object.number}')
         return redirect(self.success_url)
 
-class StockVoucherDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class StockVoucherDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = StockVoucher
     template_name = 'inventory/vouchers/detail.html'
     context_object_name = 'voucher'
     permission_required = 'inventory.view_stockvoucher'
 
-class StockVoucherPostView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class StockVoucherPostView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'inventory.change_stockvoucher'
     
     def post(self, request, pk):
@@ -457,7 +523,7 @@ class StockVoucherPostView(LoginRequiredMixin, PermissionRequiredMixin, View):
             messages.error(request, f'خطأ أثناء الترحيل: {e}')
         return redirect('inventory:voucher-detail', pk=pk)
 
-class StockVoucherReverseView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class StockVoucherReverseView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'inventory.change_stockvoucher'
     
     def post(self, request, pk):
@@ -465,13 +531,16 @@ class StockVoucherReverseView(LoginRequiredMixin, PermissionRequiredMixin, View)
         try:
             StockVoucherService.reverse_voucher(voucher, request.user)
             messages.success(request, f'تم عكس الإذن {voucher.number} وتحديث المخزون')
+            SystemNotification.notify_accountants(
+                title="عكس إذن مخزني",
+                message=f"قام {request.user.username} بعكس إذن المخزن رقم {voucher.number}.",
+                url=reverse('inventory:voucher-detail', args=[voucher.id])
+            )
         except Exception as e:
             messages.error(request, f'خطأ أثناء العكس: {e}')
         return redirect('inventory:voucher-detail', pk=pk)
 
-from django.http import JsonResponse
-
-class ItemDetailsAPIView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class ItemDetailsAPIView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'inventory.view_item'
     def get(self, request, pk):
         item = get_object_or_404(Item, pk=pk)
@@ -488,14 +557,21 @@ class ItemDetailsAPIView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 'factor': float(item.purchase_conversion_factor)
             })
         
+        warehouse_id = request.GET.get('warehouse_id')
+        available_qty = 0
+        if warehouse_id:
+            ledger = ItemLedger.objects.filter(item=item, warehouse_id=warehouse_id).first()
+            if ledger:
+                available_qty = float(ledger.quantity_on_hand)
+
         return JsonResponse({
             'units': units,
             'default_unit_id': item.sales_unit_id or item.base_unit_id,
-            'standard_price': float(item.standard_price)
+            'standard_price': float(item.standard_price),
+            'available_qty': available_qty
         })
 
-class InventoryReportDashboardView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
-    model = Item
+class InventoryReportDashboardView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'inventory/reports/dashboard.html'
     permission_required = 'inventory.view_item'
 

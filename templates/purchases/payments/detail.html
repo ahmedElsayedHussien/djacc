@@ -45,12 +45,39 @@
                         <p>
                             {% if payment.payment_method == 'cash' %}
                             الخزينة: {{ payment.cash_box.name }}
+                            {% elif payment.payment_method == 'cheque' %}
+                            شيك مسحوب: {{ payment.cheque_number|default:"—" }}
                             {% else %}
                             البنك: {{ payment.bank_account.name }}
                             {% endif %}
                         </p>
                     </div>
                 </div>
+
+                {% if payment.payment_method == 'cheque' %}
+                <div class="p-3 bg-light rounded mb-4">
+                    <div class="row">
+                        <div class="col-sm-4">
+                            <h6 class="text-muted small">رقم الشيك:</h6>
+                            <p class="mb-0 fw-bold">{{ payment.cheque_number|default:"—" }}</p>
+                        </div>
+                        <div class="col-sm-4">
+                            <h6 class="text-muted small">تاريخ الاستحقاق:</h6>
+                            <p class="mb-0 fw-bold">{{ payment.cheque_due_date|date:'Y-m-d'|default:"—" }}</p>
+                        </div>
+                        <div class="col-sm-4 text-sm-end">
+                            <h6 class="text-muted small">حالة الصرف:</h6>
+                            <p class="mb-0 fw-bold">
+                                {% if payment.is_cleared %}
+                                <span class="badge bg-success">تم الصرف</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark">لم يتم الصرف بعد</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
 
                 <div class="alert alert-info">
                     <div class="row">

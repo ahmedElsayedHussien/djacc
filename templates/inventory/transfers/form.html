@@ -36,7 +36,8 @@
                     <thead class="table-light">
                         <tr>
                             <th style="width: 40%;">الصنف</th>
-                            <th style="width: 20%;">الكمية</th>
+                            <th style="width: 15%;">الوحدة</th>
+                            <th style="width: 15%;">الكمية</th>
                             <th>ملاحظات</th>
                             <th style="width: 50px;">حذف</th>
                         </tr>
@@ -44,13 +45,14 @@
                     <tbody>
                         {% for line_form in lines %}
                         <tr class="line-row">
-                            <td>
+                            <td data-label="الصنف">
                                 {{ line_form.id }}
                                 {{ line_form.item }}
                             </td>
-                            <td>{{ line_form.quantity }}</td>
-                            <td>{{ line_form.notes }}</td>
-                            <td class="text-center text-danger">
+                            <td data-label="الوحدة">{{ line_form.unit }}</td>
+                            <td data-label="الكمية">{{ line_form.quantity }}</td>
+                            <td data-label="ملاحظات">{{ line_form.notes }}</td>
+                            <td data-label="حذف" class="text-center text-danger">
                                 {% if line_form.instance.pk %}
                                     {{ line_form.DELETE }}
                                 {% endif %}
@@ -112,6 +114,56 @@
 
         table.appendChild(newRow);
         totalForms.value = currentCount + 1;
+    });
+
+    // Fetch units based on item selection
+    async function fetchItemUnits(itemSelect) {
+        const row = itemSelect.closest('tr');
+        const unitSelect = row.querySelector('select[name$="-unit"]');
+        if (!unitSelect) return;
+        
+        const itemId = itemSelect.value;
+        const currentUnit = unitSelect.value;
+        
+        if (!itemId) {
+            unitSelect.innerHTML = '<option value="">---------</option>';
+            return;
+        }
+
+        try {
+            const response = await fetch(`/inventory/api/item/${itemId}/`);
+            if (response.ok) {
+                const data = await response.json();
+                unitSelect.innerHTML = '<option value="">---------</option>';
+                data.units.forEach(u => {
+                    const option = document.createElement('option');
+                    option.value = u.id;
+                    option.text = u.name;
+                    unitSelect.appendChild(option);
+                });
+                
+                if (currentUnit && Array.from(unitSelect.options).some(opt => opt.value === currentUnit)) {
+                    unitSelect.value = currentUnit;
+                } else if (data.default_unit_id) {
+                    unitSelect.value = data.default_unit_id;
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching units:', error);
+        }
+    }
+
+    document.addEventListener('change', function(e) {
+        if (e.target.matches('select[name$="-item"]')) {
+            fetchItemUnits(e.target);
+        }
+    });
+
+    // Initialize units for existing rows on load
+    document.querySelectorAll('select[name$="-item"]').forEach(select => {
+        if (select.value) {
+            setTimeout(() => fetchItemUnits(select), 100);
+        }
     });
 </script>
 {% endblock %}

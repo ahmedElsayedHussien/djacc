@@ -64,6 +64,7 @@ class AccountingLogicTest(TransactionTestCase):
         )
         
         PurchaseService.post_invoice(invoice, self.user)
+        invoice.refresh_from_db()
         
         # Verify Ledger
         self.assertIsNotNone(invoice.journal_entry)
@@ -124,3 +125,47 @@ class AccountingLogicTest(TransactionTestCase):
         ledger = ItemLedger.objects.get(item=self.item, warehouse=self.warehouse)
         self.assertEqual(ledger.quantity_on_hand, 0)
         self.assertEqual(ledger.total_value, 0)
+
+    def test_sales_return_payment_type_property(self):
+        """Test Case: SalesReturn dynamic payment_type property"""
+        from apps.sales.models import SalesReturn
+        
+        # 1. Create return linked to a credit invoice
+        invoice_credit = SalesInvoice.objects.create(
+            number='INV-C001', customer=self.customer, date=timezone.now().date(),
+            payment_type='credit', created_by=self.user,
+            subtotal=Decimal('100'), total=Decimal('114'), tax_amount=Decimal('14'),
+            due_date=timezone.now().date()
+        )
+        ret_credit = SalesReturn.objects.create(
+            number='RET-C001', customer=self.customer, date=timezone.now().date(),
+            invoice=invoice_credit, created_by=self.user
+        )
+        self.assertEqual(ret_credit.payment_type, 'credit')
+        self.assertEqual(ret_credit.payment_type_display, 'آجل')
+        
+        # 2. Create return linked to a cash invoice
+        from apps.treasury.models import CashBox
+        cash_box = CashBox.objects.create(
+            code='CASH_BOX_TEST', name='Cash Box Test', account=self.cash_acc, responsible_user=self.user
+        )
+        invoice_cash = SalesInvoice.objects.create(
+            number='INV-CS01', customer=self.customer, date=timezone.now().date(),
+            payment_type='cash', cash_box=cash_box, created_by=self.user,
+            subtotal=Decimal('100'), total=Decimal('114'), tax_amount=Decimal('14'),
+            due_date=timezone.now().date()
+        )
+        ret_cash = SalesReturn.objects.create(
+            number='RET-CS01', customer=self.customer, date=timezone.now().date(),
+            invoice=invoice_cash, cash_box=cash_box, created_by=self.user
+        )
+        self.assertEqual(ret_cash.payment_type, 'cash')
+        self.assertEqual(ret_cash.payment_type_display, 'نقدي')
+        
+        # 3. Create return not linked to any invoice
+        ret_no_inv = SalesReturn.objects.create(
+            number='RET-N001', customer=self.customer, date=timezone.now().date(),
+            invoice=None, created_by=self.user
+        )
+        self.assertEqual(ret_no_inv.payment_type, 'credit')
+        self.assertEqual(ret_no_inv.payment_type_display, 'آجل')

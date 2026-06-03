@@ -6,7 +6,17 @@
 <div class="row">
     <div class="col-md-4">
         <div class="card mb-4">
-            <div class="card-header"><h5 class="mb-0">بيانات التسوية</h5></div>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">بيانات التسوية</h5>
+                {% if settlement.status == 'draft' and perms.sales.change_repdailysettlement %}
+                <form action="{% url 'sales:settlement-post' settlement.pk %}" method="post" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-primary" onclick="return confirm('هل أنت متأكد من ترحيل التسوية واعتماد الكاش؟')">
+                        ترحيل التسوية
+                    </button>
+                </form>
+                {% endif %}
+            </div>
             <div class="card-body">
                 <table class="table table-sm">
                     <tr><th>رقم التسوية:</th><td>{{ settlement.number }}</td></tr>
@@ -27,10 +37,12 @@
                     </tr>
                     <tr><th>مستلم في:</th>
                         <td>
-                            {% if settlement.to_cash_box %}{{ settlement.to_cash_box.name }}{% endif %}
-                            {% if settlement.to_bank %}{{ settlement.to_bank.name }}{% endif %}
+                            {% if settlement.to_cash_box %}{{ settlement.to_cash_box.name }} (خزينة){% endif %}
+                            {% if settlement.to_bank %}{{ settlement.to_bank.name }} (بنك){% endif %}
+                            {% if settlement.to_wallet %}{{ settlement.to_wallet.name }} (محفظة){% endif %}
                         </td>
                     </tr>
+                    {% if perms.core.view_journalentry and not request.user.salesrepresentative %}
                     <tr><th>القيد المحاسبي:</th>
                         <td>
                             {% if settlement.journal_entry %}
@@ -40,6 +52,7 @@
                             {% endif %}
                         </td>
                     </tr>
+                    {% endif %}
                 </table>
             </div>
         </div>

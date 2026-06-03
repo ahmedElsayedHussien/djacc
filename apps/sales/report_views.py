@@ -1,15 +1,19 @@
 from django.views.generic import TemplateView, ListView
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.db.models import Sum, Count, F, Q, ExpressionWrapper, DecimalField
+from django.contrib.auth.mixins import LoginRequiredMixin
+from apps.core.mixins import PermRequiredMixin
+from django.db.models import Sum, Count, F, Q, ExpressionWrapper, DecimalField, Case, When
 from django.db.models.functions import TruncMonth, TruncDay, Coalesce
+from django.core.paginator import Paginator
 from django.utils import timezone
 from datetime import timedelta, date
 from decimal import Decimal
 
 from .models import SalesInvoice, SalesInvoiceLine, SalesReturn, SalesRepresentative, Customer, SalesTarget, ReceiptAllocation
 from apps.inventory.models import Item
+from apps.reports.services import ReportService
 
-class SalesDashboardView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+
+class SalesDashboardView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'sales/reports/dashboard.html'
     permission_required = 'sales.view_salesinvoice'
 
@@ -70,7 +74,7 @@ class SalesDashboardView(LoginRequiredMixin, PermissionRequiredMixin, TemplateVi
         
         return context
 
-class SalesByItemReportView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class SalesByItemReportView(LoginRequiredMixin, PermRequiredMixin, ListView):
     template_name = 'sales/reports/by_item.html'
     context_object_name = 'report_data'
     permission_required = 'sales.view_salesinvoice'
@@ -87,7 +91,6 @@ class SalesByItemReportView(LoginRequiredMixin, PermissionRequiredMixin, ListVie
         if date_to_str:
             qs = qs.filter(invoice__date__lte=date.fromisoformat(date_to_str))
             
-        from django.db.models import Case, When
         return qs.values('item__code', 'item__name', 'item__base_unit__name').annotate(
             total_qty=Sum('base_quantity'),
             total_amount=Sum('total'),
@@ -98,7 +101,7 @@ class SalesByItemReportView(LoginRequiredMixin, PermissionRequiredMixin, ListVie
             )
         ).order_by('-total_amount')
 
-class SalesByRepReportView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class SalesByRepReportView(LoginRequiredMixin, PermRequiredMixin, ListView):
     template_name = 'sales/reports/by_rep.html'
     context_object_name = 'report_data'
     permission_required = 'sales.view_salesinvoice'
@@ -145,7 +148,7 @@ class SalesByRepReportView(LoginRequiredMixin, PermissionRequiredMixin, ListView
             
         return sorted(report_data, key=lambda x: x['actual'], reverse=True)
 
-class SalesByCustomerReportView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class SalesByCustomerReportView(LoginRequiredMixin, PermRequiredMixin, ListView):
     template_name = 'sales/reports/by_customer.html'
     context_object_name = 'report_data'
     permission_required = 'sales.view_salesinvoice'
@@ -167,7 +170,7 @@ class SalesByCustomerReportView(LoginRequiredMixin, PermissionRequiredMixin, Lis
             total_amount=Sum('total')
         ).order_by('-total_amount')
 
-class SalesReturnReportView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class SalesReturnReportView(LoginRequiredMixin, PermRequiredMixin, ListView):
     template_name = 'sales/reports/returns.html'
     context_object_name = 'report_data'
     permission_required = 'sales.view_salesreturn'
@@ -186,7 +189,7 @@ class SalesReturnReportView(LoginRequiredMixin, PermissionRequiredMixin, ListVie
             
         return qs.select_related('customer', 'sales_rep').order_by('-date')
 
-class SalesTargetComparisonView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class SalesTargetComparisonView(LoginRequiredMixin, PermRequiredMixin, ListView):
     template_name = 'sales/reports/target_comparison.html'
     context_object_name = 'targets'
     permission_required = 'sales.view_salesinvoice'
@@ -195,7 +198,7 @@ class SalesTargetComparisonView(LoginRequiredMixin, PermissionRequiredMixin, Lis
     def get_queryset(self):
         return SalesTarget.objects.select_related('sales_rep').all()
 
-class DetailedSalesReportView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class DetailedSalesReportView(LoginRequiredMixin, PermRequiredMixin, ListView):
     template_name = 'sales/reports/detailed_sales.html'
     context_object_name = 'report_data'
     permission_required = 'sales.view_salesinvoice'
@@ -228,7 +231,7 @@ class DetailedSalesReportView(LoginRequiredMixin, PermissionRequiredMixin, ListV
         context['reps'] = SalesRepresentative.objects.filter(is_active=True)
         return context
 
-class SalesAgingReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class SalesAgingReportView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'sales/reports/aging.html'
     permission_required = 'sales.view_salesinvoice'
 
@@ -292,7 +295,7 @@ class SalesAgingReportView(LoginRequiredMixin, PermissionRequiredMixin, Template
             
         context['summary'] = summary
         return context
-class SalesReportDashboardView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class SalesReportDashboardView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'sales/reports/dashboard_links.html'
     permission_required = 'sales.view_salesinvoice'
 
@@ -300,7 +303,7 @@ class SalesReportDashboardView(LoginRequiredMixin, PermissionRequiredMixin, Temp
         context = super().get_context_data(**kwargs)
         return context
 
-class NetSalesProfitabilityReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class NetSalesProfitabilityReportView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'sales/reports/net_sales_profitability.html'
     permission_required = 'sales.view_salesinvoice'
 
@@ -312,13 +315,13 @@ class NetSalesProfitabilityReportView(LoginRequiredMixin, PermissionRequiredMixi
         from_date_obj = date.fromisoformat(from_date)
         to_date_obj = date.fromisoformat(to_date)
         
-        from apps.reports.services import ReportService
+        
         context['report'] = ReportService.net_sales_profitability_report(from_date_obj, to_date_obj)
         context['from_date'] = from_date_obj
         context['to_date'] = to_date_obj
         return context
 
-class ProductProfitabilityReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class ProductProfitabilityReportView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'sales/reports/product_profitability.html'
     permission_required = 'sales.view_salesinvoice'
 
@@ -330,10 +333,9 @@ class ProductProfitabilityReportView(LoginRequiredMixin, PermissionRequiredMixin
         from_date_obj = date.fromisoformat(from_date)
         to_date_obj = date.fromisoformat(to_date)
         
-        from apps.reports.services import ReportService
+        
         report_data = ReportService.product_profitability_report(from_date_obj, to_date_obj)
         
-        from django.core.paginator import Paginator
         paginator = Paginator(report_data, 50)
         page_number = self.request.GET.get('page')
         context['report'] = paginator.get_page(page_number)
@@ -342,7 +344,7 @@ class ProductProfitabilityReportView(LoginRequiredMixin, PermissionRequiredMixin
         context['to_date'] = to_date_obj
         return context
 
-class SalesBySectorReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class SalesBySectorReportView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'sales/reports/by_sector.html'
     permission_required = 'sales.view_salesinvoice'
 
@@ -354,10 +356,9 @@ class SalesBySectorReportView(LoginRequiredMixin, PermissionRequiredMixin, Templ
         from_date_obj = date.fromisoformat(from_date)
         to_date_obj = date.fromisoformat(to_date)
         
-        from apps.reports.services import ReportService
+        
         report_data = ReportService.sales_by_sector_report(from_date_obj, to_date_obj)
         
-        from django.core.paginator import Paginator
         paginator = Paginator(report_data, 50)
         page_number = self.request.GET.get('page')
         context['report'] = paginator.get_page(page_number)
@@ -366,7 +367,7 @@ class SalesBySectorReportView(LoginRequiredMixin, PermissionRequiredMixin, Templ
         context['to_date'] = to_date_obj
         return context
 
-class RepPerformanceEnhancedReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class RepPerformanceEnhancedReportView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'sales/reports/rep_performance_enhanced.html'
     permission_required = 'sales.view_salesinvoice'
 
@@ -378,10 +379,9 @@ class RepPerformanceEnhancedReportView(LoginRequiredMixin, PermissionRequiredMix
         from_date_obj = date.fromisoformat(from_date)
         to_date_obj = date.fromisoformat(to_date)
         
-        from apps.reports.services import ReportService
+        
         report_data = ReportService.rep_performance_report_enhanced(from_date_obj, to_date_obj)
         
-        from django.core.paginator import Paginator
         paginator = Paginator(report_data, 50)
         page_number = self.request.GET.get('page')
         context['report'] = paginator.get_page(page_number)
@@ -390,7 +390,7 @@ class RepPerformanceEnhancedReportView(LoginRequiredMixin, PermissionRequiredMix
         context['to_date'] = to_date_obj
         return context
 
-class CustomerAgingSummaryReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class CustomerAgingSummaryReportView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'sales/reports/aging_summary.html'
     permission_required = 'sales.view_salesinvoice'
 
@@ -398,10 +398,9 @@ class CustomerAgingSummaryReportView(LoginRequiredMixin, PermissionRequiredMixin
         context = super().get_context_data(**kwargs)
         customer_id = self.request.GET.get('customer')
         
-        from apps.reports.services import ReportService
+        
         report_data = ReportService.customer_aging_summary_report(customer_id)
         
-        from django.core.paginator import Paginator
         paginator = Paginator(report_data, 50)
         page_number = self.request.GET.get('page')
         context['report'] = paginator.get_page(page_number)
@@ -412,7 +411,7 @@ class CustomerAgingSummaryReportView(LoginRequiredMixin, PermissionRequiredMixin
             
         return context
 
-class QuotationAnalysisReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class QuotationAnalysisReportView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'sales/reports/quotation_analysis.html'
     permission_required = 'sales.view_quotation'
 
@@ -424,7 +423,7 @@ class QuotationAnalysisReportView(LoginRequiredMixin, PermissionRequiredMixin, T
         from_date_obj = date.fromisoformat(from_date)
         to_date_obj = date.fromisoformat(to_date)
         
-        from apps.reports.services import ReportService
+        
         context['report'] = ReportService.quotation_analysis_report(from_date_obj, to_date_obj)
         context['from_date'] = from_date_obj
         context['to_date'] = to_date_obj

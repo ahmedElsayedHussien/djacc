@@ -4,6 +4,9 @@ from . import views
 app_name = 'core'
 
 urlpatterns = [
+    # Login Redirect
+    path('login-redirect/', views.login_redirect, name='login-redirect'),
+
     # Dashboard
     path('', views.dashboard, name='dashboard'),
     
@@ -35,4 +38,9 @@ urlpatterns = [
     path('taxes/', views.TaxTypeListView.as_view(), name='taxtype-list'),
     path('taxes/create/', views.TaxTypeCreateView.as_view(), name='taxtype-create'),
     path('taxes/<int:pk>/edit/', views.TaxTypeUpdateView.as_view(), name='taxtype-edit'),
+
+    # Notifications
+    path('notifications/', views.NotificationListView.as_view(), name='notification-list'),
+    path('notifications/<int:pk>/read/', views.notification_read, name='notification-read'),
+    path('notifications/mark-all-read/', views.mark_all_notifications_read, name='notification-mark-all-read'),
 ]

@@ -53,12 +53,14 @@
                     <i class="bi bi-exclamation-triangle-fill me-2"></i>
                     هذه الحركة لم ترحل بعد ولن تظهر في كشوف الحسابات.
                 </div>
+                {% if perms.treasury.change_banktransaction %}
                 <form method="post" action="{% url 'treasury:banktransaction-post' transaction.pk %}">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-success btn-lg w-100 py-3 shadow-sm" onclick="return confirm('تأكيد ترحيل الحركة لدفتر الأستاذ؟');">
                         <i class="bi bi-send-check me-2"></i> ترحيل الآن
                     </button>
                 </form>
+                {% endif %}
                 {% endif %}
             </div>
         </div>

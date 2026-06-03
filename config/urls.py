@@ -2,6 +2,9 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from apps.core.handlers import handler403
+
+handler403 = handler403
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -17,6 +20,7 @@ urlpatterns = [
     path('e-invoice/', include('apps.e_invoice.urls')),
     path('accounts/', include('allauth.urls')),
     path('access/', include('apps.users.urls')),
+    path('pos/', include('apps.pos.urls')),
     path('', include('apps.core.urls')),
 ]
 

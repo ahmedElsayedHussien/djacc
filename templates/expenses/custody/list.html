@@ -6,9 +6,11 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">سجل العهد</h5>
+        {% if perms.expenses.add_custody %}
         <a href="{% url 'expenses:custody-create' %}" class="btn btn-primary">
             <i class="bi bi-plus-lg"></i> صرف عهدة جديدة
         </a>
+        {% endif %}
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -30,7 +32,7 @@
                     <tr>
                         <td><code>{{ custody.number }}</code></td>
                         <td>{{ custody.date|date:'Y-m-d' }}</td>
-                        <td>{{ custody.employee.get_full_name|default:custody.employee.username }}</td>
+                        <td>{{ custody.employee.full_name }}</td>
                         <td>{{ custody.amount }}</td>
                         <td class="text-success">{{ custody.settled_amount }}</td>
                         <td class="text-danger fw-bold">{{ custody.amount|add:"-"|add:custody.settled_amount }}</td>
@@ -47,7 +49,7 @@
                             <a href="{% url 'expenses:custody-detail' custody.pk %}" class="btn btn-sm btn-outline-info" title="التفاصيل">
                                 <i class="bi bi-eye"></i> عرض
                             </a>
-                            {% if custody.status != 'settled' %}
+                            {% if custody.status != 'settled' and perms.expenses.add_custodysettlement %}
                             <a href="{% url 'expenses:custody-settle' custody.pk %}" class="btn btn-sm btn-outline-success" title="تسوية العهدة">
                                 <i class="bi bi-calculator"></i> تسوية
                             </a>
@@ -63,5 +65,6 @@
             </table>
         </div>
     </div>
+    {% include 'partials/pagination.html' %}
 </div>
 {% endblock %}

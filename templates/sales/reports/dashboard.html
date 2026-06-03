@@ -163,45 +163,54 @@
                             </a>
                         </div>
                         {% endif %}
+                        
+                        <!-- قوائم الأسعار -->
+                        {% if perms.sales.view_pricelist or perms.core.view_account %}
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="{% url 'sales:pricelist-list' %}" class="btn btn-outline-warning w-100 py-3 shadow-sm border-2">
+                                <i class="bi bi-tags d-block mb-2 fs-3"></i>
+                                <span class="fw-bold">قوائم الأسعار</span>
+                            </a>
+                        </div>
+                        {% endif %}
+
+                        <!-- قطاعات العملاء -->
+                        {% if perms.sales.view_customersector or perms.core.view_account %}
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="{% url 'sales:sector-list' %}" class="btn btn-outline-success w-100 py-3 shadow-sm border-2">
+                                <i class="bi bi-diagram-3 d-block mb-2 fs-3"></i>
+                                <span class="fw-bold">قطاعات العملاء</span>
+                            </a>
+                        </div>
+                        {% endif %}
+
+                        <!-- العروض والخصومات -->
+                        {% if perms.sales.view_quotation or perms.core.view_account %}
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="{% url 'sales:quotation-list' %}" class="btn btn-outline-secondary w-100 py-3 shadow-sm border-2">
+                                <i class="bi bi-percent d-block mb-2 fs-3"></i>
+                                <span class="fw-bold">العروض والخصومات</span>
+                            </a>
+                        </div>
+                        {% endif %}
+
+                        {% if user.salesrepresentative %}
+                        <!-- بضاعتي الحالية للمندوب -->
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="{% url 'sales:rep-stock' %}" class="btn btn-outline-info w-100 py-3 shadow-sm border-2" style="background-color: #e0f2fe; color: #0369a1; border-color: #7dd3fc !important;">
+                                <i class="bi bi-box-seam d-block mb-2 fs-3"></i>
+                                <span class="fw-bold">بضاعتي الحالية</span>
+                            </a>
+                        </div>
+                        {% endif %}
+
                         <div class="col-lg-2 col-md-4 col-6">
                             <a href="{% url 'sales:report-dashboard' %}" class="btn btn-dark w-100 py-3 shadow-sm border-2">
                                 <i class="bi bi-bar-chart-line d-block mb-2 fs-3 text-warning"></i>
                                 <span class="fw-bold">تقارير المبيعات</span>
                             </a>
                         </div>
-
                     </div>
-                    <div class="row g-3 mt-1">
-                        {% if perms.sales.view_customersector %}
-                        <div class="col-lg-2 col-md-4 col-6">
-                            <a href="{% url 'sales:sector-list' %}" class="btn btn-light w-100 text-start border shadow-sm">
-                                <i class="bi bi-diagram-3 me-2"></i>قطاعات العملاء
-                            </a>
-                        </div>
-                        {% endif %}
-                        {% if perms.sales.view_pricelist %}
-                        <div class="col-lg-2 col-md-4 col-6">
-                            <a href="{% url 'sales:pricelist-list' %}" class="btn btn-light w-100 text-start border shadow-sm">
-                                <i class="bi bi-tags me-2"></i>قوائم الأسعار
-                            </a>
-                        </div>
-                        {% endif %}
-                        {% if perms.sales.view_quotation %}
-                        <div class="col-lg-2 col-md-4 col-6">
-                            <a href="{% url 'sales:quotation-list' %}" class="btn btn-light w-100 text-start border shadow-sm">
-                                <i class="bi bi-percent me-2"></i>العروض والخصومات
-                            </a>
-                        </div>
-                        {% endif %}
-                        {% if user.salesrepresentative %}
-                        <div class="col-lg-2 col-md-4 col-6">
-                            <a href="{% url 'sales:rep-stock' %}" class="btn btn-soft-info w-100 text-start border shadow-sm" style="background-color: #e0f2fe; color: #0369a1;">
-                                <i class="bi bi-box-seam me-2"></i>بضاعتي الحالية
-                            </a>
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
             </div>
         </div>
     </div>

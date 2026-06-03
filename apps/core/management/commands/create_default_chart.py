@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 from apps.core.models import Account, AccountType, TaxType
+from apps.core.services import AccountService
 
 DEFAULT_ACCOUNTS = [
     # (code, name, account_type, parent_code, is_leaf)
@@ -15,6 +16,7 @@ DEFAULT_ACCOUNTS = [
         ('112', 'الذمم المدينة', AccountType.ASSET, '11', False),
           ('1121', 'العملاء', AccountType.ASSET, '112', False),
           ('1122', 'ضريبة خصم وتحصيل - مدينة', AccountType.ASSET, '112', True),
+          ('1123', 'ذمم شركات التحصيل الوسيطة', AccountType.ASSET, '112', False),
         ('113', 'المخزون', AccountType.ASSET, '11', False),
           ('1131', 'مخزون البضاعة', AccountType.ASSET, '113', True),
           ('1132', 'اعتمادات مستندية وبضاعة بالطريق', AccountType.ASSET, '113', True), # (إضافة جديدة)
@@ -118,8 +120,6 @@ class Command(BaseCommand):
     help = 'إنشاء شجرة الحسابات الافتراضية للنظام وفقاً للمعايير المحاسبية الاحترافية'
 
     def handle(self, *args, **options):
-        from apps.core.services import AccountService
-        
         self.stdout.write('بدء إنشاء شجرة الحسابات...')
         count = AccountService.initialize_default_chart()
         self.stdout.write(self.style.SUCCESS(f'تم إنشاء/تحديث {count} حساب رئيسي وفرعي.'))

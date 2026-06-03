@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}شركات التحصيل الوسيطة{% endblock %}
+{% block header %}إدارة شركات التحصيل الوسيطة (فوري، أمان، إلخ){% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">سجل الشركات</h5>
+        {% if perms.sales.add_intermediarycompany %}
+        <a href="{% url 'treasury:intermediary-create' %}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus"></i> إضافة شركة جديدة
+        </a>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-striped table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>اسم الشركة</th>
+                    <th>الحساب المحاسبي المرتبط</th>
+                    <th>نسبة العمولة (%)</th>
+                    <th>الحالة</th>
+                    <th>إجراءات</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for company in companies %}
+                <tr>
+                    <td class="fw-bold">{{ company.name }}</td>
+                    <td>{{ company.account.name }} <span class="text-muted small">({{ company.account.code }})</span></td>
+                    <td>{{ company.commission_percent }}%</td>
+                    <td>
+                        {% if company.is_active %}
+                            <span class="badge bg-success">نشط</span>
+                        {% else %}
+                            <span class="badge bg-danger">موقوف</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if perms.sales.change_intermediarycompany %}<a href="{% url 'treasury:intermediary-update' company.pk %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-pencil"></i> تعديل
+                        </a>{% endif %}
+                        <a href="{% url 'reports:account_statement' %}?account={{ company.account.pk }}" class="btn btn-sm btn-outline-info">
+                            <i class="bi bi-file-earmark-text"></i> كشف حساب مالي
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-4 text-muted">لا توجد شركات مضافة حالياً.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% include 'partials/pagination.html' %}
+</div>
+{% endblock %}

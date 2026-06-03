@@ -1,112 +1,166 @@
 {% extends 'base.html' %}
-{% block title %}تفاصيل المندوب: {{ rep.name }}{% endblock %}
-{% block header %}بطاقة المندوب{% endblock %}
+{% block title %}تفاصيل الكاشير / المندوب: {{ rep.name }} | DJACC Pro{% endblock %}
+{% block header %}بطاقة الكاشير ورقابة العهد{% endblock %}
+
 {% block content %}
-<div class="row">
+<div class="row" style="font-family: 'Cairo', sans-serif;">
+    <!-- Right Sidebar: Representative Info & Quick Cards -->
     <div class="col-md-4">
-        <div class="card shadow-sm mb-4">
+        <!-- Main Card -->
+        <div class="card shadow-sm border-0 mb-4" style="border-radius: 16px; overflow: hidden;">
             <div class="card-body text-center py-4">
-                <div class="avatar-lg bg-primary-subtle text-primary rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
+                <div class="avatar-lg bg-plum text-white rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
                     <i class="bi bi-person-badge fs-1"></i>
                 </div>
-                <h4 class="fw-bold mb-1">{{ rep.name }}</h4>
-                <p class="text-muted mb-3">كود المندوب: <code>{{ rep.code }}</code></p>
+                <h4 class="fw-bold mb-1 text-plum">{{ rep.name }}</h4>
+                <p class="text-muted mb-3">كود المندوب: <span class="badge bg-light text-secondary font-monospace">{{ rep.code }}</span></p>
+                
                 <div class="d-grid gap-2">
-                    <a href="{% url 'sales:rep-edit' rep.pk %}" class="btn btn-primary rounded-pill">
-                        <i class="bi bi-pencil-square"></i> تعديل البيانات
+                    {% if perms.sales.change_salesrepresentative %}
+                    <a href="{% url 'sales:rep-edit' rep.pk %}" class="btn btn-outline-primary rounded-pill px-4">
+                        <i class="bi bi-pencil-square me-1"></i> تعديل بيانات المندوب
                     </a>
+                    {% endif %}
                 </div>
             </div>
-            <div class="card-footer bg-white p-0">
-                <ul class="list-group list-group-flush border-0">
-                    <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent">
-                        <span class="text-muted">الحالة:</span>
+            
+            <div class="card-footer bg-white border-0 p-0">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent py-3 px-4">
+                        <span class="text-secondary"><i class="bi bi-shield-check me-2"></i>حالة النشاط:</span>
                         {% if rep.is_active %}
-                        <span class="badge bg-success">نشط</span>
+                        <span class="badge bg-success-subtle text-success rounded-pill px-3 py-1.5 small">نشط</span>
                         {% else %}
-                        <span class="badge bg-danger">غير نشط</span>
+                        <span class="badge bg-danger-subtle text-danger rounded-pill px-3 py-1.5 small">معطل</span>
                         {% endif %}
                     </li>
-                    <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent">
-                        <span class="text-muted">نسبة العمولة:</span>
-                        <span class="fw-bold">{{ rep.commission_rate }}%</span>
+                    <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent py-3 px-4">
+                        <span class="text-secondary"><i class="bi bi-percent me-2"></i>نسبة العمولة:</span>
+                        <span class="fw-bold text-plum">{{ rep.commission_rate }}%</span>
                     </li>
-                    <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent">
-                        <span class="text-muted">المنطقة:</span>
-                        <span>{{ rep.territory|default:"---" }}</span>
+                    <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent py-3 px-4">
+                        <span class="text-secondary"><i class="bi bi-geo-alt me-2"></i>المنطقة البيعية:</span>
+                        <span class="fw-semibold">{{ rep.territory|default:"عام" }}</span>
                     </li>
                 </ul>
             </div>
         </div>
 
-        <div class="card shadow-sm border-0 bg-primary text-white">
-            <div class="card-body">
-                <h6 class="text-white-50 small text-uppercase mb-3">رصيد الخزنة الحالية</h6>
-                <h2 class="mb-0 fw-bold">{{ rep.cash_box.account.balance|default:"0.00" }} <small class="fs-6 fw-normal text-white-50">EGP</small></h2>
+        <!-- Receivable / Debt Account Card (ذمة المندوب / العجز المتراكم) -->
+        <div class="card shadow-sm border-0 mb-4 text-white bg-plum" style="border-radius: 16px; overflow: hidden; background: linear-gradient(135deg, #3A1530 0%, #20071A 100%);">
+            <div class="card-body p-4 relative">
+                <h6 class="text-white-50 small text-uppercase mb-3"><i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>رصيد ذمة المندوب (العجوزات المتراكمة)</h6>
+                <h2 class="mb-3 fw-extrabold">{{ receivable_balance|floatformat:2 }} <small class="fs-6 fw-normal text-white-50">EGP</small></h2>
+                <p class="small text-white-50 mb-4">يمثل هذا الرصيد إجمالي مبالغ العجز في تسويات الورديات السابقة التي لم يقم الكاشير بسدادها بعد للشركة.</p>
+                
+                {% if receivable_balance > 0 %}
+                {% if perms.sales.change_salesrepresentative %}
+                <a href="{% url 'sales:rep-collect' rep.pk %}" class="btn btn-warning text-dark w-full py-3 rounded-2xl font-bold hover:bg-[#ffdf4d] transition-all active:scale-[0.98]">
+                    <i class="bi bi-cash-coin me-1"></i> تحصيل مبالغ العجز وسداد الذمة
+                </a>
+                {% endif %}
+                {% else %}
+                <button disabled class="btn btn-outline-light/30 text-white w-full py-3 rounded-2xl font-bold opacity-50 cursor-not-allowed">
+                    <i class="bi bi-check-all me-1"></i> الذمة مسواة بالكامل (رصيد صفر)
+                </button>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Cash in Drawer Card (رصيد درج الكاشير الفعلي) -->
+        <div class="card shadow-sm border-0 mb-4" style="border-radius: 16px; overflow: hidden; border: 1px solid #EBF1FA;">
+            <div class="card-body p-4">
+                <h6 class="text-muted small text-uppercase mb-2"><i class="bi bi-safe2 text-success me-2"></i>النقدية المتوفرة بدرج الكاشير حالياً</h6>
+                <h2 class="mb-0 fw-extrabold text-success">{{ cash_box_balance|floatformat:2 }} <small class="fs-6 fw-normal text-muted">EGP</small></h2>
             </div>
         </div>
     </div>
 
+    <!-- Left Main Content: Linked Assets & Transactions -->
     <div class="col-md-8">
         <div class="row g-4 mb-4">
             <div class="col-md-6">
-                <div class="card shadow-sm h-100">
-                    <div class="card-body">
+                <div class="card shadow-sm border-0 h-100" style="border-radius: 16px; border: 1px solid #EBF1FA;">
+                    <div class="card-body p-4">
                         <div class="d-flex align-items-center mb-3">
-                            <div class="flex-shrink-0 avatar-sm bg-info-subtle text-info rounded p-2 me-3">
+                            <div class="flex-shrink-0 avatar-sm bg-primary-subtle text-primary rounded p-2.5 me-3">
                                 <i class="bi bi-house-door fs-4"></i>
                             </div>
-                            <h6 class="card-title mb-0">المخزن المرتبط</h6>
+                            <h6 class="card-title mb-0 fw-bold text-plum">المستودع المرتبط بالبيع</h6>
                         </div>
-                        <h5 class="fw-bold">{{ rep.warehouse.name }}</h5>
-                        <p class="text-muted small mb-0">كود المخزن: <code>{{ rep.warehouse.code }}</code></p>
+                        <h5 class="fw-bold mb-1">{{ rep.warehouse.name }}</h5>
+                        <p class="text-muted small mb-0 font-monospace">كود المستودع: <code>{{ rep.warehouse.code }}</code></p>
                     </div>
                 </div>
             </div>
+            
             <div class="col-md-6">
-                <div class="card shadow-sm h-100">
-                    <div class="card-body">
+                <div class="card shadow-sm border-0 h-100" style="border-radius: 16px; border: 1px solid #EBF1FA;">
+                    <div class="card-body p-4">
                         <div class="d-flex align-items-center mb-3">
-                            <div class="flex-shrink-0 avatar-sm bg-warning-subtle text-warning rounded p-2 me-3">
+                            <div class="flex-shrink-0 avatar-sm bg-success-subtle text-success rounded p-2.5 me-3">
                                 <i class="bi bi-safe fs-4"></i>
                             </div>
-                            <h6 class="card-title mb-0">الخزنة المرتبطة</h6>
+                            <h6 class="card-title mb-0 fw-bold text-plum">درج النقدية (الخزنة الفرعية)</h6>
                         </div>
-                        <h5 class="fw-bold">{{ rep.cash_box.name }}</h5>
-                        <p class="text-muted small mb-0">رقم الحساب: <code>{{ rep.cash_box.account.code }}</code></p>
+                        <h5 class="fw-bold mb-1">{{ rep.cash_box.name }}</h5>
+                        <p class="text-muted small mb-0 font-monospace">كود الحساب المالي: <code>{{ rep.cash_box.account.code }}</code></p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="card shadow-sm">
-            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0 fw-bold">آخر الحركات</h5>
-                <div class="dropdown">
-                    <button class="btn btn-sm btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        عمليات سريعة
-                    </button>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="#">طلب تحميل</a></li>
-                        <li><a class="dropdown-item" href="#">محضر توريد نقدية</a></li>
-                    </ul>
-                </div>
+        <!-- Settlements Log Card -->
+        <div class="card shadow-sm border-0 mb-4" style="border-radius: 16px; overflow: hidden;">
+            <div class="card-header bg-white border-0 py-4 px-4 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold text-plum">سجل تسويات الكاشير اليومية</h5>
+                <a href="{% url 'sales:settlement-list' %}?rep={{ rep.id }}" class="btn btn-sm btn-light rounded-pill px-3">
+                    عرض كافة التسويات
+                </a>
             </div>
+            
             <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-flush mb-0">
-                        <thead class="table-light">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light text-secondary" style="font-size: 0.9rem;">
                             <tr>
-                                <th>التاريخ</th>
-                                <th>المستند</th>
-                                <th>النوع</th>
-                                <th>المبلغ</th>
+                                <th class="py-3 px-4">رقم التسوية</th>
+                                <th class="py-3">التاريخ</th>
+                                <th class="py-3 text-center">إجمالي المبيعات</th>
+                                <th class="py-3 text-center">النقدية الموردة</th>
+                                <th class="py-3 text-center">العجز / الزيادة</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody style="font-size: 0.95rem;">
+                            {% for settlement in rep.repdailysettlement_set.all|dictsortreversed:"date"|slice:":10" %}
                             <tr>
-                                <td colspan="4" class="text-center py-4 text-muted">لا يوجد حركات مسجلة حالياً لهذا المندوب.</td>
+                                <td class="py-3 px-4">
+                                    <a href="{% url 'sales:settlement-detail' settlement.pk %}" class="fw-bold text-decoration-none">
+                                        {{ settlement.number }}
+                                    </a>
+                                </td>
+                                <td class="py-3">{{ settlement.date }}</td>
+                                <td class="py-3 text-center fw-bold text-primary">{{ settlement.total_sales|floatformat:2 }} EGP</td>
+                                <td class="py-3 text-center fw-bold">{{ settlement.cash_delivered|floatformat:2 }} EGP</td>
+                                <td class="py-3 text-center">
+                                    {% if settlement.difference == 0 %}
+                                        <span class="badge bg-success-subtle text-success px-2.5 py-1.5 rounded">مطابق</span>
+                                    {% elif settlement.difference > 0 %}
+                                        <span class="badge bg-danger-subtle text-danger px-2.5 py-1.5 rounded">عجز ({{ settlement.difference|floatformat:2 }})</span>
+                                    {% else %}
+                                        <span class="badge bg-info-subtle text-info px-2.5 py-1.5 rounded">زيادة (+{{ settlement.abs_difference|floatformat:2 }})</span>
+                                    {% endif %}
+                                </td>
                             </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-5 text-muted">
+                                    <i class="bi bi-journal-check fs-1 d-block mb-3 opacity-50 text-secondary"></i>
+                                    <span class="fw-bold d-block mb-1">لا توجد تسويات يومية مسجلة مسبقاً لهذا الكاشير</span>
+                                    <span class="small">عند إغلاق الوردية وتسوية الكاش، ستظهر التقارير هنا تلقائياً.</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 </div>

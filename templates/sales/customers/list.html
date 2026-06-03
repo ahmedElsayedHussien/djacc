@@ -5,9 +5,11 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">العملاء</h5>
+        {% if perms.sales.add_customer %}
         <a href="{% url 'sales:customer-create' %}" class="btn btn-primary">
             <i class="bi bi-person-plus"></i> إضافة عميل جديد
         </a>
+        {% endif %}
     </div>
     <div class="card-body">
         <form method="get" class="row g-2 mb-3">
@@ -41,7 +43,9 @@
                         <td>{{ customer.phone|default:"---" }}</td>
                         <td>{{ customer.balance|default:"0.00" }}</td>
                         <td>
+                            {% if perms.sales.change_customer %}
                             <a href="{% url 'sales:customer-edit' customer.pk %}" class="btn btn-sm btn-outline-primary">تعديل</a>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -53,5 +57,6 @@
             </table>
         </div>
     </div>
+    {% include 'partials/pagination.html' %}
 </div>
 {% endblock %}

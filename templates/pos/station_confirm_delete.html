@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block title %}تأكيد حذف نقطة البيع | DJACC Pro{% endblock %}
+{% block header %}تأكيد حذف نقطة البيع{% endblock %}
+{% block content %}
+<div class="row justify-content-center" style="font-family: 'Cairo', sans-serif;">
+    <div class="col-md-6">
+        <div class="card shadow-lg border-0 mb-4" style="border-radius: 16px; overflow: hidden;">
+            <!-- Warning Header -->
+            <div class="card-header text-white border-0 py-4 px-4 d-flex align-items-center gap-3" style="background: linear-gradient(135deg, #dc3545, #c0392b);">
+                <div class="d-flex align-items-center justify-content-center bg-white bg-opacity-25 rounded-circle" style="width: 44px; height: 44px;">
+                    <i class="bi bi-trash3-fill fs-4"></i>
+                </div>
+                <div>
+                    <h5 class="modal-title fw-bold mb-0">تأكيد عملية الحذف النهائية</h5>
+                    <small class="opacity-75">هذا الإجراء سيقوم بحذف تهيئة محطة الكاشير بالكامل</small>
+                </div>
+            </div>
+            
+            <!-- Body -->
+            <div class="card-body p-4 text-center">
+                <i class="bi bi-exclamation-triangle text-warning display-1 d-block mb-3 opacity-75"></i>
+                
+                <h4 class="fw-bold text-plum mb-2">هل أنت متأكد من حذف نقطة البيع؟</h4>
+                <p class="text-secondary mb-4">
+                    اسم نقطة البيع: <strong class="text-danger">{{ station.name }}</strong> (كود: <code>{{ station.code }}</code>)
+                </p>
+                
+                <div class="alert alert-danger-subtle text-danger border-0 rounded-3 text-start small mb-0 py-3 d-flex align-items-start gap-2">
+                    <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+                    <span>
+                        <strong>ملاحظة هامة:</strong> لا يمكنك حذف نقطة البيع إذا كان هناك ورديات عمل مسجلة عليها سابقاً لضمان عدم تلف البيانات التاريخية للتقارير والقيود المحاسبية. في هذه الحالة يفضل تعطيلها بدلاً من حذفها.
+                    </span>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="card-footer bg-light border-0 px-4 py-3 d-flex gap-2 justify-content-end">
+                <form method="post">
+                    {% csrf_token %}
+                    <a href="{% url 'pos:station-list' %}" class="btn btn-outline-secondary rounded-pill px-4">
+                        <i class="bi bi-x-circle me-1"></i> إلغاء
+                    </a>
+                    <button type="submit" class="btn btn-danger rounded-pill px-4 shadow-sm">
+                        <i class="bi bi-trash3 me-1"></i> نعم، تأكيد الحذف
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

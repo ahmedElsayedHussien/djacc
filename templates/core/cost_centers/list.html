@@ -17,9 +17,11 @@
 <div class="card shadow-sm border-0">
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
         <h5 class="mb-0 fw-bold"><i class="bi bi-diagram-3 text-primary me-2"></i>شجرة مراكز التكلفة</h5>
+        {% if perms.core.add_costcenter %}
         <a href="{% url 'core:costcenter-create' %}" class="btn btn-primary">
             <i class="bi bi-plus-lg me-1"></i> إضافة مركز تكلفة
         </a>
+        {% endif %}
     </div>
 
     <div class="table-responsive">
@@ -83,9 +85,9 @@
                         {% endif %}
                     </td>
                     <td class="text-end">
-                        <a href="{% url 'core:costcenter-edit' center.pk %}" class="btn btn-sm btn-outline-secondary">
+                        {% if perms.core.change_costcenter %}<a href="{% url 'core:costcenter-edit' center.pk %}" class="btn btn-sm btn-outline-secondary">
                             <i class="bi bi-pencil"></i>
-                        </a>
+                        </a>{% endif %}
                     </td>
                 </tr>
                 {% empty %}

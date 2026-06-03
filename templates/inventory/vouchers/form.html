@@ -31,6 +31,7 @@
                             <thead>
                                 <tr>
                                     <th>الصنف</th>
+                                    <th>الوحدة</th>
                                     <th>الكمية</th>
                                     <th>التكلفة (للإضافة فقط)</th>
                                     <th>ملاحظات</th>
@@ -40,11 +41,12 @@
                             <tbody id="line-items">
                                 {% for l_form in lines %}
                                 <tr class="line-form">
-                                    <td>{{ l_form.id }}{{ l_form.item|as_crispy_field }}</td>
-                                    <td>{{ l_form.quantity|as_crispy_field }}</td>
-                                    <td>{{ l_form.unit_cost|as_crispy_field }}</td>
-                                    <td>{{ l_form.notes|as_crispy_field }}</td>
-                                    <td>{{ l_form.DELETE|as_crispy_field }}</td>
+                                    <td data-label="الصنف">{{ l_form.id }}{{ l_form.item|as_crispy_field }}</td>
+                                    <td data-label="الوحدة">{{ l_form.unit|as_crispy_field }}</td>
+                                    <td data-label="الكمية">{{ l_form.quantity|as_crispy_field }}</td>
+                                    <td data-label="التكلفة">{{ l_form.unit_cost|as_crispy_field }}</td>
+                                    <td data-label="ملاحظات">{{ l_form.notes|as_crispy_field }}</td>
+                                    <td data-label="حذف">{{ l_form.DELETE|as_crispy_field }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -71,11 +73,11 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const typeField = document.querySelector('[name="voucher_type"]');
-        const unitCostHeader = document.querySelector('th:nth-child(3)');
-        
+        const offsetAccountField = document.querySelector('[name="offset_account"]');
         function toggleUnitCost() {
             const isIssue = typeField.value === 'issue';
-            const unitCostCells = document.querySelectorAll('.line-form td:nth-child(3)');
+            const unitCostCells = document.querySelectorAll('.line-form td:nth-child(4)');
+            const unitCostHeader = document.querySelector('th:nth-child(4)');
             
             if (isIssue) {
                 unitCostHeader.classList.add('hidden-col');
@@ -86,13 +88,85 @@
             }
         }
 
-        if (typeField) {
-            typeField.addEventListener('change', toggleUnitCost);
-            toggleUnitCost(); // Initial state
+        function toggleOffsetAccountOptions() {
+            const isIssue = typeField.value === 'issue';
+            if (offsetAccountField) {
+                Array.from(offsetAccountField.options).forEach(option => {
+                    const text = option.textContent || option.innerText || '';
+                    if (text.startsWith('35 ') || text.startsWith('35 -')) {
+                        if (isIssue) {
+                            option.disabled = true;
+                            option.style.display = 'none';
+                            if (offsetAccountField.value === option.value) {
+                                offsetAccountField.value = "";
+                            }
+                        } else {
+                            option.disabled = false;
+                            option.style.display = '';
+                        }
+                    }
+                });
+            }
         }
 
-        // Handle dynamically added rows if any (using a mutation observer or just re-running on button click)
-        // Since this is a standard formset, we might need to handle the 'Add More' button if it exists.
+        if (typeField) {
+            typeField.addEventListener('change', function() {
+                toggleUnitCost();
+                toggleOffsetAccountOptions();
+            });
+            toggleUnitCost(); // Initial state
+            toggleOffsetAccountOptions(); // Initial state
+        }
+
+        // Fetch units based on item selection
+        async function fetchItemUnits(itemSelect) {
+            const row = itemSelect.closest('tr');
+            const unitSelect = row.querySelector('select[name$="-unit"]');
+            if (!unitSelect) return;
+            
+            const itemId = itemSelect.value;
+            const currentUnit = unitSelect.value;
+            
+            if (!itemId) {
+                unitSelect.innerHTML = '<option value="">---------</option>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/inventory/api/item/${itemId}/`);
+                if (response.ok) {
+                    const data = await response.json();
+                    unitSelect.innerHTML = '<option value="">---------</option>';
+                    data.units.forEach(u => {
+                        const option = document.createElement('option');
+                        option.value = u.id;
+                        option.text = u.name;
+                        unitSelect.appendChild(option);
+                    });
+                    
+                    if (currentUnit && Array.from(unitSelect.options).some(opt => opt.value === currentUnit)) {
+                        unitSelect.value = currentUnit;
+                    } else if (data.default_unit_id) {
+                        unitSelect.value = data.default_unit_id;
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching units:', error);
+            }
+        }
+
+        document.addEventListener('change', function(e) {
+            if (e.target.matches('select[name$="-item"]')) {
+                fetchItemUnits(e.target);
+            }
+        });
+
+        // Initialize units for existing rows on load
+        document.querySelectorAll('select[name$="-item"]').forEach(select => {
+            if (select.value) {
+                setTimeout(() => fetchItemUnits(select), 100);
+            }
+        });
     });
 </script>
 {% endblock %}

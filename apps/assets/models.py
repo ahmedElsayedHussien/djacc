@@ -1,6 +1,8 @@
 from django.db import models
 from django.conf import settings
-from django.core.validators import MinValueValidator
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
 from decimal import Decimal
 
 class AssetCategory(models.Model):
@@ -12,11 +14,20 @@ class AssetCategory(models.Model):
     accumulated_depreciation_account = models.ForeignKey('core.Account', on_delete=models.PROTECT, related_name='acc_dep_categories', verbose_name="حساب مجمع الإهلاك")
     depreciation_expense_account = models.ForeignKey('core.Account', on_delete=models.PROTECT, related_name='dep_exp_categories', verbose_name="حساب مصروف الإهلاك")
     
-    default_depreciation_rate = models.DecimalField(max_digits=5, decimal_places=2, verbose_name="نسبة الإهلاك السنوية", help_text="النسبة الافتراضية لهذا النوع (مثلاً: 25% للحواسب، 10% للأثاث)")
+    default_depreciation_rate = models.DecimalField(max_digits=5, decimal_places=2, verbose_name="نسبة الإهلاك السنوية", help_text="النسبة الافتراضية لهذا النوع (مثلاً: 25% للحواسب، 10% للأثاث)", validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))])
 
     class Meta:
         verbose_name = "تصنيف أصول"
         verbose_name_plural = "تصنيفات الأصول"
+
+    def clean(self):
+        accounts = [self.asset_account_id, self.accumulated_depreciation_account_id, self.depreciation_expense_account_id]
+        if len(set(filter(None, accounts))) != len(list(filter(None, accounts))):
+            raise ValidationError('حسابات التصنيف (الأصل، مجمع الإهلاك، مصروف الإهلاك) يجب أن تكون مختلفة عن بعضها البعض')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
@@ -33,16 +44,17 @@ class Asset(models.Model):
     
     purchase_date = models.DateField(verbose_name="تاريخ الشراء")
     purchase_value = models.DecimalField(max_digits=18, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))], verbose_name="قيمة الشراء")
-    salvage_value = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="القيمة التخريدية (الخردة)", help_text="القيمة المتوقعة للأصل في نهاية عمره (كم سيساوي كخردة؟)")
+    salvage_value = models.DecimalField(max_digits=18, decimal_places=2, default=0, verbose_name="القيمة التخريدية (الخردة)", help_text="القيمة المتوقعة للأصل في نهاية عمره (كم سيساوي كخردة؟)", validators=[MinValueValidator(Decimal('0.00'))])
     
     # Depreciation parameters
-    depreciation_rate = models.DecimalField(max_digits=5, decimal_places=2, verbose_name="نسبة الإهلاك السنوية", help_text="النسبة المئوية التي يتم استقطاعها سنوياً (مثلاً: 10 للسيارات)")
+    depreciation_rate = models.DecimalField(max_digits=5, decimal_places=2, verbose_name="نسبة الإهلاك السنوية", help_text="النسبة المئوية التي يتم استقطاعها سنوياً (مثلاً: 10 للسيارات)", validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))])
     
     # Opening balances for assets
     initial_accumulated_depreciation = models.DecimalField(
         max_digits=18, decimal_places=2, default=0, 
         verbose_name="مجمع الإهلاك الافتتاحي", 
-        help_text="إجمالي الإهلاك المتراكم للأصل قبل البدء في استخدام هذا النظام"
+        help_text="إجمالي الإهلاك المتراكم للأصل قبل البدء في استخدام هذا النظام",
+        validators=[MinValueValidator(Decimal('0.00'))]
     )
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE, verbose_name="الحالة")
@@ -59,6 +71,18 @@ class Asset(models.Model):
     class Meta:
         verbose_name = "أصل ثابت"
         verbose_name_plural = "الأصول الثابتة"
+
+    def clean(self):
+        if self.purchase_date and self.purchase_date > timezone.now().date():
+            raise ValidationError({'purchase_date': 'تاريخ الشراء لا يمكن أن يكون في المستقبل'})
+        if self.salvage_value is not None and self.purchase_value is not None and self.salvage_value >= self.purchase_value:
+            raise ValidationError({'salvage_value': 'القيمة التخريدية يجب أن تكون أقل من قيمة الشراء'})
+        if self.initial_accumulated_depreciation is not None and self.purchase_value is not None and self.initial_accumulated_depreciation >= self.purchase_value:
+            raise ValidationError({'initial_accumulated_depreciation': 'مجمع الإهلاك الافتتاحي يجب أن يكون أقل من قيمة الشراء'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.code} - {self.name}"
@@ -77,7 +101,7 @@ class Asset(models.Model):
 class DepreciationLog(models.Model):
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name='depreciation_logs')
     date = models.DateField(verbose_name="تاريخ الإهلاك")
-    amount = models.DecimalField(max_digits=18, decimal_places=2, verbose_name="مبلغ الإهلاك")
+    amount = models.DecimalField(max_digits=18, decimal_places=2, verbose_name="مبلغ الإهلاك", validators=[MinValueValidator(Decimal('0.01'))])
     journal_entry = models.OneToOneField('core.JournalEntry', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="قيد اليومية")
     
     created_at = models.DateTimeField(auto_now_add=True)
@@ -86,6 +110,14 @@ class DepreciationLog(models.Model):
         ordering = ['-date']
         verbose_name = "سجل إهلاك"
         verbose_name_plural = "سجلات الإهلاك"
+
+    def clean(self):
+        if self.date and self.date > timezone.now().date():
+            raise ValidationError({'date': 'تاريخ الإهلاك لا يمكن أن يكون في المستقبل'})
+        if self.amount is not None and self.amount <= 0:
+            raise ValidationError({'amount': 'مبلغ الإهلاك يجب أن يكون أكبر من صفر'})
+        if self.asset_id and self.asset.status != Asset.Status.ACTIVE:
+            raise ValidationError('لا يمكن تسجيل إهلاك لأصل غير نشط')
 
     def __str__(self):
         return f"إهلاك {self.asset.name} في {self.date}"

@@ -5,9 +5,11 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">سجل التحويلات</h5>
+        {% if perms.treasury.add_cashtransfer %}
         <a href="{% url 'treasury:transfer-create' %}" class="btn btn-primary">
             <i class="bi bi-arrow-left-right"></i> إنشاء تحويل جديد
         </a>
+        {% endif %}
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -28,8 +30,8 @@
                     <tr>
                         <td><a href="{% url 'treasury:transfer-detail' tr.pk %}" class="fw-bold">{{ tr.number }}</a></td>
                         <td>{{ tr.date|date:"Y-m-d" }}</td>
-                        <td>{{ tr.from_cash_box.name|default:tr.from_bank.name }}</td>
-                        <td>{{ tr.to_cash_box.name|default:tr.to_bank.name }}</td>
+                        <td>{% if tr.from_cash_box %}{{ tr.from_cash_box.name }}{% else %}{{ tr.from_bank.name }}{% endif %}</td>
+                        <td>{% if tr.to_cash_box %}{{ tr.to_cash_box.name }}{% else %}{{ tr.to_bank.name }}{% endif %}</td>
                         <td>{{ tr.amount|floatformat:2 }}</td>
                         <td>
                             <span class="badge {% if tr.status == 'completed' %}bg-success{% elif tr.status == 'pending' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
@@ -40,12 +42,13 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="text-center">لا يوجد تحويلات مسجلة.</td>
+                        <td colspan="7" class="text-center">لا يوجد تحويلات مسجلة.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
+    {% include 'partials/pagination.html' %}
 </div>
 {% endblock %}

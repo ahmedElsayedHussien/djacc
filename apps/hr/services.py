@@ -33,7 +33,8 @@ from collections import defaultdict
 
 from apps.core.models import JournalEntry, Account, AccountType, CostCenter
 from apps.core.services import JournalService, AuditService
-from .models import PayrollPeriod, Payslip
+from django.conf import settings as django_settings
+from .models import PayrollPeriod, Payslip, Employee, Loan, EndOfService, LoanInstallment
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -105,6 +106,7 @@ class PayrollService:
         يرحّل فترة الرواتب ويُنشئ قيد الاستحقاق التفصيلي مع مراكز التكلفة.
         ✅ Fix #6: يتطلب حالة APPROVED قبل الترحيل.
         """
+        period = PayrollPeriod.objects.select_for_update().get(pk=period.pk)
         if period.status == PayrollPeriod.Status.POSTED:
             raise ValueError("هذه الفترة مرحلة بالفعل.")
         # ✅ Bug #6 Fix: منع القفز من DRAFT مباشرة إلى POSTED
@@ -122,13 +124,27 @@ class PayrollService:
             raise ValueError("لا يوجد قسائم رواتب في هذه الفترة للترحيل.")
 
         # ── الحسابات الرئيسية (حسب المعايير المحاسبية والتوجيه الصحيح) ─────────────────
-        salary_acc    = _get_or_create_account('5210', 'الرواتب والأجور الأساسية',         '521', AccountType.EXPENSE)
-        other_add_acc = _get_or_create_account('5213', 'مصروف بدلات وإضافات أخرى',       '521', AccountType.EXPENSE)
-        ins_emp_acc   = _get_or_create_account('2133', 'تأمينات اجتماعية مستحقة',          '213', AccountType.LIABILITY)
-        payable_acc   = _get_or_create_account('2132', 'رواتب وأجور مستحقة',              '213', AccountType.LIABILITY)
-        loan_acc      = _get_or_create_account('1143', 'سلف الموظفين والقروض',            '114', AccountType.ASSET)
-        other_ded_acc = _get_or_create_account('2126', 'استقطاعات أخرى من الموظفين',     '212', AccountType.LIABILITY)
-        tax_acc       = _get_or_create_account('2125', 'مصلحة الضرائب - كسب عمل',         '212', AccountType.LIABILITY)
+        salary_acc    = _get_or_create_account(
+            getattr(django_settings, 'SALARY_ACCOUNT', '5210'),
+            'الرواتب والأجور الأساسية', '521', AccountType.EXPENSE)
+        other_add_acc = _get_or_create_account(
+            getattr(django_settings, 'ALLOWANCES_ACCOUNT', '5213'),
+            'مصروف بدلات وإضافات أخرى', '521', AccountType.EXPENSE)
+        ins_emp_acc   = _get_or_create_account(
+            getattr(django_settings, 'INSURANCE_PAYABLE_ACCOUNT', '2133'),
+            'تأمينات اجتماعية مستحقة', '213', AccountType.LIABILITY)
+        payable_acc   = _get_or_create_account(
+            getattr(django_settings, 'SALARIES_PAYABLE_ACCOUNT', '2132'),
+            'رواتب وأجور مستحقة', '213', AccountType.LIABILITY)
+        loan_acc      = _get_or_create_account(
+            getattr(django_settings, 'LOANS_RECEIVABLE_ACCOUNT', '1143'),
+            'سلف الموظفين والقروض', '114', AccountType.ASSET)
+        other_ded_acc = _get_or_create_account(
+            getattr(django_settings, 'OTHER_DEDUCTIONS_ACCOUNT', '2126'),
+            'استقطاعات أخرى من الموظفين', '212', AccountType.LIABILITY)
+        tax_acc       = _get_or_create_account(
+            getattr(django_settings, 'INCOME_TAX_PAYABLE_ACCOUNT', '2125'),
+            'مصلحة الضرائب - كسب عمل', '212', AccountType.LIABILITY)
 
         lines = []
 
@@ -272,6 +288,7 @@ class PayrollService:
           مدين: مصروف تأمينات حصة المنشأة (5214)
           دائن: تأمينات اجتماعية مستحقة (2133)
         """
+        period = PayrollPeriod.objects.select_for_update().get(pk=period.pk)
         payslips = period.payslips.select_related(
             'employee__department__cost_center'
         ).filter(employee__has_social_insurance=True)
@@ -279,8 +296,12 @@ class PayrollService:
         if not payslips.exists():
             raise ValueError("لا يوجد موظفون خاضعون للتأمينات الاجتماعية في هذه الفترة.")
 
-        ins_expense_acc = _get_or_create_account('5214', 'حصة المنشأة في التأمينات الاجتماعية', '521', AccountType.EXPENSE)
-        ins_payable_acc = _get_or_create_account('2133', 'تأمينات اجتماعية مستحقة', '213', AccountType.LIABILITY)
+        ins_expense_acc = _get_or_create_account(
+            getattr(django_settings, 'INSURANCE_EXPENSE_ACCOUNT', '5214'),
+            'حصة المنشأة في التأمينات الاجتماعية', '521', AccountType.EXPENSE)
+        ins_payable_acc = _get_or_create_account(
+            getattr(django_settings, 'INSURANCE_PAYABLE_ACCOUNT', '2133'),
+            'تأمينات اجتماعية مستحقة', '213', AccountType.LIABILITY)
 
         lines = []
         total_employer_ins = Decimal(0)
@@ -341,9 +362,12 @@ class PayrollService:
           مدين: رواتب مستحقة (2133) — بمراكز التكلفة
           دائن: البنك / الخزينة
         """
+        period = PayrollPeriod.objects.select_for_update().get(pk=period.pk)
         payslips = period.payslips.select_related('employee__department__cost_center').all()
 
-        payable_acc = _get_or_create_account('2132', 'رواتب وأجور مستحقة', '213', AccountType.LIABILITY)
+        payable_acc = _get_or_create_account(
+            getattr(django_settings, 'SALARIES_PAYABLE_ACCOUNT', '2132'),
+            'رواتب وأجور مستحقة', '213', AccountType.LIABILITY)
 
         by_cc = defaultdict(lambda: Decimal(0))
         for slip in payslips:
@@ -396,8 +420,14 @@ class PayrollService:
           مدين: مصلحة الضرائب - كسب عمل (2125)
           دائن: البنك / الخزينة
         """
-        ins_acc = _get_or_create_account('2133', 'تأمينات اجتماعية مستحقة', '213', AccountType.LIABILITY)
-        tax_acc = _get_or_create_account('2125', 'مصلحة الضرائب - كسب عمل', '212', AccountType.LIABILITY)
+        if period:
+            period = PayrollPeriod.objects.select_for_update().get(pk=period.pk)
+        ins_acc = _get_or_create_account(
+            getattr(django_settings, 'INSURANCE_PAYABLE_ACCOUNT', '2133'),
+            'تأمينات اجتماعية مستحقة', '213', AccountType.LIABILITY)
+        tax_acc = _get_or_create_account(
+            getattr(django_settings, 'INCOME_TAX_PAYABLE_ACCOUNT', '2125'),
+            'مصلحة الضرائب - كسب عمل', '212', AccountType.LIABILITY)
         
         lines = []
         if insurance_amount > 0:
@@ -450,7 +480,7 @@ class PayrollService:
     @staticmethod
     @transaction.atomic
     def generate_payslips_for_period(period: PayrollPeriod):
-        from .models import Employee
+        period = PayrollPeriod.objects.select_for_update().get(pk=period.pk)
         if period.status != PayrollPeriod.Status.DRAFT:
             raise ValueError("يمكن توليد القسائم فقط للفترات في حالة المسودة.")
 
@@ -514,7 +544,7 @@ class PayrollService:
                 basic_salary=basic,
                 total_allowances=total_allowances,
                 other_additions=other_additions,
-                total_deductions=loan_deduction,
+                total_deductions=actual_loan_deduction,
                 other_deductions=other_deductions,
                 social_insurance=insurance,
                 income_tax=tax,
@@ -522,7 +552,6 @@ class PayrollService:
             )
 
             # إنشاء سجلات الأقساط المخصومة فعلياً
-            from .models import LoanInstallment
             for loan in loans_to_deduct:
                     LoanInstallment.objects.create(
                         loan=loan,
@@ -547,33 +576,36 @@ class EOSService:
         دائن: سلف الموظفين والقروض (1143)         — outstanding_loan_balance (إن وجد)
         دائن: رواتب وأجور مستحقة (2133)           — total_settlement + outstanding_loan_balance
         """
+        eos_record = EndOfService.objects.select_for_update().get(pk=eos_record.pk)
         if eos_record.is_processed:
             raise ValueError("هذه التسوية مرحلة بالفعل.")
 
         # ── الحسابات ──────────────────────────────────────────────────────
-        eos_expense_acc = _get_or_create_account('5215', 'مصروف تعويضات ومكافآت نهاية الخدمة', '521', AccountType.EXPENSE)
-        payable_acc     = _get_or_create_account('2133', 'رواتب وأجور مستحقة',                 '213', AccountType.LIABILITY)
-        loan_acc        = _get_or_create_account('1143', 'سلف الموظفين والقروض',               '114', AccountType.ASSET)
+        eos_expense_acc = _get_or_create_account(
+            getattr(django_settings, 'EOS_EXPENSE_ACCOUNT', '5215'),
+            'مصروف تعويضات ومكافآت نهاية الخدمة', '521', AccountType.EXPENSE)
+        payable_acc     = _get_or_create_account(
+            getattr(django_settings, 'SALARIES_PAYABLE_ACCOUNT', '2132'),
+            'رواتب وأجور مستحقة', '213', AccountType.LIABILITY)
+        loan_acc        = _get_or_create_account(
+            getattr(django_settings, 'LOANS_RECEIVABLE_ACCOUNT', '1143'),
+            'سلف الموظفين والقروض', '114', AccountType.ASSET)
 
         cc = eos_record.employee.department.cost_center if (
             eos_record.employee.department and eos_record.employee.department.cost_center
         ) else None
 
         # ── حساب رصيد السلف المتبقي ───────────────────────────────────────
-        from django.db.models import Sum as DbSum
-        from .models import Loan, Payslip as PayslipModel
-
         approved_loans = Loan.objects.filter(
             employee=eos_record.employee,
             status='approved'
         )
-        total_loan_amount = approved_loans.aggregate(total=DbSum('amount'))['total'] or Decimal(0)
+        total_loan_amount = approved_loans.aggregate(total=Sum('amount'))['total'] or Decimal(0)
         
         # حساب إجمالي ما تم سداده عبر الأقساط الفعلية
-        from .models import LoanInstallment
         total_deducted = LoanInstallment.objects.filter(
             loan__employee=eos_record.employee
-        ).aggregate(total=DbSum('amount'))['total'] or Decimal(0)
+        ).aggregate(total=Sum('amount'))['total'] or Decimal(0)
         
         outstanding_loan_balance = max(Decimal(0), total_loan_amount - total_deducted)
 

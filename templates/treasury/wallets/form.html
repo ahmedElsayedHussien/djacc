@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% block title %}{% if object %}تعديل المحفظة الإلكترونية{% else %}إضافة محفظة إلكترونية{% endif %} | DJACC Pro{% endblock %}
+{% block header %}{% if object %}تعديل المحفظة الإلكترونية{% else %}إضافة محفظة إلكترونية{% endif %}{% endblock %}
+{% block content %}
+<div class="row justify-content-center" style="font-family: 'Cairo', sans-serif;">
+    <div class="col-lg-7 col-md-9">
+        <div class="card shadow-sm border-0 mb-4" style="border-radius: 16px; overflow: hidden;">
+            <div class="card-header bg-white border-0 py-4 px-4 border-bottom">
+                <h5 class="mb-0 fw-bold text-plum">
+                    <i class="bi bi-phone-vibrate me-1 text-success"></i>
+                    {% if object %}تعديل بيانات المحفظة الإلكترونية{% else %}تهيئة محفظة إلكترونية جديدة{% endif %}
+                </h5>
+                <p class="text-muted small mb-0 mt-1">قم بملء البيانات التالية لتسجيل المحفظة الرقمية وإنشاء حساب تلقائي لها في شجرة الحسابات.</p>
+            </div>
+            <div class="card-body p-4">
+                {% include 'partials/_form_errors.html' %}
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    
+                    <div class="row g-4">
+                        <!-- Code -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-plum">كود المحفظة <span class="text-danger">*</span></label>
+                            {{ form.code }}
+                            <div class="form-text small text-muted">كود فريد ومختصر للمحفظة.</div>
+                        </div>
+
+                        <!-- Name -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-plum">اسم المحفظة الوصفي <span class="text-danger">*</span></label>
+                            {{ form.name }}
+                            <div class="form-text small text-muted">مثال: محفظة الفرع الرئيسي.</div>
+                        </div>
+
+                        <!-- Provider -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-plum">نوع المحفظة / مزود الخدمة <span class="text-danger">*</span></label>
+                            {{ form.provider }}
+                            <div class="form-text small text-muted">مثال: فودافون كاش، إنستاباي، فوري.</div>
+                        </div>
+
+                        <!-- Mobile Number -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-plum">رقم الهاتف المرتبط بالمحفظة <span class="text-danger">*</span></label>
+                            {{ form.mobile_number }}
+                            <div class="form-text small text-muted">الرقم المستخدم لاستقبال التحويلات الرقمية.</div>
+                        </div>
+
+                        <!-- Currency -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-plum">العملة <span class="text-danger">*</span></label>
+                            {{ form.currency }}
+                        </div>
+
+                        <!-- Status Checkbox -->
+                        <div class="col-md-6 d-flex align-items-center mt-5">
+                            <div class="form-check form-switch">
+                                {{ form.is_active }}
+                                <label class="form-check-label fw-bold text-plum ms-2" for="{{ form.is_active.id_for_label }}">
+                                    محفظة نشطة للعمليات
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Initial Balance Settings -->
+                        {% if not object %}
+                        <div class="col-md-12">
+                            <div class="p-3 bg-light rounded-3 border border-dashed">
+                                <h6 class="fw-bold text-plum mb-3"><i class="bi bi-coin me-1 text-warning"></i> رصيد أول المدة الافتتاحي</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label small text-muted">الرصيد الافتتاحي</label>
+                                        {{ form.initial_balance }}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small text-muted">طبيعة الحساب</label>
+                                        {{ form.initial_balance_type }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Footer Actions -->
+                    <div class="d-flex gap-3 justify-content-end mt-5 border-t pt-4">
+                        <a href="{% url 'treasury:wallet-list' %}" class="btn btn-outline-secondary rounded-pill px-4">
+                            <i class="bi bi-x-circle me-1"></i> إلغاء
+                        </a>
+                        <button type="submit" class="btn btn-primary rounded-pill px-4 shadow-sm">
+                            <i class="bi bi-save me-1"></i> حفظ المحفظة
+                        </button>
+                    </div>
+
+                    {% if not object %}
+                    <div class="mt-3 text-muted small text-center">
+                        <i class="bi bi-info-circle me-1"></i> سيقوم النظام بإنشاء حساب محاسبي فرعي تلقائياً تحت بند "المحافظ الإلكترونية" (الأصول المتداولة).
+                    </div>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

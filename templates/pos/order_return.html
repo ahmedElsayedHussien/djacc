@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}إرجاع أصناف | {{ order.receipt_number }}{% endblock %}
+{% block header %}إرجاع أصناف من فاتورة {{ order.receipt_number }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center" style="font-family: 'Cairo', sans-serif;">
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0 mb-4" style="border-radius: 16px; overflow: hidden;">
+            <div class="card-header bg-white border-0 py-4 px-4 border-bottom">
+                <h5 class="mb-0 fw-bold text-plum">
+                    <i class="bi bi-arrow-return-left me-1 text-warning"></i>
+                    إرجاع أصناف - {{ order.receipt_number }}
+                </h5>
+                <p class="text-muted small mb-0 mt-1">اختر الأصناف والكميات المطلوب إرجاعها.</p>
+            </div>
+            <div class="card-body p-4">
+                <div class="row mb-4 g-3">
+                    <div class="col-md-4">
+                        <div class="bg-light rounded-3 p-3 text-center">
+                            <small class="text-muted d-block">رقم الفاتورة</small>
+                            <strong class="text-plum">{{ order.receipt_number }}</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="bg-light rounded-3 p-3 text-center">
+                            <small class="text-muted d-block">الإجمالي</small>
+                            <strong class="text-primary">{{ order.grand_total }} EGP</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="bg-light rounded-3 p-3 text-center">
+                            <small class="text-muted d-block">تاريخ الفاتورة</small>
+                            <strong class="text-plum">{{ order.date|date:"Y-m-d H:i" }}</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>الصنف</th>
+                                    <th class="text-center">الكمية الأصلية</th>
+                                    <th class="text-center">سعر الوحدة</th>
+                                    <th class="text-center">الإجمالي</th>
+                                    <th class="text-center" style="min-width:120px">كمية الإرجاع</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for line in order.lines.all %}
+                                <tr>
+                                    <td class="fw-bold">{{ line.item.name }}</td>
+                                    <td class="text-center">{{ line.qty }}</td>
+                                    <td class="text-center">{{ line.price }} EGP</td>
+                                    <td class="text-center">{{ line.total }} EGP</td>
+                                    <td class="text-center">
+                                        <input type="number" name="return_qty_{{ line.id }}" class="form-control form-control-sm text-center" min="0" max="{{ line.qty|floatformat:'0' }}" step="0.01" value="0" placeholder="0">
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="d-flex gap-3 justify-content-end mt-4 pt-3 border-top">
+                        <a href="{% url 'pos:session-list' %}" class="btn btn-outline-secondary rounded-pill px-4">
+                            <i class="bi bi-x-circle me-1"></i> إلغاء
+                        </a>
+                        <button type="submit" class="btn btn-warning rounded-pill px-4 shadow-sm">
+                            <i class="bi bi-arrow-return-left me-1"></i> تأكيد الإرجاع
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

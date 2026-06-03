@@ -5,9 +5,11 @@
 
 {% block content %}
 <div class="container-fluid">
+    {% if perms.inventory.view_stockmovement or perms.inventory.view_item %}
     <!-- First Row: Live Balances -->
     <h4 class="mb-4 fw-bold text-primary"><i class="bi bi-broadcast me-2"></i>أولاً: تقارير الأرصدة اللحظية (Live Balances)</h4>
     <div class="row g-4 mb-5">
+        {% if perms.inventory.view_stockmovement %}
         <div class="col-md-4">
             <div class="card h-100 border-0 shadow-sm report-card">
                 <div class="card-body">
@@ -22,6 +24,8 @@
                 </div>
             </div>
         </div>
+        {% endif %}
+        {% if perms.inventory.view_item %}
         <div class="col-md-4">
             <div class="card h-100 border-0 shadow-sm report-card">
                 <div class="card-body">
@@ -36,6 +40,8 @@
                 </div>
             </div>
         </div>
+        {% endif %}
+        {% if perms.inventory.view_stockmovement %}
         <div class="col-md-4">
             <div class="card h-100 border-0 shadow-sm report-card">
                 <div class="card-body">
@@ -50,11 +56,13 @@
                 </div>
             </div>
         </div>
+        {% endif %}
     </div>
 
     <!-- Second Row: Historical & Audit -->
     <h4 class="mb-4 fw-bold text-secondary"><i class="bi bi-clock-history me-2"></i>ثانياً: تقارير الحركات والرقابة (Audit)</h4>
     <div class="row g-4 mb-5">
+        {% if perms.inventory.view_stockmovement %}
         <div class="col-md-4">
             <div class="card h-100 border-0 shadow-sm report-card">
                 <div class="card-body">
@@ -69,6 +77,8 @@
                 </div>
             </div>
         </div>
+        {% endif %}
+        {% if perms.inventory.view_stockvoucher %}
         <div class="col-md-4">
             <div class="card h-100 border-0 shadow-sm report-card">
                 <div class="card-body">
@@ -83,6 +93,8 @@
                 </div>
             </div>
         </div>
+        {% endif %}
+        {% if perms.inventory.view_stockmovement %}
         <div class="col-md-4">
             <div class="card h-100 border-0 shadow-sm report-card">
                 <div class="card-body">
@@ -97,11 +109,13 @@
                 </div>
             </div>
         </div>
+        {% endif %}
     </div>
 
     <!-- Third Row: Vans & Reps -->
     <h4 class="mb-4 fw-bold text-warning"><i class="bi bi-truck me-2"></i>ثالثاً: تقارير المناديب والتوزيع</h4>
     <div class="row g-4">
+        {% if perms.inventory.view_stockmovement %}
         <div class="col-md-4">
             <div class="card h-100 border-0 shadow-sm report-card">
                 <div class="card-body">
@@ -116,7 +130,11 @@
                 </div>
             </div>
         </div>
+        {% endif %}
     </div>
+    {% else %}
+    <div class="alert alert-warning">ليس لديك صلاحية لعرض تقارير المخازن.</div>
+    {% endif %}
 </div>
 
 <style>

@@ -1,20 +1,21 @@
+import logging
 from datetime import date
 from decimal import Decimal
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from apps.core.services import JournalService, AuditService
 from apps.core.models import JournalEntry, Account, AccountType
 from .models import Asset, AssetCategory, DepreciationLog
 
+logger = logging.getLogger(__name__)
+
 def _get_or_create_account(code, name, parent_code, account_type):
     """مساعد لجلب أو إنشاء حساب محاسبي للأرصدة الافتتاحية"""
-    # ✅ Fix: Use select_for_update() to prevent race conditions during account creation
+    parent = Account.objects.select_for_update().get(code=parent_code)
     acc = Account.objects.filter(code=code).first()
     if acc:
         return acc
-    
-    # إذا لم يوجد، ننشئه تحت الأب المحدد
-    parent = Account.objects.select_for_update().get(code=parent_code)
     return Account.objects.create(
         code=code,
         name=name,
@@ -33,9 +34,6 @@ class AssetService:
         1. قيد شراء الأصل: DR أصل / CR نقدية أو مورد (أو ح/35 لو افتتاحي)
         2. قيد مجمع الإهلاك الافتتاحي: DR ح/35 / CR مجمع إهلاك
         """
-        from apps.core.models import JournalEntry
-        from apps.core.services import JournalService
-
         if entry_date is None:
             entry_date = asset.purchase_date
 
@@ -69,7 +67,6 @@ class AssetService:
 
         # ── 2. قيد مجمع الإهلاك الافتتاحي ─────────────────────────────
         if asset.initial_accumulated_depreciation > 0:
-            from django.conf import settings
             # استخدام حساب الأرصدة الافتتاحية (ح/35 أو ح/34 أرباح مرحلة)
             opening_acc_code = getattr(settings, 'OPENING_BALANCES_ACCOUNT', '35')
             opening_acc = _get_or_create_account(opening_acc_code, 'أرصدة افتتاحية / أرباح مرحلة', '3', AccountType.EQUITY)
@@ -149,7 +146,8 @@ class AssetService:
         # 4. معالجة الأرباح أو الخسائر
         if gain_loss < 0:
             # خسارة (مدين)
-            loss_acc = _get_or_create_account('5261', 'خسائر استبعاد أصول ثابتة', '526', AccountType.EXPENSE)
+            loss_code = getattr(settings, 'LOSS_ON_DISPOSAL_ACCOUNT', '5261')
+            loss_acc = _get_or_create_account(loss_code, 'خسائر استبعاد أصول ثابتة', '526', AccountType.EXPENSE)
             lines.append({
                 'account': loss_acc,
                 'debit': abs(gain_loss),
@@ -158,7 +156,8 @@ class AssetService:
             })
         elif gain_loss > 0:
             # ربح (دائن)
-            gain_acc = _get_or_create_account('4210', 'أرباح رأسمالية (بيع أصول)', '421', AccountType.REVENUE)
+            gain_code = getattr(settings, 'GAIN_ON_DISPOSAL_ACCOUNT', '4210')
+            gain_acc = _get_or_create_account(gain_code, 'أرباح رأسمالية (بيع أصول)', '421', AccountType.REVENUE)
             lines.append({
                 'account': gain_acc,
                 'debit': 0,
@@ -188,13 +187,13 @@ class AssetService:
         يجرى حساب وإثبات إهلاك كافة الأصول النشطة حتى التاريخ المحدد (عادة نهاية الشهر).
         تم تحديثها لتستخدم savepoints لضمان استمرارية العملية في حال فشل أصل معين.
         """
-        active_assets = Asset.objects.filter(status=Asset.Status.ACTIVE)
+        active_assets = Asset.objects.select_for_update().filter(status=Asset.Status.ACTIVE)
         processed_count = 0
         errors = []
         
         for asset in active_assets:
             try:
-                with transaction.atomic(): # ✅ استخدام savepoint لكل أصل
+                with transaction.atomic():
                     # Check if already depreciated for this month
                     month_start = target_date.replace(day=1)
                     if DepreciationLog.objects.filter(asset=asset, date__gte=month_start, date__lte=target_date).exists():
@@ -256,8 +255,6 @@ class AssetService:
                 errors.append(f"خطأ في إهلاك الأصل {asset.name}: {str(e)}")
 
         if errors:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error("\n".join(errors))
             
         return processed_count
@@ -268,7 +265,6 @@ class AssetService:
         """
         تنشئ تصنيف جديد مع فحص وجود الحسابات أولاً قبل إنشائها (لتجنب التكرار).
         """
-        from apps.core.models import Account, AccountType
         
         # 1. تحديد الحسابات الأب
         fixed_assets_parent = Account.objects.get(code='12')
@@ -281,12 +277,11 @@ class AssetService:
                 dep_exp_parent = Account.objects.get(code='5')
 
         def get_or_create_account(parent, acc_name, acc_type, initial_type='debit'):
-            # البحث عن حساب مطابق بالاسم تحت نفس الأب
+            parent = Account.objects.select_for_update().get(pk=parent.pk)
             existing = Account.objects.filter(parent=parent, name__icontains=acc_name).first()
             if existing:
                 return existing
             
-            # إذا لم يوجد، ننشئ كود جديد
             last = Account.objects.filter(parent=parent).order_by('-code').first()
             if last:
                 try:
@@ -311,7 +306,6 @@ class AssetService:
         dep_exp_acc = get_or_create_account(dep_exp_parent, f"مصروف إهلاك - {name}", AccountType.EXPENSE)
         
         # 3. إنشاء التصنيف
-        from .models import AssetCategory
         category = AssetCategory.objects.create(
             name=name,
             asset_account=asset_acc,

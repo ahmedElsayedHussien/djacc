@@ -107,7 +107,7 @@
             <div class="card h-100">
                 <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
                     <h5 class="mb-0 fw-bold">أحدث عمليات الإهلاك</h5>
-                    <a href="{% url 'assets:run-depreciation' %}" class="btn btn-sm btn-primary">تشغيل الإهلاك</a>
+                    {% if perms.assets.add_depreciationlog %}<a href="{% url 'assets:run-depreciation' %}" class="btn btn-sm btn-primary">تشغيل الإهلاك</a>{% endif %}
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -157,12 +157,16 @@
                 </div>
                 <div class="card-body">
                     <div class="d-grid gap-3">
+                        {% if perms.assets.add_asset %}
                         <a href="{% url 'assets:asset-create' %}" class="btn btn-indigo py-3 text-white" style="background-color: #4f46e5;">
                             <i class="bi bi-plus-circle me-2"></i>تسجيل أصل جديد
                         </a>
+                        {% endif %}
+                        {% if perms.assets.add_assetcategory %}
                         <a href="{% url 'assets:category-create' %}" class="btn btn-outline-indigo py-3">
                             <i class="bi bi-tags me-2"></i>إضافة تصنيف أصول
                         </a>
+                        {% endif %}
                         <a href="{% url 'assets:asset-list' %}" class="btn btn-outline-secondary py-3">
                             <i class="bi bi-list-ul me-2"></i>عرض كافة الأصول
                         </a>
@@ -189,7 +193,7 @@
                     </div>
                     <div class="vr"></div>
                     <div>
-                        <div class="display-6 fw-bold text-warning">{% for s in status_counts %}{% if s.status == 'fully_depreciated' %}{{ s.count }}{% endif %}{% endfor %|default:0 %}</div>
+                        <div class="display-6 fw-bold text-warning">{{ fully_depreciated_count }}</div>
                         <div class="text-muted">أصول مهلكة دفترياً</div>
                     </div>
                 </div>

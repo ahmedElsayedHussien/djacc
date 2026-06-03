@@ -94,15 +94,15 @@
                                 {% for hidden in line_form.hidden_fields %}
                                     {{ hidden }}
                                 {% endfor %}
-                                <td>
+                                <td data-label="الصنف">
                                     {{ line_form.item }}
                                     {{ line_form.item.errors }}
                                 </td>
-                                <td>
+                                <td data-label="نسبة الخصم %">
                                     {{ line_form.discount_percent }}
                                     {{ line_form.discount_percent.errors }}
                                 </td>
-                                <td>
+                                <td data-label="حذف">
                                     {% if line_form.instance.pk %}
                                         {{ line_form.DELETE }}
                                     {% else %}

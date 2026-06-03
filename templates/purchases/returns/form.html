@@ -40,13 +40,13 @@
                             <tbody id="line-items">
                                 {% for l_form in lines %}
                                 <tr class="line-form">
-                                    <td>{{ l_form.id }}{{ l_form.item|as_crispy_field }}</td>
-                                    <td>{{ l_form.unit|as_crispy_field }}</td>
-                                    <td>{{ l_form.warehouse|as_crispy_field }}</td>
-                                    <td>{{ l_form.quantity|as_crispy_field }}</td>
-                                    <td>{{ l_form.unit_cost|as_crispy_field }}</td>
-                                    <td>{{ l_form.tax_type|as_crispy_field }}</td>
-                                    <td>{{ l_form.DELETE|as_crispy_field }}</td>
+                                    <td data-label="الصنف">{{ l_form.id }}{{ l_form.item|as_crispy_field }}</td>
+                                    <td data-label="الوحدة">{{ l_form.unit|as_crispy_field }}</td>
+                                    <td data-label="المستودع">{{ l_form.warehouse|as_crispy_field }}</td>
+                                    <td data-label="الكمية">{{ l_form.quantity|as_crispy_field }}</td>
+                                    <td data-label="التكلفة">{{ l_form.unit_cost|as_crispy_field }}</td>
+                                    <td data-label="الضريبة %">{{ l_form.tax_type|as_crispy_field }}</td>
+                                    <td data-label="حذف">{{ l_form.DELETE|as_crispy_field }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

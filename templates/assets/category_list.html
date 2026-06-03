@@ -4,9 +4,11 @@
 
 {% block content %}
 <div class="mb-4">
+    {% if perms.assets.add_assetcategory %}
     <a href="{% url 'assets:category-create' %}" class="btn btn-primary">
         <i class="bi bi-plus-lg"></i> إضافة تصنيف جديد
     </a>
+    {% endif %}
     <a href="{% url 'assets:asset-list' %}" class="btn btn-outline-secondary">
         <i class="bi bi-arrow-right"></i> العودة لسجل الأصول
     </a>
@@ -32,7 +34,9 @@
                     <td>{{ cat.asset_account.name }}</td>
                     <td>{{ cat.depreciation_expense_account.name }}</td>
                     <td>
-                        <a href="#" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                        {% if perms.assets.change_assetcategory %}
+                        <button class="btn btn-sm btn-outline-secondary disabled" title="قيد التطوير"><i class="bi bi-pencil"></i></button>
+                        {% endif %}
                     </td>
                 </tr>
                 {% empty %}

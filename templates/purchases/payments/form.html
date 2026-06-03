@@ -33,6 +33,18 @@
                             <label class="form-label">الخزنة (مصدر الصرف)</label>
                             {{ form.cash_box }}
                         </div>
+                        <div class="col-md-6" id="cheque_div" style="display:none;">
+                            <div class="row">
+                                <div class="col-6">
+                                    <label class="form-label fw-bold">رقم الشيك</label>
+                                    {{ form.cheque_number }}
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold">تاريخ الاستحقاق</label>
+                                    {{ form.cheque_due_date }}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     
                     <div class="mt-4 d-flex gap-2">
@@ -49,8 +61,9 @@
 {% block extra_js %}
 <script>
     function toggleSource(val) {
-        document.getElementById('bank_div').style.display = (val === 'bank' || val === 'cheque') ? 'block' : 'none';
+        document.getElementById('bank_div').style.display = (val === 'bank') ? 'block' : 'none';
         document.getElementById('cash_div').style.display = (val === 'cash') ? 'block' : 'none';
+        document.getElementById('cheque_div').style.display = (val === 'cheque') ? 'block' : 'none';
     }
     
     document.addEventListener('DOMContentLoaded', function() {

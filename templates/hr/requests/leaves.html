@@ -53,7 +53,7 @@
                             {% endif %}
                         </td>
                         <td class="text-end">
-                            {% if req.status == 'pending' %}
+                            {% if req.status == 'pending' and perms.hr.change_leaverequest %}
                             <form method="post" action="{% url 'hr:leave-approve' req.pk %}" class="d-inline" onsubmit="return confirm('هل أنت متأكد من الموافقة وتخفيض رصيد إجازات الموظف؟');">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> موافقة</button>
@@ -76,5 +76,6 @@
             </table>
         </div>
     </div>
+    {% include 'partials/pagination.html' %}
 </div>
 {% endblock %}

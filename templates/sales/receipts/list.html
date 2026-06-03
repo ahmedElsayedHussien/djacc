@@ -5,9 +5,11 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">سجل المقبوضات</h5>
+        {% if perms.sales.add_customerreceipt %}
         <a href="{% url 'sales:receipt-create' %}" class="btn btn-primary">
             <i class="bi bi-plus-lg"></i> إضافة سند قبض
         </a>
+        {% endif %}
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -19,7 +21,9 @@
                         <th>العميل</th>
                         <th>المبلغ</th>
                         <th>طريقة الدفع</th>
+                        <th>حالة الشيك</th>
                         <th>البيان</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -30,16 +34,33 @@
                         <td>{{ rcpt.customer.name }}</td>
                         <td><strong>{{ rcpt.amount }}</strong></td>
                         <td>{{ rcpt.get_payment_method_display }}</td>
+                        <td>
+                            {% if rcpt.payment_method == 'cheque' %}
+                                {% if rcpt.cheque_status == 'pending' %}
+                                <span class="badge bg-warning text-dark">قيد التحصيل</span>
+                                {% elif rcpt.cheque_status == 'collected' %}
+                                <span class="badge bg-success">تم التحصيل</span>
+                                {% elif rcpt.cheque_status == 'bounced' %}
+                                <span class="badge bg-danger">شيك مرتجع</span>
+                                {% elif rcpt.cheque_status == 'cancelled' %}
+                                <span class="badge bg-secondary">ملغي</span>
+                                {% endif %}
+                            {% else %}
+                            —
+                            {% endif %}
+                        </td>
                         <td>{{ rcpt.reference }}</td>
+                        <td><a href="{% url 'sales:receipt-detail' rcpt.pk %}" class="btn btn-sm btn-outline-info">عرض</a></td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="text-center">لا يوجد سندات قبض مسجلة.</td>
+                        <td colspan="8" class="text-center">لا يوجد سندات قبض مسجلة.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
+    {% include 'partials/pagination.html' %}
 </div>
 {% endblock %}

@@ -42,9 +42,9 @@
                             {% endif %}
                         </td>
                         <td class="text-end px-4 py-3">
-                            <a href="{% url 'users:user-roles-edit' u.pk %}" class="btn btn-sm btn-outline-primary">
+                            {% if perms.auth.change_user %}<a href="{% url 'users:user-roles-edit' u.pk %}" class="btn btn-sm btn-outline-primary">
                                 <i class="bi bi-shield-check"></i> تعديل الصلاحيات
-                            </a>
+                            </a>{% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -56,5 +56,6 @@
             </table>
         </div>
     </div>
+    {% include 'partials/pagination.html' %}
 </div>
 {% endblock %}

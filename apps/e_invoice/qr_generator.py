@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 try:
     import qrcode
     import qrcode.image.svg
+    from qrcode.image.svg import SvgImage
     QRCODE_AVAILABLE = True
 except ImportError:
     QRCODE_AVAILABLE = False
@@ -144,7 +145,6 @@ class QRGenerator:
             qr.make(fit=True)
             
             # Generate SVG
-            from qrcode.image.svg import SvgImage
             img = qr.make_image(image_factory=SvgImage)
             
             # Save to string
@@ -200,5 +200,5 @@ class QRGenerator:
         try:
             parts = qr_data.split('|')
             return len(parts) == 6
-        except Exception:
+        except (ValueError, TypeError, AttributeError):
             return False

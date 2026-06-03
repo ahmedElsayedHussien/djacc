@@ -2,13 +2,14 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from apps.core.models import Account, JournalEntry
-from apps.core.services import JournalService
-from .models import CashBox, BankAccount, CashTransfer, BankTransaction, BankReconciliation
+from apps.core.services import JournalService, AuditService
+from .models import CashBox, BankAccount, CashTransfer, BankTransaction, BankReconciliation, MobileWallet
 
 class TreasuryService:
 
     CASHBOX_PARENT_CODE = getattr(settings, 'CASHBOX_PARENT_ACCOUNT', '1111')
     BANK_PARENT_CODE = getattr(settings, 'BANK_PARENT_ACCOUNT', '1112')
+    MOBILE_WALLET_PARENT_CODE = getattr(settings, 'MOBILE_WALLET_PARENT_ACCOUNT', '1115')
 
     @staticmethod
     @transaction.atomic
@@ -70,6 +71,79 @@ class TreasuryService:
         )
         data = {k: v for k, v in validated_data.items() if k not in ('code', 'account', 'initial_balance', 'initial_balance_type')}
         return BankAccount.objects.create(account=account, code=validated_data.get('code'), **data)
+
+    @staticmethod
+    @transaction.atomic
+    def create_mobile_wallet(validated_data: dict) -> MobileWallet:
+        # Ensure parent account 1115 exists
+        try:
+            parent = Account.objects.select_for_update().get(code=TreasuryService.MOBILE_WALLET_PARENT_CODE)
+        except Account.DoesNotExist:
+            grandparent = Account.objects.select_for_update().get(code='111')
+            parent, created = Account.objects.get_or_create(
+                code=TreasuryService.MOBILE_WALLET_PARENT_CODE,
+                defaults={
+                    'name': 'المحافظ الإلكترونية',
+                    'account_type': grandparent.account_type,
+                    'parent': grandparent,
+                    'is_leaf': False
+                }
+            )
+            
+        last_account = Account.objects.filter(parent=parent).order_by('-code').first()
+        if last_account:
+            try:
+                last_seq = int(last_account.code[len(parent.code):])
+                next_seq = last_seq + 1
+            except (ValueError, IndexError):
+                next_seq = Account.objects.filter(parent=parent).count() + 1
+        else:
+            next_seq = 1
+
+        account_code = f'{parent.code}{next_seq:02d}'
+
+        account = Account.objects.create(
+            code=account_code,
+            name=f'{validated_data["provider"]} — {validated_data["name"]}',
+            account_type=parent.account_type,
+            parent=parent,
+            is_leaf=True,
+            currency=validated_data.get('currency', 'EGP'),
+            initial_balance=validated_data.get('initial_balance', 0),
+            initial_balance_type=validated_data.get('initial_balance_type', 'debit'),
+        )
+        data = {k: v for k, v in validated_data.items() if k not in ('code', 'account', 'initial_balance', 'initial_balance_type')}
+        return MobileWallet.objects.create(account=account, code=validated_data.get('code'), **data)
+
+    @staticmethod
+    @transaction.atomic
+    def update_mobile_wallet(mobile_wallet: MobileWallet, validated_data: dict) -> MobileWallet:
+        # Lock the mobile wallet and its linked account
+        mobile_wallet = MobileWallet.objects.select_for_update().get(pk=mobile_wallet.pk)
+        mobile_wallet.account = Account.objects.select_for_update().get(pk=mobile_wallet.account.pk)
+        
+        update_account = False
+        full_name = f'{validated_data.get("provider", mobile_wallet.provider)} — {validated_data.get("name", mobile_wallet.name)}'
+        if full_name != mobile_wallet.account.name:
+            mobile_wallet.account.name = full_name
+            update_account = True
+            
+        if 'initial_balance' in validated_data:
+            mobile_wallet.account.initial_balance = validated_data['initial_balance'] or 0
+            update_account = True
+            
+        if 'initial_balance_type' in validated_data:
+            mobile_wallet.account.initial_balance_type = validated_data['initial_balance_type']
+            update_account = True
+            
+        if update_account:
+            mobile_wallet.account.save(update_fields=['name', 'initial_balance', 'initial_balance_type'])
+
+        for field, value in validated_data.items():
+            if field not in ('initial_balance', 'initial_balance_type'):
+                setattr(mobile_wallet, field, value)
+        mobile_wallet.save()
+        return mobile_wallet
 
     @staticmethod
     @transaction.atomic
@@ -138,7 +212,7 @@ class TreasuryService:
         DR Cash in Transit (1113)
         CR Source Account (Cash or Bank)
         """
-        transfer.full_clean()
+        transfer = CashTransfer.objects.select_for_update().get(pk=transfer.pk)
         if transfer.issue_entry:
             raise ValueError("هذا التحويل تم إصدار قيده بالفعل")
             
@@ -146,7 +220,12 @@ class TreasuryService:
                           else transfer.from_bank.account)
         
         # ح/ نقدية بالطريق
-        transit_account = Account.objects.get(code=getattr(settings, 'CASH_IN_TRANSIT_ACCOUNT', '1114'))
+        try:
+            transit_account = Account.objects.select_for_update().get(
+                code=getattr(settings, 'CASH_IN_TRANSIT_ACCOUNT', '1114')
+            )
+        except Account.DoesNotExist:
+            raise ValueError("حساب نقدية بالطريق (1114) غير معرف، يرجى مراجعة الدليل المحاسبي")
         
         lines = [
             {
@@ -174,21 +253,21 @@ class TreasuryService:
         
         transfer.issue_entry = entry
         transfer.status = CashTransfer.Status.PENDING
-        transfer.save()
+        transfer.save(update_fields=['issue_entry', 'status'])
 
-        from apps.core.services import AuditService
         AuditService.log(posted_by, 'Post', transfer, f'إصدار تحويل نقدية رقم {transfer.number}')
 
         return entry
 
     @staticmethod
     @transaction.atomic
-    def process_receive(transfer, received_by) -> JournalEntry:
+    def process_receive(transfer, received_by, receive_date=None) -> JournalEntry:
         """
         Step 2: Incoming Transfer (Receive)
         DR Destination Account (Cash or Bank)
         CR Cash in Transit (1113)
         """
+        transfer = CashTransfer.objects.select_for_update().get(pk=transfer.pk)
         if transfer.status != CashTransfer.Status.PENDING:
             raise ValueError("لا يمكن استلام تحويل غير صادر أو تم استلامه مسبقاً")
         
@@ -199,7 +278,12 @@ class TreasuryService:
                         else transfer.to_bank.account)
         
         # ح/ نقدية بالطريق
-        transit_account = Account.objects.get(code=getattr(settings, 'CASH_IN_TRANSIT_ACCOUNT', '1114'))
+        try:
+            transit_account = Account.objects.select_for_update().get(
+                code=getattr(settings, 'CASH_IN_TRANSIT_ACCOUNT', '1114')
+            )
+        except Account.DoesNotExist:
+            raise ValueError("حساب نقدية بالطريق (1114) غير معرف، يرجى مراجعة الدليل المحاسبي")
         
         lines = [
             {
@@ -217,7 +301,7 @@ class TreasuryService:
         ]
         
         entry = JournalService.create_entry(
-            date_val=timezone.now().date(),
+            date_val=receive_date or timezone.now().date(),
             entry_type=JournalEntry.EntryType.BANK,
             description=f'تأكيد استلام تحويل رقم {transfer.number}',
             lines=lines,
@@ -229,9 +313,8 @@ class TreasuryService:
         transfer.status = CashTransfer.Status.COMPLETED
         transfer.received_at = timezone.now()
         transfer.received_by = received_by
-        transfer.save()
+        transfer.save(update_fields=['receive_entry', 'status', 'received_at', 'received_by'])
 
-        from apps.core.services import AuditService
         AuditService.log(received_by, 'Receive', transfer, f'تأكيد استلام تحويل نقدية رقم {transfer.number}')
 
         return entry
@@ -241,8 +324,12 @@ class TreasuryService:
         """
         عكس عملية تحويل (إصدار و/أو استلام)
         """
+        transfer = CashTransfer.objects.select_for_update().get(pk=transfer.pk)
         if not transfer.issue_entry and not transfer.receive_entry:
             raise ValueError("هذا التحويل لم يتم ترحيله بعد")
+
+        if transfer.status == CashTransfer.Status.CANCELLED:
+            raise ValueError("هذا التحويل تم إلغاؤه/عكسه مسبقاً")
         
         # عكس قيد الاستلام أولاً إذا وجد
         if transfer.receive_entry and not transfer.receive_entry.is_reversed:
@@ -261,9 +348,8 @@ class TreasuryService:
             )
         
         transfer.status = CashTransfer.Status.CANCELLED
-        transfer.save()
+        transfer.save(update_fields=['status'])
         
-        from apps.core.services import AuditService
         AuditService.log(reversed_by, 'Reverse', transfer, f'عكس تحويل نقدية رقم {transfer.number}')
         
         return None
@@ -274,6 +360,7 @@ class TreasuryService:
         """
         Handles accounting for bank transactions (Charges, Interest, etc.)
         """
+        transaction_obj = BankTransaction.objects.select_for_update().get(pk=transaction_obj.pk)
         if transaction_obj.journal_entry:
             raise ValueError("هذه الحركة مرحلة بالفعل")
 
@@ -283,13 +370,13 @@ class TreasuryService:
         # Determine accounting lines based on type
         if transaction_obj.transaction_type == BankTransaction.TransactionType.BANK_CHARGE:
             # DR Bank Charges (Expense) | CR Bank Account (Asset)
-            charge_acc = Account.objects.get(code=getattr(settings, 'BANK_CHARGES_ACCOUNT', '531'))
+            charge_acc = Account.objects.select_for_update().get(code=getattr(settings, 'BANK_CHARGES_ACCOUNT', '531'))
             lines.append({'account': charge_acc, 'debit': transaction_obj.amount, 'credit': 0, 'description': transaction_obj.description})
             lines.append({'account': bank_acc, 'debit': 0, 'credit': transaction_obj.amount, 'description': f'عمولة بنكية - {transaction_obj.number}'})
         
         elif transaction_obj.transaction_type == BankTransaction.TransactionType.INTEREST:
             # DR Bank Account (Asset) | CR Interest Revenue (Revenue)
-            interest_acc = Account.objects.get(code=getattr(settings, 'INTEREST_REVENUE_ACCOUNT', '421'))
+            interest_acc = Account.objects.select_for_update().get(code=getattr(settings, 'INTEREST_REVENUE_ACCOUNT', '421'))
             lines.append({'account': bank_acc, 'debit': transaction_obj.amount, 'credit': 0, 'description': f'فوائد بنكية - {transaction_obj.number}'})
             lines.append({'account': interest_acc, 'debit': 0, 'credit': transaction_obj.amount, 'description': transaction_obj.description})
         
@@ -299,7 +386,7 @@ class TreasuryService:
             raise ValueError("الإيداع والسحب النقدي يجب أن يتم عبر نظام التحويلات أو المقبوضات/المدفوعات")
         
         if not lines:
-            return None
+            raise ValueError(f"نوع الحركة البنكية '{transaction_obj.transaction_type}' غير مدعوم للترحيل")
 
         entry = JournalService.create_entry(
             date_val=transaction_obj.date,
@@ -323,19 +410,20 @@ class BankReconciliationService:
         Finalizes a reconciliation.
         Marks all linked transactions as reconciled and calculates the final book balance.
         """
+        reconciliation = BankReconciliation.objects.select_for_update().get(pk=reconciliation.pk)
         if reconciliation.status == BankReconciliation.Status.COMPLETED:
             raise ValueError("هذه التسوية منتهية بالفعل")
             
         # Update linked transactions
-        for trans in reconciliation.transactions.all():
+        trans_ids = reconciliation.transactions.values_list('pk', flat=True)
+        for trans in BankTransaction.objects.filter(pk__in=trans_ids).select_for_update().order_by('pk'):
             trans.is_reconciled = True
             trans.reconciled_at = timezone.now()
-            trans.save()
+            trans.save(update_fields=['is_reconciled', 'reconciled_at'])
             
         reconciliation.status = BankReconciliation.Status.COMPLETED
         reconciliation.save()
         
-        from apps.core.services import AuditService
         AuditService.log(posted_by, 'Reconcile', reconciliation, f'إتمام المطابقة البنكية للبيان {reconciliation.statement_date}')
         return reconciliation
 

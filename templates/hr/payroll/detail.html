@@ -26,7 +26,7 @@
             
             <div class="card-footer bg-light d-flex flex-wrap gap-2 justify-content-between">
                 {# الحالة: مسودة #}
-                {% if period.status == 'draft' %}
+                {% if period.status == 'draft' and perms.hr.change_payrollperiod %}
                 <div class="d-flex gap-2">
                     <form method="post" action="{% url 'hr:payroll-generate' period.pk %}">
                         {% csrf_token %}
@@ -43,7 +43,7 @@
                 {% endif %}
 
                 {# الحالة: معتمد (بانتظار الترحيل) #}
-                {% if period.status == 'approved' %}
+                {% if period.status == 'approved' and perms.hr.change_payrollperiod %}
                 <div class="d-flex gap-2">
                     <form method="post" action="{% url 'hr:payroll-post' period.pk %}" onsubmit="return confirm('تأكيد الترحيل النهائي للحسابات؟ لا يمكن التعديل بعد هذه الخطوة.');">
                         {% csrf_token %}
@@ -60,33 +60,33 @@
             {% if period.status == 'posted' %}
             <div class="card-footer bg-light d-flex flex-wrap gap-2 align-items-center">
                 {# حصة المنشأة #}
-                {% if not period.insurance_entry %}
+                {% if not period.insurance_entry and perms.hr.change_payrollperiod %}
                 <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#insuranceModal">
                     <i class="bi bi-shield-check"></i> إثبات حصة المنشأة
                 </button>
-                {% else %}
+                {% elif period.insurance_entry %}
                 <a href="{% url 'core:journal-detail' period.insurance_entry.pk %}" class="btn btn-sm btn-info text-white">
                     <i class="bi bi-check-circle"></i> قيد حصة المنشأة
                 </a>
                 {% endif %}
 
                 {# صرف الرواتب #}
-                {% if not period.payment_entry %}
+                {% if not period.payment_entry and perms.hr.change_payrollperiod %}
                 <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#paymentModal">
                     <i class="bi bi-cash-stack"></i> إثبات صرف الرواتب
                 </button>
-                {% else %}
+                {% elif period.payment_entry %}
                 <a href="{% url 'core:journal-detail' period.payment_entry.pk %}" class="btn btn-sm btn-success">
                     <i class="bi bi-check-circle"></i> قيد صرف الرواتب
                 </a>
                 {% endif %}
 
                 {# توريد الاستقطاعات #}
-                {% if not period.gov_payment_entry %}
+                {% if not period.gov_payment_entry and perms.hr.change_payrollperiod %}
                 <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#govPaymentModal">
                     <i class="bi bi-bank"></i> توريد (ضرائب وتأمينات)
                 </button>
-                {% else %}
+                {% elif period.gov_payment_entry %}
                 <a href="{% url 'core:journal-detail' period.gov_payment_entry.pk %}" class="btn btn-sm btn-warning">
                     <i class="bi bi-check-circle"></i> قيد التوريد الحكومي
                 </a>

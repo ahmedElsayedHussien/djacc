@@ -14,8 +14,11 @@
                 <label class="form-label fw-bold">إلى تاريخ</label>
                 <input type="date" name="to" class="form-control" value="{{ to_date|date:'Y-m-d' }}">
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <button type="submit" class="btn btn-primary w-100">عرض التقرير</button>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" name="export" value="xlsx" class="btn btn-success w-100">Excel</button>
             </div>
         </form>
     </div>

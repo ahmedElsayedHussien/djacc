@@ -15,7 +15,7 @@ urlpatterns = [
     path('cost-center-statement/', views.CostCenterStatementView.as_view(), name='cost_center_statement'),
     path('account-statement/', views.AccountStatementView.as_view(), name='account_statement'),
     path('rep-statement/', views.RepStatementView.as_view(), name='rep_statement'),
-    
+    path('rep-dashboard/', views.SalesRepDashboardView.as_view(), name='rep_dashboard'),
     # Tax Reports
     path('vat-report/', views.VATReportView.as_view(), name='vat_report'),
     path('wht-report/', views.WHTReportView.as_view(), name='wht_report'),

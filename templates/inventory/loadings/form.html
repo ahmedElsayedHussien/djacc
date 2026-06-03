@@ -46,6 +46,7 @@
                     <thead class="table-light">
                         <tr>
                             <th style="width: 40%;">الصنف</th>
+                            <th style="width: 15%;">الوحدة</th>
                             <th style="width: 20%;">الكمية المطلوبة</th>
                             <th>ملاحظات</th>
                             <th style="width: 50px;"></th>
@@ -54,11 +55,20 @@
                     <tbody>
                         {% for line_form in lines %}
                         <tr class="line-row">
-                            <td>{{ line_form.item }}</td>
-                            <td>{{ line_form.requested_qty }}</td>
-                            <td>{{ line_form.notes }}</td>
-                            <td class="text-center">
-                                {% if line_form.instance.pk %}{{ line_form.DELETE }}{% endif %}
+                            <td data-label="الصنف">
+                                {{ line_form.id }}
+                                {{ line_form.item }}
+                            </td>
+                            <td data-label="الوحدة">{{ line_form.unit }}</td>
+                            <td data-label="الكمية المطلوبة">{{ line_form.requested_qty }}</td>
+                            <td data-label="ملاحظات">{{ line_form.notes }}</td>
+                            <td data-label="حذف" class="text-center">
+                                <div class="d-none">
+                                    {{ line_form.DELETE }}
+                                </div>
+                                <button type="button" class="btn btn-outline-danger btn-sm delete-btn rounded-circle" style="width: 32px; height: 32px; padding: 0;" title="حذف السطر">
+                                    <i class="bi bi-trash"></i>
+                                </button>
                             </td>
                         </tr>
                         {% endfor %}
@@ -81,12 +91,17 @@
     </div>
 
     <div class="d-flex justify-content-between mb-5">
+        {% if perms.inventory.add_loadingorder and request.user.is_staff %}
         <a href="{% url 'inventory:loading-list' %}" class="btn btn-light px-4 rounded-pill">إلغاء</a>
+        {% else %}
+        <a href="{% url 'inventory:loading-list' %}" class="btn btn-light px-4 rounded-pill">إلغاء</a>
+        {% endif %}
         <button type="submit" class="btn btn-primary px-5 rounded-pill shadow">
             <i class="bi bi-check-lg"></i> حفظ الطلب كمسودة
         </button>
     </div>
 </form>
+{{ rep_warehouse_mapping|json_script:"rep-mapping" }}
 {% endblock %}
 
 {% block extra_js %}
@@ -94,23 +109,104 @@
     document.getElementById('addRow').addEventListener('click', function() {
         const table = document.getElementById('linesTable').getElementsByTagName('tbody')[0];
         const lastRow = table.querySelector('.line-row:last-child');
-        const newRow = lastRow.cloneNode(true);
+        if (!lastRow) return;
         
+        const newRow = lastRow.cloneNode(true);
         const totalForms = document.getElementById('id_lines-TOTAL_FORMS');
         const currentCount = parseInt(totalForms.value);
+        
+        // Reset styles and classes for the new cloned row
+        newRow.style.opacity = '';
+        newRow.style.backgroundColor = '';
+        newRow.style.textDecoration = '';
+        
+        const btn = newRow.querySelector('.delete-btn');
+        if (btn) {
+            btn.classList.replace('btn-danger', 'btn-outline-danger');
+            btn.innerHTML = '<i class="bi bi-trash"></i>';
+            btn.title = "حذف السطر";
+        }
         
         newRow.querySelectorAll('input, select').forEach(input => {
             input.name = input.name.replace(`-${currentCount-1}-`, `-${currentCount}-`);
             input.id = input.id.replace(`-${currentCount-1}-`, `-${currentCount}-`);
-            if (input.type !== 'checkbox') input.value = '';
+            if (input.type === 'checkbox') {
+                input.checked = false;
+            } else {
+                input.value = '';
+            }
         });
         
         table.appendChild(newRow);
         totalForms.value = currentCount + 1;
     });
 
+    // Handle row deletion
+    document.getElementById('linesTable').addEventListener('click', function(e) {
+        const btn = e.target.closest('.delete-btn');
+        if (!btn) return;
+        
+        const row = btn.closest('.line-row');
+        if (!row) return;
+        
+        // Find if this is an existing saved row in the database
+        const idInput = row.querySelector('input[type="hidden"][name$="-id"]');
+        const isSaved = idInput && idInput.value !== '';
+        
+        if (isSaved) {
+            // Toggle the DELETE checkbox for Django backend processing
+            const deleteCheckbox = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+            if (deleteCheckbox) {
+                deleteCheckbox.checked = !deleteCheckbox.checked;
+                
+                // Toggle visual state
+                if (deleteCheckbox.checked) {
+                    row.style.opacity = '0.5';
+                    row.style.backgroundColor = '#fee2e2'; // soft red tint
+                    row.style.textDecoration = 'line-through';
+                    btn.classList.replace('btn-outline-danger', 'btn-danger');
+                    btn.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i>';
+                    btn.title = "تراجع عن الحذف";
+                } else {
+                    row.style.opacity = '';
+                    row.style.backgroundColor = '';
+                    row.style.textDecoration = '';
+                    btn.classList.replace('btn-danger', 'btn-outline-danger');
+                    btn.innerHTML = '<i class="bi bi-trash"></i>';
+                    btn.title = "حذف السطر";
+                }
+            }
+        } else {
+            // It is a new unsaved row - remove it completely from DOM
+            const rows = document.querySelectorAll('#linesTable tbody .line-row');
+            if (rows.length > 1) {
+                row.remove();
+                reIndexRows();
+            } else {
+                // If it is the only row left, just clear its values
+                row.querySelectorAll('input, select').forEach(input => {
+                    if (input.type === 'checkbox') input.checked = false;
+                    else input.value = '';
+                });
+            }
+        }
+    });
+
+    function reIndexRows() {
+        const rows = document.querySelectorAll('#linesTable tbody .line-row');
+        const totalForms = document.getElementById('id_lines-TOTAL_FORMS');
+        totalForms.value = rows.length;
+        
+        rows.forEach((row, index) => {
+            row.querySelectorAll('input, select, textarea').forEach(input => {
+                input.name = input.name.replace(/lines-\d+-/g, `lines-${index}-`);
+                input.id = input.id.replace(/id_lines-\d+-/g, `id_lines-${index}-`);
+            });
+        });
+    }
+
     // Auto-select warehouses based on Sales Rep
-    const repMapping = {{ rep_warehouse_mapping|safe|default:"{}" }};
+    const repMapping = JSON.parse(document.getElementById('rep-mapping').textContent);
     const repSelect = document.querySelector('select[name="sales_rep"]');
     const warehouseSelect = document.querySelector('select[name="to_warehouse"]');
 
@@ -127,5 +223,56 @@
     
     // Initial update if editing or pre-filled
     updateWarehouse();
+
+    // Fetch units based on item selection
+    async function fetchItemUnits(itemSelect) {
+        const row = itemSelect.closest('tr');
+        const unitSelect = row.querySelector('select[name$="-unit"]');
+        if (!unitSelect) return;
+        
+        const itemId = itemSelect.value;
+        const currentUnit = unitSelect.value;
+        
+        if (!itemId) {
+            unitSelect.innerHTML = '<option value="">---------</option>';
+            return;
+        }
+
+        try {
+            const response = await fetch(`/inventory/api/item/${itemId}/`);
+            if (response.ok) {
+                const data = await response.json();
+                unitSelect.innerHTML = '<option value="">---------</option>';
+                data.units.forEach(u => {
+                    const option = document.createElement('option');
+                    option.value = u.id;
+                    option.text = u.name;
+                    unitSelect.appendChild(option);
+                });
+                
+                if (currentUnit && Array.from(unitSelect.options).some(opt => opt.value === currentUnit)) {
+                    unitSelect.value = currentUnit;
+                } else if (data.default_unit_id) {
+                    unitSelect.value = data.default_unit_id;
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching units:', error);
+        }
+    }
+
+    document.addEventListener('change', function(e) {
+        if (e.target.matches('select[name$="-item"]')) {
+            fetchItemUnits(e.target);
+        }
+    });
+
+    // Initialize units for existing rows on load
+    document.querySelectorAll('select[name$="-item"]').forEach(select => {
+        if (select.value) {
+            // small delay to allow initial DOM rendering
+            setTimeout(() => fetchItemUnits(select), 100);
+        }
+    });
 </script>
 {% endblock %}

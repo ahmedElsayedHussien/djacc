@@ -25,6 +25,7 @@
                             {% endif %}
                         </td>
                     </tr>
+                    {% if perms.core.view_journalentry and not request.user.salesrepresentative %}
                     <tr><th>القيد المحاسبي:</th>
                         <td>
                             {% if sales_return.journal_entry %}
@@ -34,15 +35,24 @@
                             {% endif %}
                         </td>
                     </tr>
+                    {% endif %}
                 </table>
 
                 {% if sales_return.status == 'draft' %}
+                {% if perms.sales.change_salesreturn %}
                 <form method="post" action="{% url 'sales:return-post' sales_return.pk %}" class="mt-3">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-success w-100" onclick="return confirm('تأكيد ترحيل المرتجع؟ سيتم تعديل المخزون والحسابات.');">
+                    <button type="submit" class="btn btn-success w-100 mb-2" onclick="return confirm('تأكيد ترحيل المرتجع؟ سيتم تعديل المخزون والحسابات.');">
                         <i class="bi bi-check-circle"></i> ترحيل المرتجع
                     </button>
                 </form>
+                <form method="post" action="{% url 'sales:return-delete' sales_return.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger w-100" onclick="return confirm('تأكيد حذف المرتجع بشكل نهائي؟ لا يمكن التراجع عن هذا الإجراء.');">
+                        <i class="bi bi-trash"></i> حذف المرتجع
+                    </button>
+                </form>
+                {% endif %}
                 {% endif %}
             </div>
         </div>

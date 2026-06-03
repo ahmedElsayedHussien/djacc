@@ -27,7 +27,7 @@
                         {% for row in report %}
                         <tr>
                             <td class="ps-4">
-                                <span class="fw-bold text-dark">{{ row.employee.get_full_name|default:row.employee.username }}</span><br>
+                                <span class="fw-bold text-dark">{{ row.employee.full_name }}</span><br>
                                 <small class="text-muted">{{ row.number }}</small>
                             </td>
                             <td class="text-center">{{ row.date|date:'Y-m-d' }}</td>

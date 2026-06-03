@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام نقاط البيع - واجهة الباركود السريعة</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Cairo', sans-serif; 
+            background-color: #f8f9fa; 
+        }
+        .bg-plum { background-color: #3A1530; }
+        .text-plum { color: #3A1530; }
+        .border-plum { border-color: #3A1530; }
+        
+        .bg-pink-brand { background-color: #EC228D; }
+        .text-pink-brand { color: #EC228D; }
+        .border-pink-brand { border-color: #EC228D; }
+        
+        .bg-cream { background-color: #FDEAF4; }
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        /* Custom Premium Toggle Switch */
+        .switch-container {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .switch-input {
+            display: none;
+        }
+
+        .switch-slider {
+            width: 56px;
+            height: 28px;
+            background-color: #cbd5e1; /* slate-300 */
+            border-radius: 9999px;
+            position: relative;
+            transition: background-color 0.3s ease;
+        }
+
+        .switch-slider::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 22px;
+            height: 22px;
+            background-color: #ffffff;
+            border-radius: 50%;
+            transition: transform 0.3s ease, background-color 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+        }
+
+        /* Active State */
+        .switch-input:checked + .switch-slider {
+            background-color: #EC228D; /* bg-pink-brand */
+        }
+
+        .switch-input:checked + .switch-slider::after {
+            transform: translateX(28px);
+        }
+
+        @media (max-width: 767.98px) {
+            body.h-screen.flex { flex-direction: column !important; overflow-y: auto !important; }
+            body.h-screen.flex > div { width: 100% !important; }
+            #cart-container { flex: none !important; max-height: 45vh !important; overflow-y: auto !important; }
+            .h-screen { height: auto !important; min-height: 100vh; }
+            .switch-container { flex-shrink: 0; }
+        }
+
+        /* Touch Mode */
+        .touch-mode .touch-btn { padding: 0.75rem 1.25rem !important; font-size: 1.1rem !important; }
+        .touch-mode #manual-barcode-input { padding-top: 1rem !important; padding-bottom: 1rem !important; font-size: 1.25rem !important; }
+        .touch-mode #cart-container > div { padding: 1rem !important; }
+        .touch-mode #cart-container .w-8 { width: 2.5rem !important; height: 2.5rem !important; font-size: 1.25rem !important; }
+        .touch-mode .flex.gap-3.h-20 button { min-height: 4rem !important; font-size: 1.35rem !important; }
+        .touch-mode .flex.gap-3.h-20 { height: auto !important; }
+        .touch-mode .flex.gap-3.h-20 svg { width: 2rem !important; height: 2rem !important; }
+        .touch-mode #search-container button { padding: 0.75rem !important; }
+        .touch-mode #invoice-tabs button { padding: 0.5rem 1rem !important; font-size: 0.9rem !important; }
+        .touch-mode .switch-slider { width: 64px !important; height: 32px !important; }
+        .touch-mode .switch-slider::after { width: 26px !important; height: 26px !important; }
+        .touch-mode .switch-input:checked + .switch-slider::after { transform: translateX(32px) !important; }
+        .touch-mode #category-browser { display: block !important; }
+        .touch-mode #category-browser + #cart-container { max-height: 35vh !important; }
+
+        /* Category Browser */
+        #category-browser { display: none; }
+        .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; padding: 12px; }
+        .cat-card { background: #fff; border: 2px solid #e5e7eb; border-radius: 16px; padding: 14px 8px; text-align: center; cursor: pointer; transition: all 0.2s; user-select: none; }
+        .cat-card:active { transform: scale(0.95); }
+        .cat-card.active { border-color: #EC228D; background: #FDEAF4; }
+        .cat-card .cat-icon { width: 40px; height: 40px; margin: 0 auto 6px; background: #3A1530; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 20px; }
+        .cat-card .cat-name { font-size: 13px; font-weight: 700; color: #3A1530; line-height: 1.2; }
+        .cat-card .cat-count { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+
+        .items-panel { padding: 0 12px 12px; display: none; }
+        .items-panel.open { display: block; }
+        .items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
+        .item-tile { background: #fff; border: 1.5px solid #e5e7eb; border-radius: 14px; padding: 10px 6px; text-align: center; cursor: pointer; transition: all 0.15s; user-select: none; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+        .item-tile:active { transform: scale(0.94); border-color: #EC228D; background: #FDEAF4; }
+        .item-tile .item-name { font-size: 12px; font-weight: 700; color: #1f2937; line-height: 1.2; margin-bottom: 4px; }
+        .item-tile .item-price { font-size: 14px; font-weight: 800; color: #EC228D; }
+        .item-tile .item-unit { font-size: 10px; color: #9ca3af; }
+
+        .touch-toggle-btn {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .touch-toggle-btn:hover { background: rgba(255,255,255,0.1); }
+        .touch-toggle-btn.active { background: rgba(236,34,141,0.3); border-color: #EC228D; }
+    </style>
+</head>
+<body class="h-screen flex overflow-hidden text-gray-800" id="pos-body">
+
+    {% if not active_session %}
+    <!-- Immersive Shift Opening Modal Overlay -->
+    <div class="fixed inset-0 bg-plum/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-cream transform scale-100 transition-all duration-300">
+            <!-- Header -->
+            <div class="bg-plum p-6 text-center text-white relative">
+                <div class="w-16 h-16 bg-pink-brand rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+                    <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                </div>
+                <h3 class="text-2xl font-bold">فتح وردية كاشير جديدة</h3>
+                <p class="text-sm opacity-80 mt-1">يرجى اختيار نقطة البيع وتسجيل عهدة الفتح المبدئية</p>
+            </div>
+            <!-- Form -->
+            <form action="{% url 'pos:session-open' %}" method="POST" class="p-6 space-y-5">
+                {% csrf_token %}
+                
+                <div>
+                    <label class="block text-gray-700 font-bold mb-2 text-lg">نقطة البيع (الكاشير):</label>
+                    <select name="station" required class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-brand text-lg font-semibold">
+                        {% for station in stations %}
+                            <option value="{{ station.id }}">{{ station.name }} ({{ station.warehouse.name }})</option>
+                        {% empty %}
+                            <option value="">لا توجد نقاط بيع نشطة حالياً</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 font-bold mb-2 text-lg">عهدة الفتح المبدئية (كاش):</label>
+                    <div class="relative">
+                        <input type="number" step="0.01" name="opening_cash" value="0.00" required class="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-brand text-xl font-bold text-center">
+                        <span class="absolute left-4 top-3 text-gray-400 font-bold text-lg">EGP</span>
+                    </div>
+                </div>
+                
+                <button type="submit" {% if not stations %}disabled{% endif %} class="w-full bg-pink-brand text-white py-4 rounded-2xl font-bold text-xl hover:bg-[#d81b7c] transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none">
+                    بدء العمل وفتح الوردية
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Shift Closing Modal -->
+    <div id="close-session-modal" class="fixed inset-0 bg-plum/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4 hidden">
+        <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-cream">
+            <div class="bg-plum p-6 text-center text-white">
+                <h3 class="text-2xl font-bold">إغلاق وتسوية الوردية</h3>
+                <p class="text-sm opacity-80 mt-1">تسجيل النقدية الفعلية بالدرج لإغلاق الحسابات</p>
+            </div>
+            <div class="p-6 space-y-5">
+                <div>
+                    <label class="block text-gray-700 font-bold mb-2 text-lg">النقدية الفعلية بالدرج (جرد الكاش):</label>
+                    <div class="relative">
+                        <input type="number" step="0.01" id="actual-cash-input" value="0.00" required class="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-brand text-xl font-bold text-center">
+                        <span class="absolute left-4 top-3 text-gray-400 font-bold text-lg">EGP</span>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 font-bold mb-2 text-lg">ملاحظات / أسباب العجز أو الزيادة:</label>
+                    <textarea id="close-notes-input" placeholder="اكتب أي ملاحظات هنا..." class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-brand h-24 text-lg"></textarea>
+                </div>
+                
+                <div class="flex gap-4">
+                    <button onclick="toggleCloseSessionModal(false)" class="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-bold text-lg hover:bg-gray-300 transition-colors">إلغاء</button>
+                    <button onclick="submitCloseSession()" class="flex-1 bg-pink-brand text-white py-3 rounded-xl font-bold text-lg hover:bg-[#d81b7c] transition-colors shadow-md">تأكيد الإغلاق</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🛒 MAIN AREA (Cart & Search) - 65% -->
+    <div class="w-[65%] flex flex-col bg-gray-50 relative">
+        
+        <!-- Header -->
+        <div class="bg-plum px-4 py-3 flex flex-col text-white shadow-sm z-20">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <svg class="w-7 h-7 text-pink-brand" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                    <h2 class="text-2xl font-bold">نقاط البيع <span class="text-sm font-normal opacity-80 ms-2">({{ request.user.username }})</span></h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="save-indicator" class="w-2 h-2 rounded-full bg-emerald-400 inline-block" title="تم الحفظ"></span>
+                    <button onclick="clearCurrentInvoice()" class="text-white/70 hover:text-white hover:bg-white/10 p-2 rounded-lg transition-colors" title="مسح الفاتورة">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                    <button onclick="newInvoice()" class="text-white/80 hover:text-white hover:bg-white/10 p-2 rounded-lg transition-colors" title="فاتورة جديدة">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    </button>
+                    <button id="touch-toggle-btn" onclick="toggleTouchMode()" class="touch-toggle-btn text-white/80 hover:text-white" title="واجهة لمس">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg>
+                        <span>لمس</span>
+                    </button>
+                    <a href="{% url 'core:dashboard' %}" class="text-white/80 hover:text-white hover:bg-white/10 p-2 rounded-lg transition-colors flex items-center gap-1">
+                        <span class="font-bold text-sm">خروج</span>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                    </a>
+                </div>
+            </div>
+            <div id="invoice-tabs" class="flex items-center gap-2 mt-3 flex-wrap"></div>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="p-5 bg-white shadow-sm flex gap-3 z-20 border-b border-gray-200">
+            <div class="relative w-full" id="search-container">
+                <input type="text" 
+                       id="manual-barcode-input"
+                       onkeypress="handleManualBarcode(event)"
+                       placeholder="إدخال الباركود يدوياً (أو البحث بالاسم)..." 
+                       class="w-full pl-4 pr-14 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#EC228D] focus:bg-white transition-all text-xl font-bold shadow-inner" 
+                       autofocus>
+                <button onclick="searchManualBarcode()" class="absolute left-3 top-3 text-white bg-pink-brand hover:bg-pink-brand/90 p-2.5 rounded-lg transition-colors cursor-pointer focus:outline-none shadow-sm">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </button>
+                <div id="search-dropdown" class="absolute top-full right-0 left-0 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 mt-1 max-h-72 overflow-y-auto hidden"></div>
+            </div>
+        </div>
+
+        <!-- Category Browser (Touch Mode) -->
+        <div id="category-browser" class="bg-gray-50 border-b border-gray-200 overflow-y-auto" style="max-height: 50vh;">
+            <div id="cat-grid" class="cat-grid"></div>
+            <div id="items-panel" class="items-panel"></div>
+        </div>
+
+        <!-- Cart Items -->
+        <div class="flex-1 overflow-y-auto p-5 flex flex-col gap-4" id="cart-container">
+            <!-- JS rendered cart items -->
+        </div>
+
+    </div>
+
+    <!-- 🧮 SIDEBAR (Totals & Numpad) - 35% -->
+    <div class="w-[35%] bg-white shadow-[-5px_0_25px_rgba(0,0,0,0.05)] flex flex-col z-20 border-r border-gray-200">
+        
+        {% if active_session %}
+        <!-- Session Info Card -->
+        <div class="p-4 bg-cream/40 border-b border-gray-200 flex justify-between items-center px-6 flex-shrink-0">
+            <div>
+                <span class="text-xs text-gray-500 block">نقطة العمل النشطة:</span>
+                <span class="font-bold text-plum text-lg">{{ active_session.station.name }}</span>
+            </div>
+                <button onclick="toggleCloseSessionModal(true)" class="bg-[#FFE2E2] hover:bg-red-100 text-red-600 px-4 py-2.5 rounded-xl font-bold text-base transition-colors active:scale-95 touch-btn">
+                إغلاق الوردية
+            </button>
+        </div>
+        {% endif %}
+
+        <!-- Totals Top Box -->
+        <div class="p-6 bg-white border-b border-gray-100 shadow-[0_5px_15px_rgba(0,0,0,0.02)] flex-shrink-0 z-10">
+            <!-- VAT Toggle Switch -->
+            <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-100">
+                <span class="text-gray-700 font-bold text-lg flex items-center gap-2">
+                    <svg class="w-6 h-6 text-pink-brand" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    تطبيق ضريبة القيمة المضافة (14%):
+                </span>
+                <label class="switch-container">
+                    <input type="checkbox" id="vat-toggle-input" checked class="switch-input" onchange="updateCartUI(); savePreferences(); toggleBadgeStatus('vat-badge', this.checked);">
+                    <div class="switch-slider"></div>
+                    <span id="vat-badge" class="mr-3 px-2.5 py-1 text-xs font-bold rounded-full bg-pink-brand/10 text-pink-brand">مفعل</span>
+                </label>
+            </div>
+
+            <!-- Auto-Print Toggle Switch -->
+            <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-100">
+                <span class="text-gray-700 font-bold text-lg flex items-center gap-2">
+                    <svg class="w-6 h-6 text-pink-brand" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                    طباعة الفاتورة تلقائياً:
+                </span>
+                <label class="switch-container">
+                    <input type="checkbox" id="auto-print-toggle" checked class="switch-input" onchange="savePreferences(); toggleBadgeStatus('print-badge', this.checked);">
+                    <div class="switch-slider"></div>
+                    <span id="print-badge" class="mr-3 px-2.5 py-1 text-xs font-bold rounded-full bg-pink-brand/10 text-pink-brand">مفعل</span>
+                </label>
+            </div>
+
+            <div class="flex justify-between text-gray-500 mb-2 text-lg font-semibold">
+                <span>الإجمالي قبل الضريبة:</span>
+                <span id="subtotal-display">0.00</span>
+            </div>
+            <div class="flex justify-between text-gray-500 mb-4 text-lg font-semibold">
+                <span>الضريبة (14%):</span>
+                <span id="tax-display">0.00</span>
+            </div>
+            <div class="flex justify-between items-end border-t border-dashed border-gray-300 pt-4 bg-cream p-4 rounded-xl border border-pink-brand/20 mt-2">
+                <span class="text-2xl font-bold text-plum">الصافي المطلوب:</span>
+                <span class="text-5xl font-extrabold text-pink-brand tracking-tight" id="total-display">0.00</span>
+            </div>
+        </div>
+
+        <!-- Spacer to push Pay Actions to the bottom -->
+        <div class="flex-1 bg-gray-50 flex flex-col justify-center items-center opacity-30 pointer-events-none">
+            <svg class="w-32 h-32 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+        </div>
+
+        <!-- Pay Actions Bottom -->
+        <div class="p-5 bg-white border-t border-gray-200 flex-shrink-0 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
+            <div class="flex gap-3 h-20">
+                <button class="touch-btn flex-1 bg-white text-plum border-2 border-plum rounded-xl font-bold text-xl hover:bg-gray-50 flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm" onclick="processPayment('card')">
+                    <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                    شبكة
+                </button>
+                <button class="touch-btn flex-1 bg-emerald-600 text-white rounded-xl font-bold text-xl hover:bg-emerald-700 flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md" onclick="processPayment('wallet')">
+                    <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                    محفظة
+                </button>
+                <button class="touch-btn flex-[1.3] bg-pink-brand text-white rounded-xl font-bold text-2xl shadow-lg hover:shadow-xl hover:bg-[#d81b7c] flex items-center justify-center gap-2 active:scale-95 transition-all" onclick="processPayment('cash')">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                    دفع كاش
+                </button>
+            </div>
+        </div>
+        
+    </div>
+
+<!-- Data Island -->
+{{ items_json|json_script:"items-data" }}
+
+<script>
+    const itemsData = JSON.parse(document.getElementById('items-data').textContent);
+    let invoices = [];
+    let activeInvoiceIndex = -1;
+    const STORAGE_KEY = 'pos_invoices';
+
+    function getInvoice() { return invoices[activeInvoiceIndex]; }
+    function getCart() { const inv = getInvoice(); return inv ? inv.items : []; }
+
+    // ========== PERSISTENCE ==========
+    function saveInvoices() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
+    }
+
+    function loadInvoices() {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    invoices = parsed;
+                    activeInvoiceIndex = 0;
+                    renderInvoiceTabs();
+                    updateCartUI();
+                    return;
+                }
+            }
+        } catch(e) { console.warn('Failed to load saved invoices:', e); }
+        invoices.push({ id: Date.now(), items: [], selectedItemIndex: null });
+        activeInvoiceIndex = 0;
+        renderInvoiceTabs();
+    }
+
+    // ========== INVOICE TABS ==========
+    function newInvoice() {
+        invoices.push({ id: Date.now(), items: [], selectedItemIndex: null });
+        activeInvoiceIndex = invoices.length - 1;
+        saveInvoices();
+        renderInvoiceTabs();
+        updateCartUI();
+        const input = document.getElementById('manual-barcode-input');
+        if (input) input.focus();
+    }
+
+    function switchInvoice(index) {
+        if (index === activeInvoiceIndex) return;
+        activeInvoiceIndex = index;
+        renderInvoiceTabs();
+        updateCartUI();
+    }
+
+    function completeAndNewInvoice() {
+        invoices.splice(activeInvoiceIndex, 1);
+        if (invoices.length === 0) {
+            invoices.push({ id: Date.now(), items: [], selectedItemIndex: null });
+            activeInvoiceIndex = 0;
+        } else {
+            activeInvoiceIndex = Math.min(activeInvoiceIndex, invoices.length - 1);
+        }
+        saveInvoices();
+        renderInvoiceTabs();
+        updateCartUI();
+    }
+
+    function closeInvoice(index) {
+        const inv = invoices[index];
+        if (!confirm(`تأكيد حذف الفاتورة #${index+1}${inv.items.length > 0 ? ' (' + inv.items.length + ' صنف)' : ''}؟`)) return;
+        if (invoices.length <= 1) { clearCurrentInvoice(); return; }
+        invoices.splice(index, 1);
+        if (activeInvoiceIndex >= invoices.length) activeInvoiceIndex = invoices.length - 1;
+        saveInvoices();
+        renderInvoiceTabs();
+        updateCartUI();
+    }
+
+    function clearCurrentInvoice() {
+        const cart = getCart();
+        if (cart.length > 0 && !confirm(`تأكيد مسح ${cart.length} صنف من الفاتورة الحالية؟`)) return;
+        const inv = getInvoice();
+        inv.items = [];
+        inv.selectedItemIndex = null;
+        saveInvoices();
+        updateCartUI();
+    }
+
+    function renderInvoiceTabs() {
+        const container = document.getElementById('invoice-tabs');
+        container.innerHTML = '';
+        invoices.forEach((inv, i) => {
+            const isActive = i === activeInvoiceIndex;
+            const tab = document.createElement('button');
+            tab.className = `px-3 py-1.5 rounded-lg font-bold text-sm transition-all flex items-center gap-1.5 ${isActive ? 'bg-pink-brand text-white shadow-md' : 'bg-white/10 text-white/70 hover:bg-white/20'}`;
+            tab.innerHTML = `فاتورة #${i+1} <span class="text-xs opacity-70">(${inv.items.length})</span>`;
+            tab.onclick = () => switchInvoice(i);
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'mr-1 text-white/50 hover:text-white text-xs px-1';
+            closeBtn.textContent = '\u2715';
+            closeBtn.onclick = (e) => { e.stopPropagation(); closeInvoice(i); };
+            tab.appendChild(closeBtn);
+            container.appendChild(tab);
+        });
+    }
+
+    // ========== CART LOGIC ==========
+    function addToCart(item) {
+        const cart = getCart();
+        const existingIndex = cart.findIndex(c => c.id === item.id && c.unit_type === 'base');
+        const inv = getInvoice();
+        if (existingIndex > -1) {
+            cart[existingIndex].qty += 1;
+            inv.selectedItemIndex = existingIndex;
+        } else {
+            cart.push({
+                id: item.id, name: item.name, price: parseFloat(item.price) || 0,
+                qty: 1, unit_type: 'base',
+                base_unit_name: item.base_unit_name || '\u062D\u0628\u0629',
+                sales_unit_name: item.sales_unit_name || '',
+                conversion_factor: parseFloat(item.conversion_factor) || 1.0,
+            });
+            inv.selectedItemIndex = cart.length - 1;
+        }
+        saveInvoices();
+        updateCartUI();
+    }
+
+    function selectCartItem(index) { getInvoice().selectedItemIndex = index; updateCartUI(); }
+
+    function changeUnit(index, unitType, e) {
+        if (e) e.stopPropagation();
+        getCart()[index].unit_type = unitType;
+        saveInvoices(); updateCartUI();
+    }
+
+    function updateItemQty(index, change, e) {
+        if (e) e.stopPropagation();
+        const cart = getCart();
+        cart[index].qty += change;
+        if (cart[index].qty <= 0) { removeCartItem(index, null); }
+        else { saveInvoices(); updateCartUI(); }
+    }
+
+    function removeCartItem(index, e) {
+        if (e) e.stopPropagation();
+        if (!confirm('\u062D\u0630\u0641 \u0627\u0644\u0635\u0646\u0641 \u0645\u0646 \u0627\u0644\u0641\u0627\u062A\u0648\u0631\u0629\u061F')) return;
+        const inv = getInvoice();
+        inv.items.splice(index, 1);
+        if (inv.selectedItemIndex === index) {
+            inv.selectedItemIndex = inv.items.length > 0 ? inv.items.length - 1 : null;
+        } else if (inv.selectedItemIndex > index) { inv.selectedItemIndex--; }
+        saveInvoices(); updateCartUI();
+    }
+
+    function updateCartUI() {
+        const container = document.getElementById('cart-container');
+        container.innerHTML = '';
+        const cart = getCart();
+        let subtotal = 0;
+
+        cart.forEach((c, index) => {
+            const isSales = c.unit_type === 'sales';
+            const unitPrice = isSales ? (c.price * c.conversion_factor) : c.price;
+            const validQty = parseFloat(c.qty) || 0;
+            const lineTotal = unitPrice * validQty;
+            subtotal += lineTotal;
+
+            const inv = getInvoice();
+            const isActive = index === (inv ? inv.selectedItemIndex : null);
+            const bgClass = isActive ? 'bg-cream border-[#EC228D]/50 shadow-md transform scale-[1.01]' : 'bg-white border-gray-200 hover:border-gray-300';
+            const highlightIndicator = isActive ? `<div class="absolute right-0 top-0 bottom-0 w-1.5 bg-pink-brand rounded-r-xl"></div>` : '';
+
+            let unitSelectorHtml = '';
+            if (c.sales_unit_name) {
+                unitSelectorHtml = `
+                    <select onchange="changeUnit(${index}, this.value, event)" onclick="event.stopPropagation()" class="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-md font-semibold border-0 text-xs focus:ring-1 focus:ring-pink-brand cursor-pointer">
+                        <option value="base" ${c.unit_type === 'base' ? 'selected' : ''}>${c.base_unit_name}</option>
+                        <option value="sales" ${c.unit_type === 'sales' ? 'selected' : ''}>${c.sales_unit_name} (x${c.conversion_factor})</option>
+                    </select>`;
+            } else {
+                unitSelectorHtml = `<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md font-semibold">${c.base_unit_name}</span>`;
+            }
+
+            const div = document.createElement('div');
+            div.className = `${bgClass} p-3 rounded-2xl border shadow-sm relative cursor-pointer transition-all duration-200`;
+            div.onclick = () => selectCartItem(index);
+            div.innerHTML = `
+                ${highlightIndicator}
+                <div class="flex justify-between items-center w-full pr-1.5">
+                    <div class="flex-1 min-w-0 pr-2 text-right">
+                        <h4 class="font-bold text-plum text-lg truncate leading-tight mb-1">${c.name}</h4>
+                        <div class="flex items-center gap-2 text-xs text-gray-500 justify-start">
+                            <span>\u0627\u0644\u0648\u062D\u062F\u0629:</span> ${unitSelectorHtml} <span>\u2022</span>
+                            <span>\u0633\u0639\u0631 \u0627\u0644\u0648\u062D\u062F\u0629: ${unitPrice.toFixed(2)} EGP</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 flex-shrink-0">
+                        <div class="flex items-center bg-gray-50 rounded-lg border border-gray-200 shadow-sm overflow-hidden" onclick="event.stopPropagation()">
+                            <button class="w-8 h-8 flex justify-center items-center hover:bg-gray-200 text-lg font-bold text-plum transition-colors active:bg-gray-300" onclick="updateItemQty(${index}, 1, event)">+</button>
+                            <span class="font-bold text-base w-8 text-center text-plum bg-white h-8 flex items-center justify-center border-x border-gray-200">${c.qty}</span>
+                            <button class="w-8 h-8 flex justify-center items-center hover:bg-gray-200 text-xl font-bold text-plum transition-colors active:bg-gray-300" onclick="updateItemQty(${index}, -1, event)">-</button>
+                        </div>
+                        <div class="text-left min-w-[70px]">
+                            <span class="font-extrabold text-pink-brand text-lg block leading-none">${lineTotal.toFixed(2)}</span>
+                            <span class="text-[10px] text-gray-400 uppercase">EGP</span>
+                        </div>
+                        <button class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-colors active:scale-95 flex-shrink-0" onclick="removeCartItem(${index}, event)">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </div>
+                </div>`;
+            container.appendChild(div);
+        });
+
+        const vatToggle = document.getElementById('vat-toggle-input');
+        const isTaxable = vatToggle ? vatToggle.checked : true;
+        const grandTotal = subtotal;
+        const taxRate = isTaxable ? 0.14 : 0;
+        const subtotalBeforeTax = grandTotal / (1 + taxRate);
+        const taxAmount = grandTotal - subtotalBeforeTax;
+
+        document.getElementById('subtotal-display').innerText = subtotalBeforeTax.toFixed(2);
+        document.getElementById('tax-display').innerText = taxAmount.toFixed(2);
+        document.getElementById('total-display').innerText = grandTotal.toFixed(2);
+    }
+
+    // ========== CHECKOUT ==========
+    const csrfToken = "{{ csrf_token }}";
+
+    function printReceiptFromServer(data) {
+        const autoPrintToggle = document.getElementById('auto-print-toggle');
+        if (autoPrintToggle && !autoPrintToggle.checked) return;
+
+        const isTaxable = document.getElementById('vat-toggle-input') ? document.getElementById('vat-toggle-input').checked : true;
+        const taxRate = isTaxable ? 0.14 : 0;
+        const subtotal = data.grand_total / (1 + taxRate);
+        const taxAmount = data.grand_total - subtotal;
+
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed'; iframe.style.right = '0'; iframe.style.bottom = '0';
+        iframe.style.width = '0'; iframe.style.height = '0'; iframe.style.border = '0';
+        document.body.appendChild(iframe);
+        const doc = iframe.contentWindow.document;
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('ar-EG') + ' ' + now.toLocaleTimeString('ar-EG');
+
+        let itemRows = '';
+        (data.lines || []).forEach(line => {
+            itemRows += `
+                <tr style="border-bottom: 1px dashed #000;">
+                    <td style="padding: 6px 0; font-size: 14px; font-weight: bold; text-align: right;">${line.name}</td>
+                    <td style="padding: 6px 0; font-size: 14px; text-align: center;">${line.qty}</td>
+                    <td style="padding: 6px 0; font-size: 14px; text-align: left; font-weight: bold;">${line.total.toFixed(2)}</td>
+                </tr>`;
+        });
+
+        doc.open();
+        doc.write(`
+            <!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
+            <style>
+                @page{margin:0} body{font-family:Arial,sans-serif;width:76mm;margin:0;padding:3mm;color:#000;background:#fff}
+                .text-center{text-align:center} .divider{border-top:1px dashed #000;margin:8px 0}
+                .double-divider{border-top:3px double #000;margin:8px 0} table{width:100%;border-collapse:collapse}
+                .totals-table td{font-size:14px;padding:4px 0} .bold{font-weight:bold}
+            </style></head><body>
+            <div class="text-center">
+                <h2 style="margin:0 0 5px 0;font-size:18px">\u0633\u0648\u0628\u0631 \u0645\u0627\u0631\u0643\u062A \u0627\u0644\u0641\u0631\u0639 \u0627\u0644\u0631\u0626\u064A\u0633\u064A</h2>
+                <p style="margin:2px 0;font-size:12px">\u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u0636\u0631\u064A\u0628\u064A: 300123456700003</p>
+                <p style="margin:2px 0;font-size:12px;font-weight:bold">\u0641\u0627\u062A\u0648\u0631\u0629 \u062A\u0628\u0633\u064A\u0637\u064A\u0629 \u0636\u0631\u064A\u0628\u064A\u0629</p>
+            </div>
+            <div class="divider"></div>
+            <div style="font-size:12px;line-height:1.6">
+                <div><b>\u0631\u0642\u0645 \u0627\u0644\u0625\u064A\u0635\u0627\u0644:</b> ${data.receipt_number}</div>
+                <div><b>\u0627\u0644\u062A\u0627\u0631\u064A\u062E:</b> ${dateStr}</div>
+            </div>
+            <div class="divider"></div>
+            <table><thead><tr style="border-bottom:2px solid #000">
+                <th style="text-align:right;font-size:13px;padding-bottom:5px">\u0627\u0644\u0635\u0646\u0641</th>
+                <th style="text-align:center;font-size:13px;padding-bottom:5px;width:15%">\u0627\u0644\u0643\u0645\u064A\u0629</th>
+                <th style="text-align:left;font-size:13px;padding-bottom:5px;width:25%">\u0627\u0644\u0645\u062C\u0645\u0648\u0639</th>
+            </tr></thead><tbody>${itemRows}</tbody></table>
+            <div class="divider"></div>
+            <table class="totals-table">
+                <tr><td>\u0627\u0644\u0625\u062C\u0645\u0627\u0644\u064A \u0627\u0644\u062E\u0627\u0636\u0639 \u0644\u0644\u0636\u0631\u064A\u0628\u0629:</td>
+                    <td style="text-align:left" class="bold">${subtotal.toFixed(2)} EGP</td></tr>
+                ${isTaxable ? `<tr><td>\u0636\u0631\u064A\u0628\u0629 \u0627\u0644\u0642\u064A\u0645\u0629 \u0627\u0644\u0645\u0636\u0627\u0641\u0629 (14%):</td>
+                    <td style="text-align:left" class="bold">${taxAmount.toFixed(2)} EGP</td></tr>` : ''}
+                <tr style="font-size:16px" class="bold">
+                    <td>\u0627\u0644\u0635\u0627\u0641\u064A \u0627\u0644\u0645\u0637\u0644\u0648\u0628:</td>
+                    <td style="text-align:left">${data.grand_total.toFixed(2)} EGP</td></tr>
+            </table>
+            <div class="double-divider"></div>
+            <div class="text-center" style="font-size:11px;margin-top:10px">
+                <p style="margin:2px 0;font-weight:bold">\u0634\u0643\u0631\u0627\u064B \u0644\u062A\u0633\u0648\u0642\u0643\u0645 \u0645\u0639\u0646\u0627!</p>
+                <p style="margin:2px 0">\u064A\u0631\u062C\u0649 \u0627\u0644\u0627\u062D\u062A\u0641\u0627\u0638 \u0628\u0627\u0644\u0625\u064A\u0635\u0627\u0644 \u0644\u0644\u0627\u0633\u062A\u0628\u062F\u0627\u0644 \u0648\u0627\u0644\u0627\u0633\u062A\u0631\u062C\u0627\u0639</p>
+            </div>
+        </body></html>`);
+        doc.close();
+        iframe.contentWindow.focus();
+        setTimeout(() => { iframe.contentWindow.print(); setTimeout(() => document.body.removeChild(iframe), 1000); }, 250);
+    }
+
+    function processPayment(method) {
+        const cart = getCart();
+        if (cart.length === 0) { alert('\u0633\u0644\u0629 \u0627\u0644\u0645\u0634\u062A\u0631\u064A\u0627\u062A \u0641\u0627\u0631\u063A\u0629! \u064A\u0631\u062C\u0649 \u0625\u0636\u0627\u0641\u0629 \u0623\u0635\u0646\u0627\u0641 \u0623\u0648\u0644\u0627\u064B.'); return; }
+
+        const cleanCart = cart.map(c => ({
+            id: c.id, qty: c.qty,
+            price: c.unit_type === 'sales' ? (c.price * c.conversion_factor) : c.price,
+            unit_type: c.unit_type
+        }));
+        const isTaxable = document.getElementById('vat-toggle-input') ? document.getElementById('vat-toggle-input').checked : true;
+
+        fetch('{% url "pos:checkout" %}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ cart: cleanCart, payment_method: method, is_taxable: isTaxable })
+        })
+        .then(r => { if (!r.ok) return r.json().then(e => { throw new Error(e.message || '\u0641\u0634\u0644\u062A \u0639\u0645\u0644\u064A\u0629 \u0627\u0644\u062F\u0641\u0639'); }); return r.json(); })
+        .then(data => {
+            printReceiptFromServer(data);
+            if (data.warnings && data.warnings.length > 0) {
+                alert('\u26A0\uFE0F ' + data.warnings.join('\n'));
+            }
+            alert(`\u2705 \u062A\u0645 \u0625\u062A\u0645\u0627\u0645 \u0627\u0644\u0628\u064A\u0639 \u0628\u0646\u062C\u0627\u062D!\n\u0631\u0642\u0645 \u0627\u0644\u0641\u0627\u062A\u0648\u0631\u0629: ${data.receipt_number}\n\u0627\u0644\u0645\u0628\u0644\u063A \u0627\u0644\u0645\u0637\u0644\u0648\u0628: ${data.grand_total.toFixed(2)} EGP`);
+            completeAndNewInvoice();
+            const input = document.getElementById('manual-barcode-input');
+            if (input) input.focus();
+        })
+        .catch(error => alert(`\u274C \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062F\u0641\u0639: ${error.message}`));
+    }
+
+    // ========== SESSION OPEN/CLOSE ==========
+    function toggleCloseSessionModal(show) {
+        const modal = document.getElementById('close-session-modal');
+        if (modal) {
+            if (show) { modal.classList.remove('hidden'); document.getElementById('actual-cash-input').focus(); document.getElementById('actual-cash-input').select(); }
+            else { modal.classList.add('hidden'); }
+        }
+    }
+
+    function submitCloseSession() {
+        const actualCashVal = parseFloat(document.getElementById('actual-cash-input').value) || 0;
+        const notesVal = document.getElementById('close-notes-input').value;
+        fetch('{% url "pos:session-close" %}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ actual_cash: actualCashVal, notes: notesVal })
+        })
+        .then(r => { if (!r.ok) return r.json().then(e => { throw new Error(e.message || '\u0641\u0634\u0644 \u0625\u063A\u0644\u0627\u0642 \u0627\u0644\u0648\u0631\u062F\u064A\u0629'); }); return r.json(); })
+        .then(data => { alert('\u2705 ' + data.message); localStorage.removeItem(STORAGE_KEY); window.location.reload(); })
+        .catch(error => alert(`\u274C \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u0625\u063A\u0644\u0627\u0642 \u0627\u0644\u0648\u0631\u062F\u064A\u0629: ${error.message}`));
+    }
+
+    // ========== SEARCH ==========
+    function renderSearchDropdown(items) {
+        const dd = document.getElementById('search-dropdown');
+        dd.innerHTML = '';
+        items.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'px-4 py-3 hover:bg-pink-brand/10 cursor-pointer border-b border-gray-100 flex justify-between items-center transition-colors';
+            div.innerHTML = `<span class="font-bold text-plum text-base">${item.name}</span><span class="text-xs text-gray-400" dir="ltr">${item.code}${item.barcode ? ' | ' + item.barcode : ''}</span>`;
+            div.onclick = () => { addToCart(item); document.getElementById('manual-barcode-input').value = ''; closeSearchDropdown(); document.getElementById('manual-barcode-input').focus(); };
+            dd.appendChild(div);
+        });
+    }
+
+    function openSearchDropdown() { document.getElementById('search-dropdown').classList.remove('hidden'); }
+    function closeSearchDropdown() { document.getElementById('search-dropdown').classList.add('hidden'); }
+
+    function searchManualBarcode() {
+        const input = document.getElementById('manual-barcode-input');
+        const val = input.value.trim();
+        if (!val) return;
+        const matches = itemsData.filter(i => i.barcode.includes(val) || i.code.includes(val) || i.name.includes(val));
+        if (matches.length === 1) { addToCart(matches[0]); input.value = ''; closeSearchDropdown(); input.focus(); }
+        else if (matches.length > 1) { renderSearchDropdown(matches); openSearchDropdown(); }
+        else { alert('\u0639\u0641\u0648\u0627\u064B\u060C \u0627\u0644\u0635\u0646\u0641 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F: ' + val); input.select(); }
+    }
+
+    function handleManualBarcode(e) { if (e.key === "Enter") { e.preventDefault(); searchManualBarcode(); } }
+
+    document.getElementById('manual-barcode-input').addEventListener('keyup', function(e) {
+        if (e.key === 'Enter') return;
+        const val = this.value.trim();
+        if (!val) { closeSearchDropdown(); return; }
+        const matches = itemsData.filter(i => i.barcode.includes(val) || i.code.includes(val) || i.name.includes(val));
+        if (matches.length > 0) { renderSearchDropdown(matches); openSearchDropdown(); }
+        else { closeSearchDropdown(); }
+    });
+
+    document.addEventListener('click', function(e) { if (!e.target.closest('#search-container')) closeSearchDropdown(); });
+
+    // ========== PREFERENCES ==========
+    function savePreferences() {
+        const vt = document.getElementById('vat-toggle-input');
+        const pt = document.getElementById('auto-print-toggle');
+        if (vt) localStorage.setItem('pos_is_taxable', vt.checked);
+        if (pt) localStorage.setItem('pos_auto_print', pt.checked);
+    }
+
+    function toggleBadgeStatus(badgeId, isChecked) {
+        const badge = document.getElementById(badgeId);
+        if (!badge) return;
+        badge.innerText = isChecked ? "\u0645\u0641\u0639\u0644" : "\u0645\u0648\u0642\u0641";
+        badge.className = isChecked ? "mr-3 px-2.5 py-1 text-xs font-bold rounded-full bg-pink-brand/10 text-pink-brand transition-all" : "mr-3 px-2.5 py-1 text-xs font-bold rounded-full bg-gray-100 text-gray-400 transition-all";
+    }
+
+    function loadPreferences() {
+        const vt = document.getElementById('vat-toggle-input');
+        const pt = document.getElementById('auto-print-toggle');
+        const savedTaxable = localStorage.getItem('pos_is_taxable');
+        if (savedTaxable !== null && vt) vt.checked = (savedTaxable === 'true');
+        const savedPrint = localStorage.getItem('pos_auto_print');
+        if (savedPrint !== null && pt) pt.checked = (savedPrint === 'true');
+        if (vt) toggleBadgeStatus('vat-badge', vt.checked);
+        if (pt) toggleBadgeStatus('print-badge', pt.checked);
+    }
+
+    // ========== CATEGORY BROWSER (Touch Mode) ==========
+    let activeCategoryId = null;
+
+    function getCategoriesFromItems() {
+        const map = {};
+        itemsData.forEach(item => {
+            const cid = item.category_id || '0';
+            const cname = item.category_name || '\u0639\u0627\u0645';
+            if (!map[cid]) map[cid] = { id: cid, name: cname, items: [] };
+            map[cid].items.push(item);
+        });
+        return Object.values(map).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+    }
+
+    function renderCategoryBrowser() {
+        const cats = getCategoriesFromItems();
+        const grid = document.getElementById('cat-grid');
+        grid.innerHTML = '';
+        cats.forEach(cat => {
+            const card = document.createElement('div');
+            card.className = 'cat-card' + (activeCategoryId === cat.id ? ' active' : '');
+            card.dataset.catId = cat.id;
+            const iconChar = cat.name.charAt(0);
+            card.innerHTML = `
+                <div class="cat-icon">${iconChar}</div>
+                <div class="cat-name">${cat.name}</div>
+                <div class="cat-count">${cat.items.length}</div>
+            `;
+            card.onclick = () => toggleCategory(cat.id);
+            grid.appendChild(card);
+        });
+    }
+
+    function toggleCategory(catId) {
+        const cats = getCategoriesFromItems();
+        const cat = cats.find(c => c.id === catId);
+        if (!cat) return;
+
+        if (activeCategoryId === catId) {
+            activeCategoryId = null;
+            document.getElementById('items-panel').classList.remove('open');
+            document.querySelectorAll('.cat-card').forEach(c => c.classList.remove('active'));
+            return;
+        }
+
+        activeCategoryId = catId;
+        document.querySelectorAll('.cat-card').forEach(c => {
+            c.classList.toggle('active', c.dataset.catId === catId);
+        });
+
+        const panel = document.getElementById('items-panel');
+        panel.classList.add('open');
+        const grid = document.createElement('div');
+        grid.className = 'items-grid';
+
+        cat.items.forEach(item => {
+            const tile = document.createElement('div');
+            tile.className = 'item-tile';
+            tile.innerHTML = `
+                <div class="item-name">${item.name}</div>
+                <div class="item-price">${parseFloat(item.price).toFixed(2)}</div>
+                <div class="item-unit">${item.unit_name}</div>
+            `;
+            tile.onclick = () => {
+                addToCart(item);
+                tile.style.background = '#FDEAF4';
+                tile.style.borderColor = '#EC228D';
+                setTimeout(() => { tile.style.background = ''; tile.style.borderColor = ''; }, 300);
+            };
+            grid.appendChild(tile);
+        });
+
+        panel.innerHTML = '';
+        panel.appendChild(grid);
+    }
+
+    // ========== TOUCH MODE ==========
+    function toggleTouchMode() {
+        const body = document.getElementById('pos-body');
+        const btn = document.getElementById('touch-toggle-btn');
+        const isActive = body.classList.toggle('touch-mode');
+        btn.classList.toggle('active', isActive);
+        localStorage.setItem('pos_touch_mode', isActive);
+        if (isActive) renderCategoryBrowser();
+    }
+
+    function loadTouchMode() {
+        const body = document.getElementById('pos-body');
+        const btn = document.getElementById('touch-toggle-btn');
+        const saved = localStorage.getItem('pos_touch_mode');
+        if (saved === 'true') {
+            body.classList.add('touch-mode');
+            btn.classList.add('active');
+            renderCategoryBrowser();
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", function() { loadPreferences(); loadTouchMode(); loadInvoices(); updateCartUI(); });
+
+    // ========== BARCODE SCANNER ==========
+    let barcodeBuffer = "";
+    let barcodeTimer = null;
+
+    document.addEventListener("keydown", function(e) {
+        if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+        if (e.key === "Enter") {
+            if (barcodeBuffer.length > 0) {
+                const item = itemsData.find(i => i.barcode === barcodeBuffer || i.code === barcodeBuffer);
+                if (item) addToCart(item);
+                else alert('\u0639\u0641\u0648\u0627\u064B\u060C \u0627\u0644\u0635\u0646\u0641 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0623\u0648 \u0627\u0644\u0628\u0627\u0631\u0643\u0648\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D: ' + barcodeBuffer);
+                barcodeBuffer = "";
+            }
+            return;
+        }
+        if (e.key.length === 1) {
+            barcodeBuffer += e.key;
+            clearTimeout(barcodeTimer);
+            barcodeTimer = setTimeout(() => { barcodeBuffer = ""; }, 50);
+        }
+    });
+</script>
+</body>
+</html>

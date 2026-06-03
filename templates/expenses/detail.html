@@ -62,21 +62,23 @@
                 {% endif %}
                 
                 <hr>
+                {% if perms.core.view_journalentry and not request.user.salesrepresentative %}
                 <h6>الربط المحاسبي</h6>
                 {% if expense.journal_entry %}
                 <p>رقم القيد: <a href="{% url 'core:journal-detail' expense.journal_entry.pk %}">{{ expense.journal_entry.number }}</a></p>
                 {% else %}
                 <p class="text-muted">لم يتم الترحيل بعد.</p>
                 {% endif %}
+                {% endif %}
                 
-                {% if expense.status == 'draft' %}
+                {% if expense.status == 'draft' and perms.expenses.change_expense %}
                 <form method="post" action="{% url 'expenses:expense-approve' expense.pk %}" class="mt-3">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-primary w-100">
                         <i class="bi bi-check-circle"></i> اعتماد المصروف
                     </button>
                 </form>
-                {% elif expense.status == 'approved' %}
+                {% elif expense.status == 'approved' and perms.expenses.change_expense %}
                 <form method="post" action="{% url 'expenses:expense-post' expense.pk %}" class="mt-3">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-success w-100" onclick="return confirm('تأكيد الترحيل المحاسبي؟');">

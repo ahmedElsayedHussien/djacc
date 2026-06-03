@@ -15,8 +15,11 @@
                 <div class="col-md-4">
                     <label class="form-label fw-bold">العميل *</label>
                     {{ form.customer }}
+                    <div class="alert alert-warning py-2 px-3 border-0 small mt-2 d-none shadow-sm" id="cashCustomerCreditWarning">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>تنبيه: العميل نقدي وتم اختيار الدفع آجل! (تم تعيين الاستحقاق 20 يوم، وسيتم إخطار المحاسب بهذه الفاتورة)
+                    </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-4" id="dueDateContainer">
                     <label class="form-label fw-bold">تاريخ الاستحقاق *</label>
                     {{ form.due_date }}
                 </div>
@@ -46,49 +49,55 @@
         <div class="card-header">أصناف الفاتورة</div>
         <div class="card-body">
             {{ lines.management_form }}
-            <table class="table table-bordered" id="linesTable">
-                <thead class="table-light">
-                    <tr>
-                        <th style="width: 25%;">الصنف</th>
-                        <th style="width: 10%;">الوحدة</th>
-                        <th>المستودع</th>
-                        <th style="width: 8%;">الكمية</th>
-                        <th style="width: 10%;">السعر</th>
-                        <th style="width: 14%;">خصم %</th>
-                        <th style="width: 12%;">ضريبة 1</th>
-                        <th style="width: 12%;">ضريبة 2</th>
-                        <th style="width: 12%;">الإجمالي</th>
-                        <th>حذف</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for line_form in lines %}
-                    <tr class="line-row">
-                        <td>{{ line_form.item }}</td>
-                        <td>{{ line_form.unit }}</td>
-                        <td>{{ line_form.warehouse }}</td>
-                        <td>{{ line_form.quantity }}</td>
-                        <td>{{ line_form.unit_price }}</td>
-                        <td>{{ line_form.discount_percent }}</td>
-                        <td>
-                            {{ line_form.tax_type }}
-                            {{ line_form.tax_percent }}
-                        </td>
-                        <td>
-                            {{ line_form.tax_type2 }}
-                            {{ line_form.tax_percent2 }}
-                        </td>
-                        <td>
-                            <input type="text" class="form-control line-total-display" readonly value="0.00">
-                            {{ line_form.total }}
-                        </td>
-                        <td class="text-center">
-                            {% if line_form.instance.pk %}{{ line_form.DELETE }}{% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="table table-bordered" id="linesTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 22%;">الصنف</th>
+                            <th style="width: 8%;">المتاح</th>
+                            <th style="width: 10%;">الوحدة</th>
+                            <th style="width: 15%;">المستودع</th>
+                            <th style="width: 8%;">الكمية</th>
+                            <th style="width: 9%;">السعر</th>
+                            <th style="width: 8%;">خصم %</th>
+                            <th style="width: 10%;">ضريبة 1</th>
+                            <th style="width: 10%;">ضريبة 2</th>
+                            <th style="width: 12%;">الإجمالي</th>
+                            <th>حذف</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for line_form in lines %}
+                        <tr class="line-row">
+                            <td data-label="الصنف">{{ line_form.item }}</td>
+                            <td data-label="المتاح">
+                                <input type="text" class="form-control form-control-sm available-qty-display bg-light text-center px-1" readonly value="0" style="min-width: 60px;">
+                            </td>
+                            <td data-label="الوحدة">{{ line_form.unit }}</td>
+                            <td data-label="المستودع">{{ line_form.warehouse }}</td>
+                            <td data-label="الكمية">{{ line_form.quantity }}</td>
+                            <td data-label="السعر">{{ line_form.unit_price }}</td>
+                            <td data-label="خصم %">{{ line_form.discount_percent }}</td>
+                            <td data-label="ضريبة 1">
+                                {{ line_form.tax_type }}
+                                {{ line_form.tax_percent }}
+                            </td>
+                            <td data-label="ضريبة 2">
+                                {{ line_form.tax_type2 }}
+                                {{ line_form.tax_percent2 }}
+                            </td>
+                            <td data-label="الإجمالي">
+                                <input type="text" class="form-control line-total-display" readonly value="0.00">
+                                {{ line_form.total }}
+                            </td>
+                            <td class="text-center" data-label="حذف">
+                                {% if line_form.instance.pk %}{{ line_form.DELETE }}{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
             <button type="button" class="btn btn-outline-secondary btn-sm" id="addRow">
                 <i class="bi bi-plus"></i> إضافة سطر
             </button>
@@ -105,7 +114,7 @@
             </div>
         </div>
         <div class="col-md-5">
-            <div class="card">
+            <div class="card totals-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between mb-2">
                         <span class="fw-bold">إجمالي قيمة الفاتورة:</span>
@@ -138,443 +147,650 @@
 
 {% block extra_js %}
 <script>
-    // Professional logic to calculate totals (VAT, WHT, Table Tax)
-    function calculateInvoice() {
-        let grossTotal = 0;
-        let discountTotal = 0;
-        let taxTotalAdd = 0;
-        let taxTotalSub = 0;
+    document.addEventListener('DOMContentLoaded', function () {
+        const customerSelect = document.getElementById('id_customer');
         
-        document.querySelectorAll('.line-row').forEach(row => {
-            const qtyInput = row.querySelector('.qty-input');
+        // Dynamic Item Select Lock Logic
+        function updateItemSelectsState() {
+            const customerSelected = customerSelect && !!customerSelect.value;
+            document.querySelectorAll('.item-select').forEach(select => {
+                select.disabled = !customerSelected;
+                
+                let firstOpt = select.options[0];
+                if (!firstOpt) {
+                    firstOpt = document.createElement('option');
+                    firstOpt.value = '';
+                    select.insertBefore(firstOpt, select.firstChild);
+                }
+                
+                if (!customerSelected) {
+                    firstOpt.text = "الرجاء اختيار العميل أولاً...";
+                    select.value = '';
+                    const row = select.closest('.line-row');
+                    const unitSelect = row ? row.querySelector('.unit-select') : null;
+                    if (unitSelect) unitSelect.innerHTML = '<option value="">---------</option>';
+                    const priceInput = row ? row.querySelector('.price-input') : null;
+                    if (priceInput) {
+                        priceInput.value = '';
+                        priceInput.dataset.basePrice = '';
+                    }
+                } else {
+                    firstOpt.text = "---------";
+                }
+            });
+            calculateInvoice();
+        }
+        const paymentTypeSelect = document.getElementById('id_payment_type');
+        const cashBoxSelect = document.getElementById('id_cash_box');
+        const cashBoxContainer = cashBoxSelect ? cashBoxSelect.closest('.col-md-3') : null;
+
+        let currentCustomerPriceList = null;
+        let currentCustomerTax1 = null;
+        let currentCustomerTax2 = null;
+        let currentCustomerIsTaxable = true;
+        let currentSectorOffers = [];
+        let currentCustomerType = null;
+        let currentCustomerPaymentTermsDays = null;
+        const dueDateContainer = document.getElementById('dueDateContainer');
+        const dateInput = document.getElementById('id_date');
+
+        // 1. Calculate Invoice Totals (Standardized Premium Pricing/Tax Logic)
+        function calculateInvoice() {
+            let grossTotal = 0;
+            let discountTotal = 0;
+            let taxTotalAdd = 0;
+            let taxTotalSub = 0;
+            
+            document.querySelectorAll('.line-row').forEach(row => {
+                const qtyInput = row.querySelector('.qty-input');
+                const priceInput = row.querySelector('.price-input');
+                const discInput = row.querySelector('.discount-input');
+                
+                const tax1Select = row.querySelector('.tax-select');
+                const tax2Select = row.querySelector('.tax-select2');
+                const tax1RateInput = row.querySelector('.tax-rate');
+                const tax2RateInput = row.querySelector('.tax-rate2');
+                
+                if (!qtyInput || !priceInput) return;
+
+                const qty = parseFloat(qtyInput.value) || 0;
+                const price = parseFloat(priceInput.value) || 0;
+                const discPercent = discInput ? (parseFloat(discInput.value) || 0) : 0;
+                
+                const grossLine = qty * price;
+                const discLine = grossLine * (discPercent / 100);
+                const netLine = grossLine - discLine;
+                
+                const tax1Rate = tax1RateInput ? (parseFloat(tax1RateInput.value) || 0) : 0;
+                const tax2Rate = tax2RateInput ? (parseFloat(tax2RateInput.value) || 0) : 0;
+                
+                const tax1Cat = tax1Select ? tax1Select.selectedOptions[0]?.dataset.category : '';
+                const tax2Cat = tax2Select ? tax2Select.selectedOptions[0]?.dataset.category : '';
+
+                // Table Tax first
+                let tableTaxAmount = 0;
+                if (tax1Cat === 'table') tableTaxAmount += netLine * (tax1Rate / 100);
+                if (tax2Cat === 'table') tableTaxAmount += netLine * (tax2Rate / 100);
+
+                // VAT and other taxes
+                let lineTaxAdd = 0;
+                let lineTaxSub = 0;
+
+                [
+                    {cat: tax1Cat, rate: tax1Rate},
+                    {cat: tax2Cat, rate: tax2Rate}
+                ].forEach(tx => {
+                    if (!tx.cat || tx.rate === 0) return;
+                    
+                    let val = 0;
+                    if (tx.cat === 'vat') {
+                        val = (netLine + tableTaxAmount) * (tx.rate / 100);
+                    } else {
+                        val = netLine * (tx.rate / 100);
+                    }
+
+                    if (['wht', 'salary', 'insurance'].includes(tx.cat)) {
+                        lineTaxSub += val;
+                    } else {
+                        lineTaxAdd += val;
+                    }
+                });
+
+                const lineTotal = netLine + lineTaxAdd - lineTaxSub;
+                
+                const displayEl = row.querySelector('.line-total-display');
+                const totalInput = row.querySelector('.total-input');
+                if (displayEl) displayEl.value = lineTotal.toFixed(2);
+                if (totalInput) totalInput.value = lineTotal.toFixed(2);
+                
+                grossTotal += grossLine;
+                discountTotal += discLine;
+                taxTotalAdd += lineTaxAdd;
+                taxTotalSub += lineTaxSub;
+            });
+            
+            document.getElementById('subtotal').innerText = grossTotal.toFixed(2);
+            document.getElementById('discountTotal').innerText = discountTotal.toFixed(2);
+            document.getElementById('taxTotal').innerText = (taxTotalAdd - taxTotalSub).toFixed(2);
+            document.getElementById('grandTotal').innerText = (grossTotal - discountTotal + taxTotalAdd - taxTotalSub).toFixed(2);
+        }
+
+        // 2. Fetch tax rate and category when tax type is selected
+        async function fetchTaxRate(taxSelect, rateInputClass) {
+            const taxId = taxSelect.value;
+            const row = taxSelect.closest('.line-row');
+            const rateInput = row.querySelector(rateInputClass);
+            
+            if (!taxId) {
+                rateInput.value = '0.00';
+                if (taxSelect.selectedOptions[0]) taxSelect.selectedOptions[0].dataset.category = '';
+                calculateInvoice();
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/taxes/${taxId}/`);
+                if (response.ok) {
+                    const data = await response.json();
+                    rateInput.value = data.rate;
+                    if (taxSelect.selectedOptions[0]) {
+                        taxSelect.selectedOptions[0].dataset.category = data.category;
+                    }
+                    calculateInvoice();
+                }
+            } catch (error) {
+                console.error('Error fetching tax rate:', error);
+            }
+        }
+
+        // Initialize categories for existing rows on load
+        document.querySelectorAll('.tax-select, .tax-select2').forEach(select => {
+            if (select.value) fetchTaxRate(select, select.classList.contains('tax-select') ? '.tax-rate' : '.tax-rate2');
+        });
+
+        document.addEventListener('input', function(e) {
+            if (e.target.matches('.qty-input, .price-input, .discount-input')) {
+                calculateInvoice();
+            }
+        });
+        
+        document.addEventListener('change', function(e) {
+            if (e.target.matches('.tax-select')) {
+                fetchTaxRate(e.target, '.tax-rate');
+            }
+            if (e.target.matches('.tax-select2')) {
+                fetchTaxRate(e.target, '.tax-rate2');
+            }
+        });
+
+        // 3. Multi-unit logic
+        async function fetchItemUnits(itemSelect) {
+            const row = itemSelect.closest('.line-row');
+            const unitSelect = row.querySelector('.unit-select');
+            const warehouseSelect = row.querySelector('.warehouse-select');
+            const availQtyDisplay = row.querySelector('.available-qty-display');
+            const itemId = itemSelect.value;
+            
+            // Check for duplicate items
+            let isDuplicate = false;
+            document.querySelectorAll('.item-select').forEach(select => {
+                if (select !== itemSelect && select.value === itemId && itemId !== '') {
+                    isDuplicate = true;
+                }
+            });
+            
+            if (isDuplicate) {
+                alert('هذا الصنف مكرر! يرجى اختيار صنف آخر أو تجميع الكميات في نفس السطر.');
+                itemSelect.value = '';
+                if (unitSelect) unitSelect.innerHTML = '<option value="">---------</option>';
+                if (availQtyDisplay) availQtyDisplay.value = '0';
+                return;
+            }
+
+            if (!itemId) {
+                if (unitSelect) unitSelect.innerHTML = '<option value="">---------</option>';
+                if (availQtyDisplay) availQtyDisplay.value = '0';
+                return;
+            }
+
+            try {
+                let url = `/inventory/api/item/${itemId}/`;
+                if (warehouseSelect && warehouseSelect.value) {
+                    url += `?warehouse_id=${warehouseSelect.value}`;
+                }
+                const response = await fetch(url);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (unitSelect) {
+                        unitSelect.innerHTML = '';
+                        data.units.forEach(u => {
+                            const option = document.createElement('option');
+                            option.value = u.id;
+                            option.text = u.name;
+                            option.dataset.factor = u.factor;
+                            unitSelect.appendChild(option);
+                        });
+                        if (data.default_unit_id) {
+                            unitSelect.value = data.default_unit_id;
+                        }
+                    }
+                    if (availQtyDisplay) {
+                        availQtyDisplay.value = data.available_qty;
+                    }
+                    calculateInvoice();
+                }
+            } catch (error) {
+                console.error('Error fetching units:', error);
+            }
+        }
+
+        // 4. Fetch Item Price and apply discounts/defaults with Conversion Factors
+        async function fetchItemPrice(itemSelect) {
+            if (!itemSelect.value) return;
+            
+            const row = itemSelect.closest('.line-row');
             const priceInput = row.querySelector('.price-input');
             const discInput = row.querySelector('.discount-input');
-            
             const tax1Select = row.querySelector('.tax-select');
             const tax2Select = row.querySelector('.tax-select2');
-            const tax1RateInput = row.querySelector('.tax-rate');
-            const tax2RateInput = row.querySelector('.tax-rate2');
-            
-            if (!qtyInput || !priceInput) return;
+            const unitSelect = row.querySelector('.unit-select');
 
-            const qty = parseFloat(qtyInput.value) || 0;
-            const price = parseFloat(priceInput.value) || 0;
-            const discPercent = discInput ? (parseFloat(discInput.value) || 0) : 0;
-            
-            const grossLine = qty * price;
-            const discLine = grossLine * (discPercent / 100);
-            const netLine = grossLine - discLine;
-            
-            const tax1Rate = tax1RateInput ? (parseFloat(tax1RateInput.value) || 0) : 0;
-            const tax2Rate = tax2RateInput ? (parseFloat(tax2RateInput.value) || 0) : 0;
-            
-            const tax1Cat = tax1Select ? tax1Select.selectedOptions[0]?.dataset.category : '';
-            const tax2Cat = tax2Select ? tax2Select.selectedOptions[0]?.dataset.category : '';
-
-            // 1. Calculate Table Tax first (as it might affect VAT)
-            let tableTaxAmount = 0;
-            if (tax1Cat === 'table') tableTaxAmount += netLine * (tax1Rate / 100);
-            if (tax2Cat === 'table') tableTaxAmount += netLine * (tax2Rate / 100);
-
-            // 2. Calculate VAT and other taxes
-            let lineTaxAdd = 0;
-            let lineTaxSub = 0;
-
-            [
-                {cat: tax1Cat, rate: tax1Rate},
-                {cat: tax2Cat, rate: tax2Rate}
-            ].forEach(tx => {
-                if (!tx.cat || tx.rate === 0) return;
+            try {
+                let fetchedPrice = 0;
+                if (currentCustomerPriceList) {
+                    const response = await fetch(`/api/price-lists/${currentCustomerPriceList}/item_price/?item_id=${itemSelect.value}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.price) {
+                            fetchedPrice = parseFloat(data.price);
+                        }
+                    }
+                }
                 
-                let val = 0;
-                if (tx.cat === 'vat') {
-                    // VAT is on (Net + Table Tax)
-                    val = (netLine + tableTaxAmount) * (tx.rate / 100);
-                } else {
-                    // Others are on Net
-                    val = netLine * (tx.rate / 100);
+                if (fetchedPrice === 0) {
+                    let url = `/inventory/api/item/${itemSelect.value}/`;
+                    if (warehouseSelect && warehouseSelect.value) {
+                        url += `?warehouse_id=${warehouseSelect.value}`;
+                    }
+                    const invResponse = await fetch(url);
+                    if (invResponse.ok) {
+                        const data = await invResponse.json();
+                        if (data.standard_price) {
+                            fetchedPrice = parseFloat(data.standard_price);
+                        }
+                        const availQtyDisplay = row.querySelector('.available-qty-display');
+                        if (availQtyDisplay) availQtyDisplay.value = data.available_qty;
+                    }
                 }
 
-                // Decide if add or sub
-                if (['wht', 'salary', 'insurance'].includes(tx.cat)) {
-                    lineTaxSub += val;
+                if (fetchedPrice > 0) {
+                    priceInput.dataset.basePrice = fetchedPrice.toString();
+                    const selectedOption = unitSelect ? unitSelect.selectedOptions[0] : null;
+                    const factor = selectedOption ? (parseFloat(selectedOption.dataset.factor) || 1) : 1;
+                    priceInput.value = (fetchedPrice * factor).toFixed(2);
+                    calculateInvoice();
+                }
+            } catch (error) {
+                console.error('Error fetching item price:', error);
+            }
+        }
+
+        // Calculate Due Date based on Customer settings and Payment type
+        function calculateDueDate() {
+            if (!dateInput || !dateInput.value) return;
+            
+            const baseDate = new Date(dateInput.value);
+            if (isNaN(baseDate.getTime())) return;
+            
+            let days = 30; // standard default credit days
+            const warningEl = document.getElementById('cashCustomerCreditWarning');
+            
+            if (paymentTypeSelect && paymentTypeSelect.value === 'credit') {
+                if (currentCustomerType === 'cash') {
+                    if (warningEl) warningEl.classList.remove('d-none');
+                    days = 20; // Default 20 days for cash customer on credit
                 } else {
-                    lineTaxAdd += val;
+                    if (warningEl) warningEl.classList.add('d-none');
+                    days = currentCustomerPaymentTermsDays !== null && currentCustomerPaymentTermsDays !== undefined ? parseInt(currentCustomerPaymentTermsDays) : 30;
+                }
+            } else {
+                if (warningEl) warningEl.classList.add('d-none');
+                days = 0; // For cash payments, due date is same as invoice date
+            }
+            
+            baseDate.setDate(baseDate.getDate() + days);
+            const year = baseDate.getFullYear();
+            const month = String(baseDate.getMonth() + 1).padStart(2, '0');
+            const day = String(baseDate.getDate()).padStart(2, '0');
+            
+            const dueDateField = document.getElementById('id_due_date');
+            if (dueDateField) {
+                dueDateField.value = `${year}-${month}-${day}`;
+            }
+        }
+
+        // 5. Apply Customer Defaults
+        async function fetchCustomerDetails(customerId) {
+            if (!customerId) return;
+            try {
+                const response = await fetch(`/api/customers/${customerId}/`);
+                if (response.ok) {
+                    const data = await response.json();
+                    currentCustomerPriceList = data.price_list;
+                    currentCustomerTax1 = data.default_tax1;
+                    currentCustomerTax2 = data.default_tax2;
+                    currentCustomerIsTaxable = data.is_taxable;
+                    currentCustomerType = data.customer_type;
+                    currentCustomerPaymentTermsDays = data.payment_terms_days;
+
+                    // Trigger due date calculation based on customer defaults
+                    calculateDueDate();
+
+                    if (data.sector) {
+                        const offerResponse = await fetch(`/api/quotations/active_for_sector/?sector_id=${data.sector}`);
+                        if (offerResponse.ok) {
+                            currentSectorOffers = await offerResponse.json();
+                        }
+                    } else {
+                        currentSectorOffers = [];
+                    }
+
+                    document.querySelectorAll('.line-row').forEach(row => {
+                        applyCustomerDefaultsToRow(row);
+                    });
+                }
+            } catch (error) {
+                console.error('Error fetching customer details:', error);
+            }
+        }
+
+        function applyCustomerDefaultsToRow(row) {
+            const tax1Select = row.querySelector('.tax-select');
+            const tax2Select = row.querySelector('.tax-select2');
+            
+            if (currentCustomerIsTaxable) {
+                if (currentCustomerTax1) {
+                    tax1Select.value = currentCustomerTax1;
+                    fetchTaxRate(tax1Select, '.tax-rate');
+                }
+                if (currentCustomerTax2) {
+                    tax2Select.value = currentCustomerTax2;
+                    fetchTaxRate(tax2Select, '.tax-rate2');
+                }
+            } else {
+                tax1Select.value = '';
+                tax2Select.value = '';
+                fetchTaxRate(tax1Select, '.tax-rate');
+                fetchTaxRate(tax2Select, '.tax-rate2');
+            }
+            
+            const itemSelect = row.querySelector('.item-select');
+            if (itemSelect && itemSelect.value) {
+                fetchItemPrice(itemSelect);
+                applySectorDiscount(row, itemSelect.value);
+            }
+        }
+
+        function applySectorDiscount(row, itemId) {
+            const discInput = row.querySelector('.discount-input');
+            if (!discInput) return;
+
+            let totalDiscount = 0;
+            currentSectorOffers.forEach(offer => {
+                const line = offer.lines.find(l => l.item == itemId);
+                if (line) {
+                    totalDiscount += parseFloat(line.discount_percent || 0);
                 }
             });
 
-            const lineTotal = netLine + lineTaxAdd - lineTaxSub;
-            
-            const displayEl = row.querySelector('.line-total-display');
-            const totalInput = row.querySelector('.total-input');
-            if (displayEl) displayEl.value = lineTotal.toFixed(2);
-            if (totalInput) totalInput.value = lineTotal.toFixed(2);
-            
-            grossTotal += grossLine;
-            discountTotal += discLine;
-            taxTotalAdd += lineTaxAdd;
-            taxTotalSub += lineTaxSub;
-        });
-        
-        document.getElementById('subtotal').innerText = grossTotal.toFixed(2);
-        document.getElementById('discountTotal').innerText = discountTotal.toFixed(2);
-        
-        // Total Tax in display usually shows the net impact or sum of additions? 
-        // We'll show the net tax impact (Additions - Deductions) or separate them.
-        // Let's show net impact to match grand total math.
-        document.getElementById('taxTotal').innerText = (taxTotalAdd - taxTotalSub).toFixed(2);
-        document.getElementById('grandTotal').innerText = (grossTotal - discountTotal + taxTotalAdd - taxTotalSub).toFixed(2);
-    }
-
-    // Fetch tax rate and category when tax type is selected
-    async function fetchTaxRate(taxSelect, rateInputClass) {
-        const taxId = taxSelect.value;
-        const row = taxSelect.closest('.line-row');
-        const rateInput = row.querySelector(rateInputClass);
-        
-        if (!taxId) {
-            rateInput.value = '0.00';
-            if (taxSelect.selectedOptions[0]) taxSelect.selectedOptions[0].dataset.category = '';
-            calculateInvoice();
-            return;
-        }
-
-        try {
-            const response = await fetch(`/api/taxes/${taxId}/`);
-            if (response.ok) {
-                const data = await response.json();
-                rateInput.value = data.rate;
-                // Store category in the selected option's dataset for calculation
-                if (taxSelect.selectedOptions[0]) {
-                    taxSelect.selectedOptions[0].dataset.category = data.category;
-                }
-                calculateInvoice();
+            if (totalDiscount > 0) {
+                discInput.value = totalDiscount.toFixed(2);
             }
-        } catch (error) {
-            console.error('Error fetching tax rate:', error);
-        }
-    }
-
-    // Initialize categories for existing rows on load
-    document.querySelectorAll('.tax-select, .tax-select2').forEach(select => {
-        if (select.value) fetchTaxRate(select, select.classList.contains('tax-select') ? '.tax-rate' : '.tax-rate2');
-    });
-
-    document.addEventListener('input', function(e) {
-        if (e.target.matches('.qty-input, .price-input, .discount-input')) {
             calculateInvoice();
         }
-    });
-    
-    document.addEventListener('change', function(e) {
-        if (e.target.matches('.tax-select')) {
-            fetchTaxRate(e.target, '.tax-rate');
-        }
-        if (e.target.matches('.tax-select2')) {
-            fetchTaxRate(e.target, '.tax-rate2');
-        }
-    });
 
-    // Add row logic
-    document.getElementById('addRow').addEventListener('click', function() {
-        const table = document.getElementById('linesTable').getElementsByTagName('tbody')[0];
-        const lastRow = table.querySelector('.line-row:last-child');
-        const newRow = lastRow.cloneNode(true);
-        
-        const totalForms = document.getElementById('id_lines-TOTAL_FORMS');
-        const currentCount = parseInt(totalForms.value);
-        
-        newRow.querySelectorAll('input, select').forEach(input => {
-            input.name = input.name.replace(`-${currentCount-1}-`, `-${currentCount}-`);
-            input.id = input.id.replace(`-${currentCount-1}-`, `-${currentCount}-`);
-            if (input.type !== 'checkbox') input.value = '';
-            // Reset totals
-            if (input.classList.contains('line-total-display')) input.value = '0.00';
-            if (input.classList.contains('total-input')) input.value = '0.00';
-            if (input.classList.contains('tax-rate')) input.value = '0.00';
-            if (input.classList.contains('tax-rate2')) input.value = '0.00';
-        });
-        
-        table.appendChild(newRow);
-        totalForms.value = currentCount + 1;
-    });
-
-    calculateInvoice();
-
-    // Payment type toggle logic
-    const paymentTypeSelect = document.getElementById('id_payment_type');
-    const cashBoxContainer = document.getElementById('cashBoxContainer');
-    const cashBoxSelect = document.getElementById('id_cash_box');
-
-    function toggleCashBox() {
-        if (paymentTypeSelect && paymentTypeSelect.value === 'cash') {
-            cashBoxContainer.style.display = 'block';
-            cashBoxSelect.required = true;
-        } else if (cashBoxContainer) {
-            cashBoxContainer.style.display = 'none';
-            cashBoxSelect.required = false;
-        }
-    }
-
-    if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', toggleCashBox);
-    toggleCashBox();
-
-    // Multi-unit logic
-    async function fetchItemUnits(itemSelect) {
-        const row = itemSelect.closest('.line-row');
-        const unitSelect = row.querySelector('.unit-select');
-        const itemId = itemSelect.value;
-        
-        if (!itemId) {
-            unitSelect.innerHTML = '<option value="">---------</option>';
-            return;
+        // Customer change triggers
+        if (customerSelect) {
+            customerSelect.addEventListener('change', function () {
+                fetchCustomerDetails(customerSelect.value);
+                updateItemSelectsState();
+            });
+            if (customerSelect.value) {
+                fetchCustomerDetails(customerSelect.value);
+            }
         }
 
-        try {
-            const response = await fetch(`/inventory/api/item/${itemId}/`);
-            if (response.ok) {
-                const data = await response.json();
-                unitSelect.innerHTML = '';
-                data.units.forEach(u => {
-                    const option = document.createElement('option');
-                    option.value = u.id;
-                    option.text = u.name;
-                    option.dataset.factor = u.factor;
-                    unitSelect.appendChild(option);
-                });
-                if (data.default_unit_id) {
-                    unitSelect.value = data.default_unit_id;
+        // Item-select changes (Awaited sequentially to prevent race conditions)
+        document.addEventListener('change', async function(e) {
+            if (e.target.matches('.item-select')) {
+                const row = e.target.closest('.line-row');
+                await fetchItemUnits(e.target);
+                await fetchItemPrice(e.target);
+                applySectorDiscount(row, e.target.value);
+            }
+            if (e.target.matches('.warehouse-select')) {
+                const row = e.target.closest('.line-row');
+                const itemSelect = row.querySelector('.item-select');
+                if (itemSelect && itemSelect.value) {
+                    await fetchItemUnits(itemSelect);
+                    await fetchItemPrice(itemSelect);
                 }
-                calculateInvoice();
-            }
-        } catch (error) {
-            console.error('Error fetching units:', error);
-        }
-    }
-
-    document.addEventListener('change', function(e) {
-        if (e.target.matches('.item-select')) {
-            fetchItemUnits(e.target);
-        }
-    });
-
-    // Customer Defaults Logic
-    const customerSelect = document.getElementById('id_customer');
-    let currentCustomerPriceList = null;
-    let currentCustomerTax1 = null;
-    let currentCustomerTax2 = null;
-    let currentCustomerIsTaxable = true;
-    let currentSectorOffers = [];
-
-    async function fetchCustomerDetails(customerId) {
-        if (!customerId) return;
-        try {
-            const response = await fetch(`/api/customers/${customerId}/`);
-            if (response.ok) {
-                const data = await response.json();
-                
-                // 1. Set Payment Type
-                if (data.customer_type) {
-                    paymentTypeSelect.value = data.customer_type;
-                    toggleCashBox();
-                }
-
-                // 2. Store defaults for lines
-                currentCustomerPriceList = data.price_list;
-                currentCustomerTax1 = data.default_tax1;
-                currentCustomerTax2 = data.default_tax2;
-                currentCustomerIsTaxable = data.is_taxable;
-
-                // 3. Fetch Sector Offers
-                if (data.sector) {
-                    const offerResponse = await fetch(`/api/quotations/active_for_sector/?sector_id=${data.sector}`);
-                    if (offerResponse.ok) {
-                        currentSectorOffers = await offerResponse.json();
-                    }
-                } else {
-                    currentSectorOffers = [];
-                }
-
-                // 4. Apply to existing lines
-                document.querySelectorAll('.line-row').forEach(row => {
-                    applyCustomerDefaultsToRow(row);
-                });
-            }
-        } catch (error) {
-            console.error('Error fetching customer details:', error);
-        }
-    }
-
-    function applyCustomerDefaultsToRow(row) {
-        const tax1Select = row.querySelector('.tax-select');
-        const tax2Select = row.querySelector('.tax-select2');
-        
-        if (currentCustomerIsTaxable) {
-            if (currentCustomerTax1) {
-                tax1Select.value = currentCustomerTax1;
-                fetchTaxRate(tax1Select, '.tax-rate');
-            }
-            if (currentCustomerTax2) {
-                tax2Select.value = currentCustomerTax2;
-                fetchTaxRate(tax2Select, '.tax-rate2');
-            }
-        } else {
-            tax1Select.value = '';
-            tax2Select.value = '';
-            fetchTaxRate(tax1Select, '.tax-rate');
-            fetchTaxRate(tax2Select, '.tax-rate2');
-        }
-        
-        // Re-price and re-discount item if already selected
-        const itemSelect = row.querySelector('.item-select');
-        if (itemSelect && itemSelect.value) {
-            fetchItemPrice(itemSelect);
-            applySectorDiscount(row, itemSelect.value);
-        }
-    }
-
-    function applySectorDiscount(row, itemId) {
-        const discInput = row.querySelector('.discount-input, input[name$="-discount_percent"]');
-        if (!discInput) return;
-
-        let totalDiscount = 0;
-        currentSectorOffers.forEach(offer => {
-            const line = offer.lines.find(l => l.item == itemId);
-            if (line) {
-                totalDiscount += parseFloat(line.discount_percent || 0);
             }
         });
 
-        if (totalDiscount > 0) {
-            discInput.value = totalDiscount.toFixed(2);
-        }
-        calculateInvoice();
-    }
-
-    async function fetchItemPrice(itemSelect) {
-        if (!itemSelect.value) return;
-        
-        const row = itemSelect.closest('.line-row');
-        const priceInput = row.querySelector('.price-input');
-
-        try {
-            // Priority 1: Price from Customer's PriceList
-            if (currentCustomerPriceList) {
-                const response = await fetch(`/api/price-lists/${currentCustomerPriceList}/item_price/?item_id=${itemSelect.value}`);
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.price) {
-                        priceInput.value = data.price;
-                        calculateInvoice();
-                        return;
-                    }
-                }
-            }
-            
-            // Priority 2: Fallback to Item's standard_price
-            const invResponse = await fetch(`/inventory/api/item/${itemSelect.value}/`);
-            if (invResponse.ok) {
-                const data = await invResponse.json();
-                if (data.standard_price) {
-                    priceInput.value = data.standard_price;
+        // Unit-select changes: Update price based on conversion factor
+        document.addEventListener('change', function(e) {
+            if (e.target.matches('.unit-select')) {
+                const row = e.target.closest('.line-row');
+                const priceInput = row.querySelector('.price-input');
+                if (priceInput && priceInput.dataset.basePrice) {
+                    const selectedOption = e.target.selectedOptions[0];
+                    const factor = selectedOption ? (parseFloat(selectedOption.dataset.factor) || 1) : 1;
+                    const basePrice = parseFloat(priceInput.dataset.basePrice) || 0;
+                    priceInput.value = (basePrice * factor).toFixed(2);
                     calculateInvoice();
                 }
             }
-        } catch (error) {
-            console.error('Error fetching item price:', error);
+        });
+
+        // Manual price edits: Keep base price in sync
+        document.addEventListener('input', function(e) {
+            if (e.target.matches('.price-input')) {
+                const priceInput = e.target;
+                const row = priceInput.closest('.line-row');
+                const unitSelect = row.querySelector('.unit-select');
+                const selectedOption = unitSelect ? unitSelect.selectedOptions[0] : null;
+                const factor = selectedOption ? (parseFloat(selectedOption.dataset.factor) || 1) : 1;
+                const typedPrice = parseFloat(priceInput.value) || 0;
+                priceInput.dataset.basePrice = (typedPrice / factor).toString();
+            }
+        });
+
+        // Payment Type & Due Date visibility and CashBox toggle logic
+        function handlePaymentTypeChange() {
+            if (!paymentTypeSelect) return;
+            
+            if (paymentTypeSelect.value === 'cash') {
+                if (cashBoxContainer) {
+                    cashBoxContainer.style.display = 'block';
+                    if (cashBoxSelect) cashBoxSelect.required = true;
+                }
+                if (dueDateContainer) {
+                    dueDateContainer.style.display = 'none';
+                }
+            } else {
+                if (cashBoxContainer) {
+                    cashBoxContainer.style.display = 'none';
+                    if (cashBoxSelect) cashBoxSelect.required = false;
+                }
+                if (dueDateContainer) {
+                    dueDateContainer.style.display = 'block';
+                }
+            }
+            
+            // Recalculate Due Date when Payment Type changes
+            calculateDueDate();
         }
-    }
 
-    if (customerSelect) {
-        customerSelect.addEventListener('change', (e) => fetchCustomerDetails(e.target.value));
-        if (customerSelect.value) fetchCustomerDetails(customerSelect.value);
-    }
-
-    // Update item-select listener to also fetch price and apply discount
-    document.addEventListener('change', function(e) {
-        if (e.target.matches('.item-select')) {
-            fetchItemUnits(e.target);
-            fetchItemPrice(e.target);
-            applySectorDiscount(e.target.closest('.line-row'), e.target.value);
+        if (paymentTypeSelect) {
+            paymentTypeSelect.addEventListener('change', handlePaymentTypeChange);
         }
-    });
-
-    // Sales Representative logic
-    const salesRepSelect = document.getElementById('id_sales_rep');
-
-    async function fetchAndApplyRepDetails(repId) {
-        if (!repId) {
-            unlockFields();
-            return;
+        if (dateInput) {
+            dateInput.addEventListener('change', calculateDueDate);
         }
+        handlePaymentTypeChange();
 
-        try {
-            const response = await fetch(`/sales/api/rep/${repId}/`);
-            if (response.ok) {
-                const data = await response.json();
+        // Add row logic
+        const addRowBtn = document.getElementById('addRow');
+        if (addRowBtn) {
+            addRowBtn.addEventListener('click', function() {
+                const table = document.getElementById('line-items');
+                const lastRow = table.querySelector('.line-row:last-child');
                 
-                if (data.cash_box_id) {
-                    cashBoxSelect.value = data.cash_box_id;
-                    lockField(cashBoxSelect);
+                const totalFormsInput = document.getElementById('id_lines-TOTAL_FORMS');
+                if (!totalFormsInput || !lastRow) return;
+                
+                const currentCount = parseInt(totalFormsInput.value);
+                const newRow = lastRow.cloneNode(true);
+                
+                newRow.querySelectorAll('input, select').forEach(input => {
+                    input.name = input.name.replace(`-${currentCount-1}-`, `-${currentCount}-`);
+                    input.id = input.id.replace(`-${currentCount-1}-`, `-${currentCount}-`);
+                    
+                    if (input.type !== 'checkbox') input.value = '';
+                    
+                    if (input.classList.contains('line-total-display')) input.value = '0.00';
+                    if (input.classList.contains('total-input')) input.value = '0.00';
+                    if (input.classList.contains('tax-rate')) input.value = '0.00';
+                    if (input.classList.contains('tax-rate2')) input.value = '0.00';
+                });
+                
+                table.appendChild(newRow);
+                totalFormsInput.value = currentCount + 1;
+                
+                // Explicitly clear/reset units for cloned row
+                const unitSelect = newRow.querySelector('.unit-select');
+                if (unitSelect) {
+                    unitSelect.innerHTML = '<option value="">---------</option>';
                 }
                 
-                document.querySelectorAll('.line-row').forEach(row => {
-                    const warehouseSelect = row.querySelector('select[name$="-warehouse"]');
+                {% if request.user.salesrepresentative %}
+                    const warehouseSelect = newRow.querySelector('select[name$="-warehouse"]');
                     if (warehouseSelect && data.warehouse_id) {
-                        warehouseSelect.value = data.warehouse_id;
-                        lockField(warehouseSelect);
+                        warehouseSelect.value = "{{ request.user.salesrepresentative.warehouse_id }}";
+                        warehouseSelect.style.pointerEvents = 'none';
+                        warehouseSelect.style.backgroundColor = '#f8f9fa';
                     }
-                });
+                {% endif %}
+                
+                applyCustomerDefaultsToRow(newRow);
+                updateItemSelectsState();
+            });
+        }
+
+        // Sales Representative logic on page load
+        const salesRepSelect = document.getElementById('id_sales_rep');
+        {% if request.user.salesrepresentative %}
+            if (salesRepSelect) {
+                salesRepSelect.style.pointerEvents = 'none';
+                salesRepSelect.style.backgroundColor = '#f8f9fa';
+                salesRepSelect.setAttribute('tabindex', '-1');
             }
-        } catch (error) {
-            console.error('Error fetching rep details:', error);
-        }
-    }
-
-    function lockField(el) {
-        el.style.pointerEvents = 'none';
-        el.style.backgroundColor = '#f8f9fa';
-        el.setAttribute('tabindex', '-1');
-    }
-
-    function unlockFields() {
-        if (cashBoxSelect) {
-            cashBoxSelect.style.pointerEvents = 'auto';
-            cashBoxSelect.style.backgroundColor = '';
-            cashBoxSelect.removeAttribute('tabindex');
-        }
-        
-        document.querySelectorAll('.line-row select[name$="-warehouse"]').forEach(el => {
-            el.style.pointerEvents = 'auto';
-            el.style.backgroundColor = '';
-            el.removeAttribute('tabindex');
-        });
-    }
-
-    if (salesRepSelect) salesRepSelect.addEventListener('change', (e) => fetchAndApplyRepDetails(e.target.value));
-
-    // Handle Current User as Rep
-    {% for rep in form.sales_rep.field.queryset %}
-        {% if rep.user_id == request.user.id %}
-            if (salesRepSelect && !salesRepSelect.value) {
-                salesRepSelect.value = "{{ rep.id }}";
-                lockField(salesRepSelect);
-                fetchAndApplyRepDetails("{{ rep.id }}");
+            if (cashBoxSelect) {
+                cashBoxSelect.style.pointerEvents = 'none';
+                cashBoxSelect.style.backgroundColor = '#f8f9fa';
+                cashBoxSelect.setAttribute('tabindex', '-1');
             }
         {% endif %}
-    {% endfor %}
-    
-    if (salesRepSelect && salesRepSelect.value) {
-        fetchAndApplyRepDetails(salesRepSelect.value);
-    }
 
-    document.getElementById('addRow').addEventListener('click', function() {
-        setTimeout(() => {
-            const table = document.getElementById('linesTable').getElementsByTagName('tbody')[0];
-            const newRow = table.querySelector('.line-row:last-child');
-            if (salesRepSelect && salesRepSelect.value) fetchAndApplyRepDetails(salesRepSelect.value);
-            applyCustomerDefaultsToRow(newRow);
-        }, 100);
+        async function fetchAndApplyRepDetails(repId) {
+            if (!repId) {
+                unlockFields();
+                return;
+            }
+
+            try {
+                const response = await fetch(`/sales/api/rep/${repId}/`);
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.cash_box_id) {
+                        cashBoxSelect.value = data.cash_box_id;
+                        lockField(cashBoxSelect);
+                    }
+                    
+                    document.querySelectorAll('.line-row').forEach(row => {
+                        const warehouseSelect = row.querySelector('select[name$="-warehouse"]');
+                        if (warehouseSelect && data.warehouse_id) {
+                            warehouseSelect.value = data.warehouse_id;
+                            lockField(warehouseSelect);
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error fetching rep details:', error);
+            }
+        }
+
+        function lockField(el) {
+            el.style.pointerEvents = 'none';
+            el.style.backgroundColor = '#f8f9fa';
+            el.setAttribute('tabindex', '-1');
+        }
+
+        function unlockFields() {
+            if (cashBoxSelect) {
+                cashBoxSelect.style.pointerEvents = 'auto';
+                cashBoxSelect.style.backgroundColor = '';
+                cashBoxSelect.removeAttribute('tabindex');
+            }
+            
+            document.querySelectorAll('.line-row select[name$="-warehouse"]').forEach(el => {
+                el.style.pointerEvents = 'auto';
+                el.style.backgroundColor = '';
+                el.removeAttribute('tabindex');
+            });
+        }
+
+        if (salesRepSelect) salesRepSelect.addEventListener('change', (e) => fetchAndApplyRepDetails(e.target.value));
+        if (salesRepSelect && salesRepSelect.value) fetchAndApplyRepDetails(salesRepSelect.value);
+
+        // Initial setup for existing rows: Filter/initialize units
+        document.querySelectorAll('.line-row').forEach(row => {
+            const itemSelect = row.querySelector('.item-select');
+            const unitSelect = row.querySelector('.unit-select');
+            if (itemSelect && unitSelect) {
+                const currentUnitId = unitSelect.value;
+                const itemId = itemSelect.value;
+                if (!itemId) {
+                    unitSelect.innerHTML = '<option value="">---------</option>';
+                } else {
+                    fetch(`/inventory/api/item/${itemId}/`)
+                        .then(response => {
+                            if (response.ok) return response.json();
+                        })
+                        .then(data => {
+                            if (data && data.units) {
+                                unitSelect.innerHTML = '';
+                                data.units.forEach(u => {
+                                    const option = document.createElement('option');
+                                    option.value = u.id;
+                                    option.text = u.name;
+                                    option.dataset.factor = u.factor;
+                                    if (u.id == currentUnitId) {
+                                        option.selected = true;
+                                    }
+                                    unitSelect.appendChild(option);
+                                });
+                            }
+                        })
+                        .catch(err => console.error('Error initializing units:', err));
+                }
+            }
+        });
+
+        updateItemSelectsState();
+        calculateInvoice();
     });
 </script>
 {% endblock %}

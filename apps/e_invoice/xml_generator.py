@@ -47,8 +47,6 @@ class XMLGenerator:
         Returns:
             str: XML string مطابق لمواصفات ETA
         """
-        from apps.sales.models import SalesInvoiceLine
-        
         lines = sales_invoice.lines.all()
         
         # بناء XML
@@ -60,7 +58,8 @@ class XMLGenerator:
         
         # Header Section
         xml_parts.append('<Header>')
-        xml_parts.append(f'<DocumentType>{XMLGenerator.DOCUMENT_TYPE['invoice']}</DocumentType>')
+        doc_type = company_settings.document_type_issue if hasattr(company_settings, 'document_type_issue') else 'invoice'
+        xml_parts.append(f'<DocumentType>{XMLGenerator.DOCUMENT_TYPE.get(doc_type, "I")}</DocumentType>')
         xml_parts.append(f'<DocumentTypeVersion>1.0</DocumentTypeVersion>')
         xml_parts.append(f'<CompanyName>{XMLGenerator._escape_xml(company_settings.company_name_ar)}</CompanyName>')
         xml_parts.append(f'<CompanyNameCode>{company_settings.tax_id}</CompanyNameCode>')
@@ -106,7 +105,7 @@ class XMLGenerator:
             xml_parts.append(f'<SequenceNumber>{idx}</SequenceNumber>')
             xml_parts.append(f'<ItemCode>{line.item.code}</ItemCode>')
             xml_parts.append(f'<ItemName>{XMLGenerator._escape_xml(line.item.name)}</ItemName>')
-            xml_parts.append(f'<UnitType>{line.unit.code if line.unit else 'EA'}</UnitType>')
+            xml_parts.append(f'<UnitType>{line.unit.code if line.unit else "EA"}</UnitType>')
             xml_parts.append(f'<Quantity>{XMLGenerator._format_decimal(line.quantity)}</Quantity>')
             xml_parts.append(f'<UnitValue>')
             xml_parts.append(f'<CurrencySoldAmount>{XMLGenerator._format_decimal(line.unit_price)}</CurrencySoldAmount>')
@@ -217,5 +216,5 @@ class XMLGenerator:
         if value is None:
             return '0'
         if isinstance(value, Decimal):
-            value = float(value)
-        return f'{value:.4f}'.rstrip('0').rstrip('.')
+            return f'{value:.4f}'.rstrip('0').rstrip('.')
+        return f'{float(value):.4f}'.rstrip('0').rstrip('.')

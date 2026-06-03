@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.views import View
 from ..models import FiscalYear
 from ..forms import FiscalYearForm
+from ..services import JournalService
 
 class FiscalYearListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = FiscalYear
@@ -29,7 +30,6 @@ class FiscalYearCloseView(LoginRequiredMixin, PermissionRequiredMixin, View):
     permission_required = 'core.change_fiscalyear'
     
     def post(self, request, pk):
-        from ..services import JournalService
         fiscal_year = get_object_or_404(FiscalYear, pk=pk)
         try:
             JournalService.close_fiscal_year(fiscal_year, request.user)
@@ -42,7 +42,6 @@ class FiscalYearPostOpeningView(LoginRequiredMixin, PermissionRequiredMixin, Vie
     permission_required = 'core.change_fiscalyear'
     
     def post(self, request, pk):
-        from ..services import JournalService
         fiscal_year = get_object_or_404(FiscalYear, pk=pk)
         try:
             entry = JournalService.post_opening_balances(fiscal_year, request.user)

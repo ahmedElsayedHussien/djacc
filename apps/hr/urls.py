@@ -8,7 +8,8 @@ from .views import (
     LoanListView, ApproveLoanView, RejectLoanView,
     ESSDashboardView, ESSPayslipListView, ESSLeaveCreateView, ESSLoanCreateView,
     DailyAttendanceView, LeaveBalanceCreateView, LeaveBalanceUpdateView,
-    EOSListView, EOSCreateView, PostEOSView
+    EOSListView, EOSCreateView, PostEOSView, employee_reset_password, employee_create_user,
+    setup_hr_defaults_view
 )
 from . import report_views
 
@@ -28,8 +29,11 @@ urlpatterns = [
     path('employees/departments/add/', DepartmentCreateView.as_view(), name='department-add'),
     path('employees/job-titles/add/', JobTitleCreateView.as_view(), name='jobtitle-add'),
     path('api/user-info/', get_user_info, name='api-user-info'),
+    path('setup-defaults/', setup_hr_defaults_view, name='setup-defaults'),
     path('employees/<int:pk>/', EmployeeDetailView.as_view(), name='employee-detail'),
     path('employees/<int:pk>/edit/', EmployeeUpdateView.as_view(), name='employee-edit'),
+    path('employees/<int:pk>/reset-password/', employee_reset_password, name='employee-reset-password'),
+    path('employees/<int:pk>/create-user/', employee_create_user, name='employee-create-user'),
 
     # Payroll
     path('payroll/', PayrollPeriodListView.as_view(), name='payroll-list'),
@@ -81,4 +85,3 @@ urlpatterns = [
     path('reports/employee-assets/', report_views.HREmployeeAssetsView.as_view(), name='report-employee-assets'),
     path('reports/eos-settlements/', report_views.HREOSSettlementsView.as_view(), name='report-eos-settlements'),
 ]
-

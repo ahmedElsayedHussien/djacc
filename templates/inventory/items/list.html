@@ -5,9 +5,11 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">الأصناف</h5>
+        {% if perms.inventory.add_item %}
         <a href="{% url 'inventory:item-create' %}" class="btn btn-primary">
             <i class="bi bi-plus-lg"></i> إضافة صنف جديد
         </a>
+        {% endif %}
     </div>
     <div class="card-body">
         <form method="get" class="row g-2 mb-3">
@@ -48,7 +50,7 @@
                         <td><strong>{{ item.current_stock|default:"0"|floatformat:0 }}</strong></td>
 
                         <td>
-                            <a href="{% url 'inventory:item-edit' item.pk %}" class="btn btn-sm btn-outline-primary">تعديل</a>
+                            {% if perms.inventory.change_item %}<a href="{% url 'inventory:item-edit' item.pk %}" class="btn btn-sm btn-outline-primary">تعديل</a>{% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -60,5 +62,6 @@
             </table>
         </div>
     </div>
+    {% include 'partials/pagination.html' %}
 </div>
 {% endblock %}

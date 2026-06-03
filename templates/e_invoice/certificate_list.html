@@ -6,9 +6,11 @@
 {% block content %}
 <div class="d-flex justify-content-between mb-4">
     <h5 class="fw-bold"><i class="bi bi-key me-2"></i>الشهادات المسجلة</h5>
+    {% if perms.e_invoice.add_certificate %}
     <a href="{% url 'e_invoice:certificate-create' %}" class="btn btn-primary">
         <i class="bi bi-plus-lg"></i> إضافة شهادة جديدة
     </a>
+    {% endif %}
 </div>
 
 <div class="row g-4">
@@ -45,9 +47,9 @@
                     <div class="text-muted small">
                         {% if cert.is_default %}<i class="bi bi-star-fill text-warning me-1"></i> الافتراضية{% endif %}
                     </div>
-                    <a href="{% url 'e_invoice:certificate-update' cert.pk %}" class="btn btn-sm btn-outline-secondary">
+                    {% if perms.e_invoice.change_certificate %}<a href="{% url 'e_invoice:certificate-update' cert.pk %}" class="btn btn-sm btn-outline-secondary">
                         <i class="bi bi-pencil"></i> تعديل
-                    </a>
+                    </a>{% endif %}
                 </div>
             </div>
         </div>
@@ -57,9 +59,10 @@
         <div class="alert alert-light text-center py-5 border-0 shadow-sm">
             <i class="bi bi-key display-1 text-muted opacity-25"></i>
             <p class="mt-3 text-muted">لا توجد شهادات رقمية مسجلة حالياً.</p>
-            <a href="{% url 'e_invoice:certificate-create' %}" class="btn btn-primary mt-2">أضف أول شهادة الآن</a>
+            {% if perms.e_invoice.add_certificate %}<a href="{% url 'e_invoice:certificate-create' %}" class="btn btn-primary mt-2">أضف أول شهادة الآن</a>{% endif %}
         </div>
     </div>
     {% endfor %}
 </div>
+{% include 'partials/pagination.html' %}
 {% endblock %}

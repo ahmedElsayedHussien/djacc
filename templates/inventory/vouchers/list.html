@@ -6,9 +6,11 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">قائمة الأذون</h5>
+        {% if perms.inventory.add_stockvoucher %}
         <a href="{% url 'inventory:voucher-create' %}" class="btn btn-primary">
             <i class="bi bi-plus-lg"></i> إنشاء إذن جديد
         </a>
+        {% endif %}
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -62,5 +64,6 @@
             </table>
         </div>
     </div>
+    {% include 'partials/pagination.html' %}
 </div>
 {% endblock %}

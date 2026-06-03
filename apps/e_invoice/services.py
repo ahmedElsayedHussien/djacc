@@ -6,6 +6,7 @@ import uuid
 import logging
 from datetime import datetime
 from decimal import Decimal
+from io import BytesIO
 from typing import Optional, Dict, Any
 
 from django.db import transaction
@@ -58,9 +59,11 @@ class EInvoiceService:
             dict: نتيجة العملية
         """
         try:
-            # 1. التحقق من الإعدادات
+            # 1. التحقق من الإعدادات (مع lock)
             if not company_settings:
-                company_settings = CompanySettings.objects.filter(is_active=True).first()
+                company_settings = CompanySettings.objects.filter(
+                    is_active=True
+                ).select_for_update().first()
             
             if not company_settings:
                 return {
@@ -72,7 +75,7 @@ class EInvoiceService:
             e_invoice_config = EInvoiceConfig.objects.filter(
                 company=company_settings,
                 is_active=True
-            ).first()
+            ).select_for_update().first()
             
             if not e_invoice_config:
                 return {
@@ -93,18 +96,17 @@ class EInvoiceService:
                 company=company_settings,
                 is_active=True,
                 is_default=True
-            ).first()
+            ).select_for_update().first()
             
             if not certificate:
-                logger.warning("No certificate found - using unsigned submission")
-                signed_xml = xml_content
-            else:
-                logger.info(f"Signing with certificate {certificate.name}")
-                signer = Signer(
-                    certificate_path=certificate.certificate_file.path,
-                    password=certificate.password_encrypted
-                )
-                signed_xml = signer.sign_xml(xml_content)
+                raise ValueError("لا توجد شهادة رقمية نشطة — يجب تحميل شهادة P12 قبل الإرسال")
+            
+            logger.info(f"Signing with certificate {certificate.name}")
+            signer = Signer(
+                certificate_path=certificate.certificate_file.path,
+                password=certificate.decrypt_password()
+            )
+            signed_xml = signer.sign_xml(xml_content)
             
             # 4. إنشاء سجل
             document_uuid = str(uuid.uuid4())
@@ -120,14 +122,19 @@ class EInvoiceService:
             )
             
             # 5. رفع للضريبة
-            api_client = create_api_client(e_invoice_config)
-            
+            api_client = TaxAPIClient(
+                base_url=e_invoice_config.api_base_url,
+                client_id=e_invoice_config.client_id,
+                client_secret=e_invoice_config.decrypt_client_secret(),
+                timeout=e_invoice_config.timeout_seconds
+            )
+
             logger.info(f"Submitting to Tax Authority API: {document_uuid}")
             api_response = api_client.submit_document(
                 signed_xml=signed_xml,
                 document_uuid=document_uuid
             )
-            
+
             if api_response.get('success'):
                 # 6. توليد QR Code
                 qr_buffer = None
@@ -141,13 +148,17 @@ class EInvoiceService:
                 # 7. تحديث السجل
                 log_entry.submission_id = api_response.get('submission_id')
                 log_entry.uuid = api_response.get('uuid', document_uuid)
-                log_entry.status = LogStatus(api_response.get('status', 'submitted'))
+                try:
+                    log_entry.status = LogStatus(api_response.get('status', 'submitted'))
+                except ValueError:
+                    log_entry.status = LogStatus.SUBMITTED
                 log_entry.submitted_at = datetime.now()
                 log_entry.raw_response = api_response.get('raw_response')
-                log_entry.qr_code.save(
-                    f'qr_{sales_invoice.number}.png',
-                    qr_buffer if qr_buffer else BytesIO()
-                )
+                if qr_buffer:
+                    log_entry.qr_code.save(
+                        f'qr_{sales_invoice.number}.png',
+                        qr_buffer
+                    )
                 log_entry.save()
                 
                 logger.info(f"Invoice {sales_invoice.number} submitted successfully")
@@ -178,10 +189,15 @@ class EInvoiceService:
                 
         except Exception as e:
             logger.exception(f"Unexpected error in submit_sales_invoice: {e}")
+            if 'log_entry' in locals():
+                log_entry.status = LogStatus.INVALID
+                log_entry.error_message = str(e)
+                log_entry.save(update_fields=['status', 'error_message'])
             return {
                 'success': False,
                 'error': 'UNEXPECTED_ERROR',
-                'message': str(e)
+                'message': str(e),
+                'log_id': log_entry.id if 'log_entry' in locals() else None
             }
     
     @staticmethod
@@ -208,7 +224,12 @@ class EInvoiceService:
         if not e_invoice_config:
             return {'success': False, 'message': 'لا توجد إعدادات API'}
         
-        api_client = create_api_client(e_invoice_config)
+        api_client = TaxAPIClient(
+            base_url=e_invoice_config.api_base_url,
+            client_id=e_invoice_config.client_id,
+            client_secret=e_invoice_config.decrypt_client_secret(),
+            timeout=e_invoice_config.timeout_seconds
+        )
         return api_client.query_document(log_entry.uuid)
     
     @staticmethod
@@ -223,19 +244,26 @@ class EInvoiceService:
                 'message': 'لا يوجد UUID للإلغاء'
             }
         
-        company_settings = CompanySettings.objects.filter(is_active=True).first()
+        company_settings = CompanySettings.objects.filter(
+            is_active=True
+        ).select_for_update().first()
         if not company_settings:
             return {'success': False, 'message': 'لا توجد إعدادات للشركة'}
         
         e_invoice_config = EInvoiceConfig.objects.filter(
             company=company_settings,
             is_active=True
-        ).first()
+        ).select_for_update().first()
         
         if not e_invoice_config:
             return {'success': False, 'message': 'لا توجد إعدادات API'}
         
-        api_client = create_api_client(e_invoice_config)
+        api_client = TaxAPIClient(
+            base_url=e_invoice_config.api_base_url,
+            client_id=e_invoice_config.client_id,
+            client_secret=e_invoice_config.decrypt_client_secret(),
+            timeout=e_invoice_config.timeout_seconds
+        )
         result = api_client.cancel_document(log_entry.uuid, reason)
         
         if result.get('success'):
@@ -245,5 +273,3 @@ class EInvoiceService:
         return result
 
 
-# Import BytesIO for the service
-from io import BytesIO

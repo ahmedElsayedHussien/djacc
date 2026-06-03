@@ -5,13 +5,16 @@
 {% block content %}
 <div class="d-flex justify-content-between mb-4">
     <div class="d-flex gap-2">
+        {% if perms.assets.add_asset %}
         <a href="{% url 'assets:asset-create' %}" class="btn btn-primary">
             <i class="bi bi-plus-lg"></i> إضافة أصل جديد
         </a>
+        {% endif %}
         <a href="{% url 'assets:category-list' %}" class="btn btn-outline-info">
             <i class="bi bi-tags"></i> تصنيفات الأصول
         </a>
     </div>
+    {% if perms.assets.add_depreciationlog %}
     <form method="post" action="{% url 'assets:run-depreciation' %}" onsubmit="return confirm('هل تريد تشغيل الإهلاك لكافة الأصول عن الشهر الحالي؟');">
         {% csrf_token %}
         <div class="d-flex align-items-center gap-3">
@@ -24,6 +27,7 @@
             </button>
         </div>
     </form>
+    {% endif %}
 </div>
 
 <div class="card shadow-sm">
@@ -68,7 +72,7 @@
                         <td>
                             <div class="btn-group btn-group-sm">
                                 <a href="{% url 'assets:asset-detail' asset.pk %}" class="btn btn-outline-primary"><i class="bi bi-eye"></i></a>
-                                <a href="{% url 'assets:asset-update' asset.pk %}" class="btn btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                                {% if perms.assets.change_asset %}<a href="{% url 'assets:asset-update' asset.pk %}" class="btn btn-outline-secondary"><i class="bi bi-pencil"></i></a>{% endif %}
                             </div>
                         </td>
                     </tr>
@@ -81,5 +85,6 @@
             </table>
         </div>
     </div>
+    {% include 'partials/pagination.html' %}
 </div>
 {% endblock %}

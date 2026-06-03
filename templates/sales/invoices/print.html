@@ -1,0 +1,145 @@
+{% load custom_filters %}
+<!DOCTYPE html>
+<html dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>طباعة فاتورة {{ invoice.number }}</title>
+<style>
+    @page { size: 80mm auto; margin: 0; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        font-family: 'Courier New', 'Courier', monospace;
+        font-size: 11px;
+        line-height: 1.4;
+        padding: 5px 8px;
+        width: 72mm;
+        color: #000;
+    }
+    .header { text-align: center; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px dashed #000; }
+    .header h2 { font-size: 14px; font-weight: bold; }
+    .header .info { font-size: 10px; }
+    .divider { border-top: 1px dashed #000; margin: 4px 0; }
+    .row { display: flex; justify-content: space-between; }
+    .items-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    .items-table th { text-align: center; font-weight: bold; border-bottom: 1px solid #000; padding: 2px 0; }
+    .items-table td { padding: 1px 0; vertical-align: top; }
+    .items-table .qty { text-align: center; }
+    .items-table .price { text-align: right; }
+    .items-table .total { text-align: right; }
+    .items-table .name { text-align: right; }
+    .totals { margin-top: 4px; padding-top: 4px; border-top: 1px dashed #000; }
+    .totals .line { display: flex; justify-content: space-between; font-size: 11px; }
+    .totals .grand-total { font-size: 14px; font-weight: bold; border-top: 1px solid #000; padding-top: 3px; }
+    .footer { text-align: center; margin-top: 8px; font-size: 9px; border-top: 1px dashed #000; padding-top: 4px; }
+    .barcode { text-align: center; font-family: 'Courier New', monospace; font-size: 14px; letter-spacing: 1px; margin: 4px 0; white-space: nowrap; }
+    .info-grid { font-size: 10px; }
+    .info-grid th { text-align: right; padding-left: 8px; white-space: nowrap; }
+    .info-grid td { text-align: right; }
+    .payment-badge { display: inline-block; padding: 1px 6px; border: 1px solid #000; font-weight: bold; font-size: 10px; }
+    @media print {
+        html, body { width: 72mm; }
+        .no-print { display: none !important; }
+    }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h2>{{ company_name|default:"شركتك" }}</h2>
+    <div class="info">{{ company_address|default:"" }}</div>
+    <div class="info">{{ company_tax_number|default:"" }}</div>
+    <div class="divider"></div>
+    <div style="font-size: 13px; font-weight: bold; margin: 2px 0;">فاتورة مبيعات</div>
+    <div class="info-grid" style="margin: 2px auto;">
+        <table style="margin: 0 auto;">
+            <tr><th>رقم الفاتورة:</th><td>{{ invoice.number }}</td></tr>
+            <tr><th>التاريخ:</th><td>{{ invoice.date|date:'Y-m-d' }}</td></tr>
+            <tr><th>تاريخ الاستحقاق:</th><td>{{ invoice.due_date|date:'Y-m-d' }}</td></tr>
+        </table>
+    </div>
+</div>
+
+<div class="info-grid">
+    <table style="width:100%;">
+        <tr><th style="width:35%;">العميل:</th><td>{{ invoice.customer.name }}</td></tr>
+        {% if invoice.customer.tax_number %}
+        <tr><th>الرقم الضريبي:</th><td>{{ invoice.customer.tax_number }}</td></tr>
+        {% endif %}
+        {% if invoice.customer.phone %}
+        <tr><th>الهاتف:</th><td>{{ invoice.customer.phone }}</td></tr>
+        {% endif %}
+        {% if invoice.sales_rep %}
+        <tr><th>المندوب:</th><td>{{ invoice.sales_rep.name }}</td></tr>
+        {% endif %}
+    </table>
+</div>
+
+<div class="divider"></div>
+
+<table class="items-table">
+    <thead>
+        <tr>
+            <th class="name" style="width:35%;">الصنف</th>
+            <th class="qty" style="width:12%;">الكمية</th>
+            <th class="price" style="width:18%;">السعر</th>
+            <th class="price" style="width:15%;">الخصم</th>
+            <th class="total" style="width:20%;">الإجمالي</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for line in invoice.lines.all %}
+        <tr>
+            <td class="name">{{ line.item.name }}</td>
+            <td class="qty">{{ line.quantity|floatformat:0 }}</td>
+            <td class="price">{{ line.unit_price|floatformat:2 }}</td>
+            <td class="price">{% if line.discount_percent %}{{ line.discount_percent }}%{% else %}-{% endif %}</td>
+            <td class="total">{{ line.total|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="divider"></div>
+
+<div class="totals">
+    <div class="line"><span>الإجمالي قبل الخصم:</span><span>{{ invoice.subtotal|floatformat:2 }}</span></div>
+    {% if invoice.discount_amount %}
+    <div class="line"><span>الخصم:</span><span>{{ invoice.discount_amount|floatformat:2 }}</span></div>
+    {% endif %}
+    {% if invoice.tax_amount %}
+    <div class="line"><span>الضريبة:</span><span>{{ invoice.tax_amount|floatformat:2 }}</span></div>
+    {% endif %}
+    <div class="line grand-total"><span>الصافي:</span><span>{{ invoice.total|floatformat:2 }}</span></div>
+</div>
+
+<div style="margin-top: 4px; text-align: center;">
+    <span class="payment-badge">{{ invoice.get_payment_type_display }}</span>
+</div>
+
+{% if invoice.notes %}
+<div style="margin-top: 4px; font-size: 9px; border-top: 1px dashed #000; padding-top: 3px;">
+    <strong>ملاحظات:</strong> {{ invoice.notes }}
+</div>
+{% endif %}
+
+<div class="barcode">* {{ invoice.number }} *</div>
+
+<div class="footer">
+    <div>شكراً لتعاملكم معنا</div>
+    {% if company_phone %}
+    <div style="font-size: 10px; margin-top: 4px; font-weight: bold;">للتواصل: {{ company_phone }}</div>
+    {% endif %}
+    <div style="font-size: 8px; margin-top: 4px;">{{ invoice.created_by.get_full_name|default:invoice.created_by.username }} | {{ invoice.created_at|date:'Y-m-d H:i' }}</div>
+</div>
+
+<div class="no-print" style="margin-top: 8px; text-align: center;">
+    <button onclick="window.print()" style="padding: 8px 30px; font-size: 14px; cursor: pointer;">طباعة</button>
+    <button onclick="window.close()" style="padding: 8px 20px; font-size: 14px; cursor: pointer;">إغلاق</button>
+</div>
+
+<script>
+    window.onload = function() { window.print(); }
+</script>
+
+</body>
+</html>

@@ -1,8 +1,15 @@
+import logging
+import time
 from datetime import date
+from django.conf import settings
 from django.db import transaction
 from django.contrib.contenttypes.models import ContentType
-from .models import JournalEntry, JournalLine, FiscalYear, AuditLog
+from django.db.models import Sum
+from decimal import Decimal
+from .models import Account, AccountType, JournalEntry, JournalLine, FiscalYear, TaxType, CostCenter, AuditLog
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 class JournalService:
     """
@@ -12,7 +19,6 @@ class JournalService:
     """
 
     @staticmethod
-    @transaction.atomic
     def create_entry(
         date_val: date,
         entry_type: str,
@@ -22,14 +28,93 @@ class JournalService:
         reference: str = '',
         created_by=None,
     ) -> JournalEntry:
-        from decimal import Decimal
+        # Filter out 0 value lines immediately
+        valid_lines = []
+        for l in lines:
+            if 'debit' in l and l['debit'] is not None:
+                l['debit'] = Decimal(str(l['debit'])).quantize(Decimal('0.01'))
+            if 'credit' in l and l['credit'] is not None:
+                l['credit'] = Decimal(str(l['credit'])).quantize(Decimal('0.01'))
+            if Decimal(str(l.get('debit', 0))) > 0 or Decimal(str(l.get('credit', 0))) > 0:
+                valid_lines.append(l)
+
+        if not valid_lines:
+            return None
+                
         # 1. Validate balance before creating anything
-        total_debit = sum(Decimal(str(l.get('debit', 0))) for l in lines)
-        total_credit = sum(Decimal(str(l.get('credit', 0))) for l in lines)
+        total_debit = sum(Decimal(str(l.get('debit') or 0)) for l in valid_lines)
+        total_credit = sum(Decimal(str(l.get('credit') or 0)) for l in valid_lines)
+        
+        # Auto-adjust tiny penny differences (up to 0.05 EGP) standard in ERP systems
+        diff = total_debit - total_credit
+        if diff != 0 and abs(diff) <= Decimal('0.05'):
+            largest_line = None
+            largest_val = Decimal('-1')
+            for l in valid_lines:
+                val = max(Decimal(str(l.get('debit', 0))), Decimal(str(l.get('credit', 0))))
+                if val > largest_val:
+                    largest_val = val
+                    largest_line = l
+                    
+            if largest_line:
+                if diff > 0:
+                    # Debit is larger: increase Credit or decrease Debit of the largest line
+                    if Decimal(str(largest_line.get('credit', 0))) > 0:
+                        largest_line['credit'] = Decimal(str(largest_line['credit'])) + diff
+                    else:
+                        largest_line['debit'] = Decimal(str(largest_line['debit'])) - diff
+                else:
+                    # Credit is larger: increase Debit or decrease Credit of the largest line
+                    if Decimal(str(largest_line.get('debit', 0))) > 0:
+                        largest_line['debit'] = Decimal(str(largest_line['debit'])) + abs(diff)
+                    else:
+                        largest_line['credit'] = Decimal(str(largest_line['credit'])) - abs(diff)
+                        
+            # Recalculate totals after adjustment
+            total_debit = sum(Decimal(str(l.get('debit', 0))) for l in valid_lines)
+            total_credit = sum(Decimal(str(l.get('credit', 0))) for l in valid_lines)
+            
         if total_debit != total_credit:
             raise ValueError(f'القيد غير متوازن: مدين={total_debit}, دائن={total_credit}')
 
-        fiscal_year = FiscalYear.objects.get(start_date__lte=date_val, end_date__gte=date_val, is_closed=False)
+        # Validate accounts: must be leaf, active, and log type mismatches
+        entry_type_account_types = {
+            JournalEntry.EntryType.SALE: ['asset', 'revenue', 'expense', 'liability'],
+            JournalEntry.EntryType.PURCHASE: ['asset', 'liability', 'expense'],
+            JournalEntry.EntryType.RECEIPT: ['asset', 'expense', 'liability'],
+            JournalEntry.EntryType.PAYMENT: ['asset', 'liability'],
+            JournalEntry.EntryType.EXPENSE: ['expense', 'asset', 'liability'],
+            JournalEntry.EntryType.CUSTODY: ['asset'],
+            JournalEntry.EntryType.INVENTORY: ['asset', 'expense', 'revenue', 'equity'],
+            JournalEntry.EntryType.BANK: ['asset', 'expense', 'revenue'],
+        }
+        expected_types = entry_type_account_types.get(entry_type, [])
+        for i, l in enumerate(valid_lines):
+            acc = l.get('account')
+            if acc and isinstance(acc, Account):
+                if not acc.is_leaf:
+                    raise ValueError(
+                        f'الحساب {acc.code} - {acc.name} ليس حساباً طرفياً (leaf) '
+                        f'ولا يمكن استخدامه في قيود اليومية'
+                    )
+                if not acc.is_active:
+                    raise ValueError(
+                        f'الحساب {acc.code} - {acc.name} غير نشط'
+                    )
+                if expected_types and acc.account_type not in expected_types:
+                    logger.warning(
+                        f'نوع الحساب {acc.code} - {acc.name} ({acc.account_type}) '
+                        f'قد لا يكون مناسباً لنوع القيد {entry_type}. '
+                        f'الأنواع المتوقعة: {expected_types}'
+                    )
+
+        try:
+            fiscal_year = FiscalYear.objects.get(start_date__lte=date_val, end_date__gte=date_val, is_closed=False)
+        except FiscalYear.DoesNotExist:
+            raise ValueError(
+                f'لا توجد سنة مالية مفتوحة تشمل التاريخ {date_val}. '
+                f'يرجى التأكد من إعداد السنة المالية أولاً.'
+            )
         
         entry = JournalEntry.objects.create(
             number=JournalService._generate_number(entry_type),
@@ -46,7 +131,7 @@ class JournalService:
             entry.object_id = source_document.pk
             entry.save()
 
-        for line_data in lines:
+        for line_data in valid_lines:
             JournalLine.objects.create(entry=entry, **line_data)
 
         entry.is_posted = True
@@ -54,7 +139,6 @@ class JournalService:
         entry.posted_at = timezone.now()
         entry.save()
         
-        from .services import AuditService
         AuditService.log(created_by, 'Create & Post', entry, f'إنشاء وترحيل قيد آلي رقم {entry.number}')
         
         return entry
@@ -62,6 +146,23 @@ class JournalService:
     @staticmethod
     @transaction.atomic
     def reverse_entry(entry: JournalEntry, date_val: date, created_by) -> JournalEntry:
+        # ✅ Guard: منع عكس قيد غير مرحّل أو قيد هو في الأصل إلغاء
+        if not entry.is_posted:
+            raise ValueError(f"لا يمكن عكس قيد غير مرحّل (رقم {entry.number})")
+
+        if entry.is_reversal:
+            raise ValueError(f"لا يمكن عكس القيد رقم {entry.number} لأنه قيد عكسي/إلغاء في الأصل.")
+        
+        # ✅ استخدام تحديث ذري (Atomic Update) لمنع Race Condition
+        # هذا يضمن حماية حقيقية حتى على SQLite الذي لا يدعم select_for_update
+        updated = JournalEntry.objects.filter(pk=entry.pk, is_reversed=False).update(is_reversed=True)
+        if updated == 0:
+            # إعادة جلب القيد لمعرفة من قام بعكسه مسبقاً
+            db_entry = JournalEntry.objects.get(pk=entry.pk)
+            raise ValueError(f"القيد رقم {entry.number} تم عكسه مسبقاً بواسطة القيد رقم {db_entry.reversed_by.number if db_entry.reversed_by else '?'}")
+        
+        entry.is_reversed = True
+
         reversal_lines = []
         for line in entry.lines.all():
             reversal_lines.append({
@@ -79,12 +180,10 @@ class JournalService:
             created_by=created_by,
         )
         
-        entry.is_reversed = True
         entry.reversed_by = new_entry
         entry.reversed_at = timezone.now()
-        entry.save()
+        entry.save(update_fields=['reversed_by', 'reversed_at'])
         
-        from .services import AuditService
         AuditService.log(created_by, 'Reverse', entry, f'عكس قيد رقم {entry.number} بواسطة القيد {new_entry.number}')
         
         return new_entry
@@ -114,7 +213,7 @@ class JournalService:
                     
                 return f"{prefix}{next_num:04d}"
         except Exception:
-            import time
+            logger.exception("فشل توليد رقم مستند بالتسلسل الطبيعي، استخدام الطابع الزمني")
             return f"{prefix}{int(time.time()*1000)}"
 
     @staticmethod
@@ -124,11 +223,8 @@ class JournalService:
         
         ✅ آمن للتكرار: يحذف القيد الافتتاحي القديم تلقائياً قبل إنشاء الجديد لمنع الازدواجية.
         """
-        from .models import Account
-        from decimal import Decimal
-        from .services import AuditService
 
-        accounts = Account.objects.filter(is_leaf=True, initial_balance__gt=0)
+        accounts = Account.objects.filter(is_leaf=True).exclude(initial_balance=0)
         if not accounts.exists():
             return None
             
@@ -178,11 +274,18 @@ class JournalService:
                     'description': 'رصيد افتتاحي وسيط (للموازنة)'
                 })
 
-        # ✅ حذف أي قيد افتتاحي سابق لهذه السنة المالية لمنع التكرار والازدواجية
-        JournalEntry.objects.filter(
+        # أرشفة أي قيد افتتاحي سابق بدلاً من حذفه (الحفاظ على سجل التدقيق)
+        old_entries = JournalEntry.objects.filter(
             fiscal_year=fiscal_year,
-            entry_type=JournalEntry.EntryType.OPENING
-        ).delete()
+            entry_type=JournalEntry.EntryType.OPENING,
+            is_reversed=False
+        )
+        for old_entry in old_entries:
+            old_entry.is_reversed = True
+            old_entry.description += ' (ملغي - استبدل بقيد افتتاحي جديد)'
+            old_entry.save(update_fields=['is_reversed', 'description'])
+            AuditService.log(created_by, 'Archive', old_entry,
+                             f'أرشفة قيد افتتاحي سابق للسنة {fiscal_year.name}')
 
         entry = JournalService.create_entry(
             date_val=fiscal_year.start_date,
@@ -204,13 +307,11 @@ class JournalService:
         1. تصفير حسابات الإيرادات والمصروفات.
         2. ترحيل الفرق إلى حساب أرباح/خسائر العام.
         """
-        from django.conf import settings
-        from .models import Account, JournalLine, AccountType
-        from django.db.models import Sum
-        from decimal import Decimal
-
-        if fiscal_year.is_closed:
+        # قفل السنة المالية لمنع سباق التنفيذ (Race Condition)
+        locked_fy = FiscalYear.objects.select_for_update().get(pk=fiscal_year.pk)
+        if locked_fy.is_closed:
             raise ValueError("هذه السنة المالية مغلقة بالفعل")
+        fiscal_year = locked_fy
 
         # 1. جلب كل حسابات الإيرادات والمصروفات (الورقة فقط)
         closing_accounts = Account.objects.filter(
@@ -298,20 +399,19 @@ class AccountService:
         """
         تنشئ شجرة الحسابات الافتراضية بالكامل (رئيسية وفرعية).
         """
-        from .models import Account, AccountType, TaxType
-        
         DEFAULT_ACCOUNTS = [
             # ── 1. أصول ──
             ('1', 'الأصول', AccountType.ASSET, None, False),
               ('11', 'الأصول المتداولة', AccountType.ASSET, '1', False),
                 ('111', 'النقدية والبنوك', AccountType.ASSET, '11', False),
-                  ('1111', 'خزائن النقدية', AccountType.ASSET, '111', True),
-                  ('1112', 'البنوك', AccountType.ASSET, '111', True),
+                  ('1111', 'خزائن النقدية', AccountType.ASSET, '111', False),
+                  ('1112', 'البنوك', AccountType.ASSET, '111', False),
                   ('1113', 'عهد نقدية / صندوق نثرية', AccountType.ASSET, '111', True), 
                   ('1114', 'نقدية بالطريق', AccountType.ASSET, '111', True), 
                 ('112', 'الذمم المدينة', AccountType.ASSET, '11', False),
                   ('1121', 'العملاء', AccountType.ASSET, '112', False),
                   ('1122', 'ضريبة خصم وتحصيل - مدينة', AccountType.ASSET, '112', True),
+                  ('1123', 'ذمم شركات التحصيل الوسيطة', AccountType.ASSET, '112', False),
                 ('113', 'المخزون', AccountType.ASSET, '11', False),
                   ('1131', 'مخزون البضاعة', AccountType.ASSET, '113', True),
                   ('1132', 'اعتمادات مستندية وبضاعة بالطريق', AccountType.ASSET, '113', True),
@@ -383,6 +483,7 @@ class AccountService:
                 ('422', 'خصم مكتسب (مشتريات)', AccountType.REVENUE, '42', True), 
                 ('423', 'أرباح فروق عملة', AccountType.REVENUE, '42', True),
                 ('424', 'فروقات تسوية وزيادة المخزون', AccountType.REVENUE, '42', True),
+                ('425', 'زيادة خزينة نقدية', AccountType.REVENUE, '42', True),
 
             # ── 5. مصروفات ──
             ('5', 'المصروفات', AccountType.EXPENSE, None, False),
@@ -397,9 +498,9 @@ class AccountService:
                   ('5214', 'حصة المنشأة في التأمينات الاجتماعية', AccountType.EXPENSE, '521', True),
                   ('5215', 'مصروف تعويضات ومكافأة نهاية الخدمة', AccountType.EXPENSE, '521', True),
                 ('522', 'مصروفات الإيجار', AccountType.EXPENSE, '52', True),
-                ('523', 'مصروفات المرافق', AccountType.EXPENSE, '52', True), 
-                ('524', 'مصروفات إدارية عامة', AccountType.EXPENSE, '52', True), 
-                ('525', 'مصروفات عمولات مناديب', AccountType.EXPENSE, '52', True),
+                ('523', 'مصروفات المرافق', AccountType.EXPENSE, '52', False), 
+                ('524', 'مصروفات إدارية عامة', AccountType.EXPENSE, '52', False), 
+                ('525', 'مصروفات عمولات مناديب', AccountType.EXPENSE, '52', False),
                 ('526', 'مصروف الإهلاك', AccountType.EXPENSE, '52', False), 
               ('53', 'مصروفات التمويل', AccountType.EXPENSE, '5', False),
                 ('531', 'عمولات ومصاريف بنكية', AccountType.EXPENSE, '53', True), 
@@ -408,6 +509,7 @@ class AccountService:
                 ('541', 'خسائر فروق عملة', AccountType.EXPENSE, '54', True),
                 ('542', 'عجز وتوالف المخزون', AccountType.EXPENSE, '54', True),
                 ('543', 'ديون معدومة', AccountType.EXPENSE, '54', True),
+                ('544', 'عجز خزينة نقدية', AccountType.EXPENSE, '54', True),
               ('55', 'ضرائب الدخل', AccountType.EXPENSE, '5', False),
                 ('551', 'مصروف ضريبة الدخل', AccountType.EXPENSE, '55', True),
         ]
@@ -435,11 +537,12 @@ class AccountService:
                 }
             )
             if not created:
-                # تحديث البيانات للحسابات الموجودة مسبقاً (Clean up)
+                # إذا كان للحساب أبناء بالفعل، لا يمكن أن يكون ورقي
+                has_children = acc.children.exists()
                 acc.name = name
                 acc.parent = parent
                 acc.account_type = acc_type
-                acc.is_leaf = is_leaf
+                acc.is_leaf = False if has_children else is_leaf
                 acc.initial_balance_type = expected_nature
                 acc.save()
                 
@@ -484,7 +587,6 @@ class AccountService:
         """
         تضيف أشهر الحسابات الفرعية (Leaf Accounts) التي تحتاجها أغلب الشركات
         """
-        from .models import Account, AccountType
         
         common_accounts = [
             ('111101', 'الخزينة الرئيسية', AccountType.ASSET, '1111'),
@@ -522,7 +624,6 @@ class AccountService:
         تنشئ/تحدث مراكز التكلفة الـ 13 الأساسية دون حذف أي مراكز يدوية أخرى
         لضمان مرونة النظام في المستقبل.
         """
-        from .models import CostCenter
         
         DEFAULT_CC = [
             ('10', 'الإدارة العامة', CostCenter.CenterType.ADMIN, None, True),
@@ -591,7 +692,6 @@ class DocumentService:
         Avoids ID dependency which causes issues after deletions.
         Example: generate_number(SalesInvoice, 'SINV') -> 'SINV-20260508-00001'
         """
-        from django.utils import timezone
         today = timezone.now().strftime('%Y%m%d')
         prefix_with_date = f'{prefix}-{today}'
 

@@ -32,6 +32,7 @@
                             {% endif %}
                         </td>
                     </tr>
+                    {% if perms.core.view_journalentry and not request.user.salesrepresentative %}
                     <tr><th>القيد المحاسبي:</th>
                         <td>
                             {% if invoice.journal_entry %}
@@ -41,15 +42,30 @@
                             {% endif %}
                         </td>
                     </tr>
+                    {% endif %}
                 </table>
 
                 {% if invoice.status == 'draft' %}
+                {% if perms.sales.change_salesinvoice or request.user.salesrepresentative and invoice.sales_rep == request.user.salesrepresentative %}
+                <div class="mt-3 d-grid gap-2">
+                    <a href="{% url 'sales:invoice-edit' invoice.pk %}" class="btn btn-warning">
+                        <i class="bi bi-pencil"></i> تعديل الفاتورة
+                    </a>
+                </div>
                 <form method="post" action="{% url 'sales:invoice-post' invoice.pk %}" class="mt-3">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-success w-100" onclick="return confirm('هل أنت متأكد من ترحيل الفاتورة؟ لن يمكنك التعديل بعد الترحيل.');">
                         <i class="bi bi-check-circle"></i> ترحيل الفاتورة
                     </button>
                 </form>
+                {% endif %}
+                {% endif %}
+                {% if invoice.status == 'posted' %}
+                <div class="mt-3 d-grid gap-2">
+                    <a href="{% url 'sales:invoice-print' invoice.pk %}" target="_blank" class="btn btn-outline-primary">
+                        <i class="bi bi-printer"></i> طباعة الفاتورة
+                    </a>
+                </div>
                 {% endif %}
             </div>
         </div>

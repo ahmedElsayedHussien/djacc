@@ -20,6 +20,9 @@
                     <i class="bi bi-search me-1"></i> عرض التقرير
                 </button>
             </div>
+            <div class="col-md-2">
+                <button type="submit" name="export" value="xlsx" class="btn btn-success w-100">Excel</button>
+            </div>
         </form>
     </div>
 </div>
@@ -49,7 +52,12 @@
                     <tr>
                         <td><strong>{{ item_ledger.item.name }}</strong><br><small class="text-muted">{{ item_ledger.item.code }}</small></td>
                         <td>{{ item_ledger.item.category.name }}</td>
-                        <td>{{ item_ledger.warehouse.name }}</td>
+                        <td>
+                            {{ item_ledger.warehouse.name }}
+                            {% if item_ledger.warehouse.is_returns %}
+                            <span class="badge bg-danger rounded-pill px-2 py-1 ms-1" style="font-size: 0.75rem;">توالف/مرتجع</span>
+                            {% endif %}
+                        </td>
                         <td class="text-center">{{ item_ledger.quantity_on_hand|floatformat:0 }}</td>
                         <td class="text-end">{{ item_ledger.average_cost|floatformat:2 }}</td>
                         <td class="text-end fw-bold">{{ item_ledger.total_value|floatformat:2 }}</td>

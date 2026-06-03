@@ -1,15 +1,19 @@
+import logging
 from django.views.generic import TemplateView
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
+from apps.core.mixins import PermRequiredMixin
 from datetime import date
 from .models import Supplier
 from apps.reports.services import ReportService
 from django.core.paginator import Paginator
 
-class PurchaseReportDashboardView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+logger = logging.getLogger(__name__)
+
+class PurchaseReportDashboardView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'purchases/reports/dashboard_links.html'
     permission_required = 'purchases.view_purchaseinvoice'
 
-class PurchaseSummaryReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class PurchaseSummaryReportView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'purchases/reports/summary.html'
     permission_required = 'purchases.view_purchaseinvoice'
 
@@ -26,7 +30,7 @@ class PurchaseSummaryReportView(LoginRequiredMixin, PermissionRequiredMixin, Tem
         context['to_date'] = to_date_obj
         return context
 
-class ItemPurchaseCostReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class ItemPurchaseCostReportView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'purchases/reports/item_cost.html'
     permission_required = 'purchases.view_purchaseinvoice'
 
@@ -47,7 +51,7 @@ class ItemPurchaseCostReportView(LoginRequiredMixin, PermissionRequiredMixin, Te
         context['to_date'] = to_date_obj
         return context
 
-class SupplierBalancesReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class SupplierBalancesReportView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'purchases/reports/supplier_balances.html'
     permission_required = 'purchases.view_supplier'
 
@@ -68,7 +72,7 @@ class SupplierBalancesReportView(LoginRequiredMixin, PermissionRequiredMixin, Te
         context['to_date'] = to_date_obj
         return context
 
-class SupplierAgingReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class SupplierAgingReportView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'purchases/reports/aging.html'
     permission_required = 'purchases.view_supplier'
 
@@ -81,12 +85,12 @@ class SupplierAgingReportView(LoginRequiredMixin, PermissionRequiredMixin, Templ
         page_number = self.request.GET.get('page')
         context['report'] = paginator.get_page(page_number)
         
-        context['suppliers'] = Supplier.objects.all()
+        context['suppliers'] = Supplier.objects.all().select_related('account')
         if supplier_id:
             context['selected_supplier'] = int(supplier_id)
         return context
 
-class OpenPurchaseOrdersReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class OpenPurchaseOrdersReportView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'purchases/reports/open_orders.html'
     permission_required = 'purchases.view_purchaseorder'
 
@@ -95,7 +99,7 @@ class OpenPurchaseOrdersReportView(LoginRequiredMixin, PermissionRequiredMixin, 
         context['report'] = ReportService.open_purchase_orders_report()
         return context
 
-class PurchaseReturnAnalysisReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+class PurchaseReturnAnalysisReportView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
     template_name = 'purchases/reports/returns_analysis.html'
     permission_required = 'purchases.view_purchasereturn'
 

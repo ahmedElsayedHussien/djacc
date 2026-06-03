@@ -17,8 +17,11 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <button type="submit" class="btn btn-primary w-100">عرض الأرصدة</button>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" name="export" value="xlsx" class="btn btn-success w-100">Excel</button>
             </div>
         </form>
     </div>
@@ -46,7 +49,12 @@
                 <tbody>
                     {% for entry in report.items %}
                     <tr {% if entry.quantity_on_hand <= entry.item.minimum_stock %}class="table-warning"{% endif %}>
-                        <td>{{ entry.warehouse.name }}</td>
+                        <td>
+                            {{ entry.warehouse.name }}
+                            {% if entry.warehouse.is_returns %}
+                            <span class="badge bg-danger rounded-pill px-2 py-1 ms-1" style="font-size: 0.75rem;">توالف/مرتجع</span>
+                            {% endif %}
+                        </td>
                         <td><code>{{ entry.item.code }}</code></td>
                         <td>{{ entry.item.name }}</td>
                         <td>{{ entry.item.base_unit.name }}</td>

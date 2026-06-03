@@ -5,9 +5,11 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">قائمة القطاعات</h5>
+        {% if perms.sales.add_customersector %}
         <a href="{% url 'sales:sector-create' %}" class="btn btn-primary">
             <i class="bi bi-plus-lg"></i> إضافة قطاع جديد
         </a>
+        {% endif %}
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -25,7 +27,9 @@
                         <td>{{ sector.name }}</td>
                         <td>{{ sector.description|default:"-" }}</td>
                         <td>
+                            {% if perms.sales.change_customersector %}
                             <a href="{% url 'sales:sector-edit' sector.id %}" class="btn btn-sm btn-outline-primary">تعديل</a>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -37,5 +41,6 @@
             </table>
         </div>
     </div>
+    {% include 'partials/pagination.html' %}
 </div>
 {% endblock %}

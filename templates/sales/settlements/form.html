@@ -55,11 +55,22 @@
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">أو استلام في بنك</label>
-                            <select name="to_bank" class="form-select" disabled>
-                                <option value="">(قريباً - البنوك)</option>
-                            </select>
-                            <small class="text-muted">ملاحظة: اختر الخزنة أو البنك، وليس كلاهما.</small>
+                            <label class="form-label">أو استلام في بنك / محفظة</label>
+                            <div class="input-group">
+                                <select name="to_bank" class="form-select border-primary" style="border-right-radius: 0;">
+                                    <option value="">-- بنك --</option>
+                                    {% for bank in banks %}
+                                    <option value="{{ bank.id }}">{{ bank.bank_name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <select name="to_wallet" class="form-select border-success">
+                                    <option value="">-- محفظة --</option>
+                                    {% for wallet in wallets %}
+                                    <option value="{{ wallet.id }}">{{ wallet.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <small class="text-muted">اختر الخزنة، أو البنك، أو المحفظة فقط.</small>
                         </div>
                     </div>
 

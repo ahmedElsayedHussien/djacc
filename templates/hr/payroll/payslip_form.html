@@ -75,19 +75,19 @@
                                         {% for item_form in items_formset %}
                                         <tr class="item-row">
                                             {{ item_form.id }}
-                                            <td>
+                                            <td data-label="اسم البند">
                                                 {{ item_form.name }}
                                                 {% if item_form.name.errors %}<div class="text-danger small">{{ item_form.name.errors }}</div>{% endif %}
                                             </td>
-                                            <td>
+                                            <td data-label="المبلغ">
                                                 {{ item_form.amount }}
                                                 {% if item_form.amount.errors %}<div class="text-danger small">{{ item_form.amount.errors }}</div>{% endif %}
                                             </td>
-                                            <td>
+                                            <td data-label="النوع">
                                                 {{ item_form.item_type }}
                                                 {% if item_form.item_type.errors %}<div class="text-danger small">{{ item_form.item_type.errors }}</div>{% endif %}
                                             </td>
-                                            <td class="text-center align-middle">
+                                            <td data-label="حذف" class="text-center align-middle">
                                                 {% if items_formset.can_delete %}
                                                     {{ item_form.DELETE }}
                                                 {% endif %}
@@ -130,15 +130,15 @@
 <!-- Template for new row -->
 <template id="empty-row-template">
     <tr class="item-row">
-        <td><input type="text" name="items-__prefix__-name" class="form-control item-name" placeholder="اسم البند" maxlength="100" id="id_items-__prefix__-name"></td>
-        <td><input type="number" name="items-__prefix__-amount" class="form-control item-amount" placeholder="المبلغ" step="0.01" id="id_items-__prefix__-amount"></td>
-        <td>
+        <td data-label="اسم البند"><input type="text" name="items-__prefix__-name" class="form-control item-name" placeholder="اسم البند" maxlength="100" id="id_items-__prefix__-name"></td>
+        <td data-label="المبلغ"><input type="number" name="items-__prefix__-amount" class="form-control item-amount" placeholder="المبلغ" step="0.01" id="id_items-__prefix__-amount"></td>
+        <td data-label="النوع">
             <select name="items-__prefix__-item_type" class="form-select item-type" id="id_items-__prefix__-item_type">
                 <option value="addition">إضافة (استحقاق)</option>
                 <option value="deduction">خصم (استقطاع)</option>
             </select>
         </td>
-        <td class="text-center align-middle">
+        <td data-label="حذف" class="text-center align-middle">
             <input type="checkbox" name="items-__prefix__-DELETE" id="id_items-__prefix__-DELETE">
         </td>
     </tr>
