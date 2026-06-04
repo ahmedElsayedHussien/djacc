@@ -10,6 +10,9 @@ urlpatterns = [
     path('suppliers/create/', views.SupplierCreateView.as_view(), name='supplier-create'),
     path('suppliers/<int:pk>/', views.SupplierDetailView.as_view(), name='supplier-detail'),
     path('suppliers/<int:pk>/edit/', views.SupplierUpdateView.as_view(), name='supplier-edit'),
+    path('api/supplier/<int:pk>/', views.supplier_api, name='api-supplier'),
+    path('api/supplier/<int:supplier_id>/invoices/', views.SupplierInvoicesAPIView.as_view(), name='supplier-invoices-api'),
+    path('api/invoice/<int:invoice_id>/lines/', views.PurchaseInvoiceLinesAPIView.as_view(), name='invoice-lines-api'),
     
     # Invoices
     path('invoices/', views.PurchaseInvoiceListView.as_view(), name='invoice-list'),
@@ -27,6 +30,7 @@ urlpatterns = [
     path('returns/create/', views.PurchaseReturnCreateView.as_view(), name='return-create'),
     path('returns/<int:pk>/', views.PurchaseReturnDetailView.as_view(), name='return-detail'),
     path('returns/<int:pk>/post/', views.PurchaseReturnPostView.as_view(), name='return-post'),
+    path('returns/<int:pk>/delete/', views.PurchaseReturnDeleteView.as_view(), name='return-delete'),
 
     # Reports
     path('reports/', report_views.PurchaseReportDashboardView.as_view(), name='report-dashboard'),
@@ -36,4 +40,5 @@ urlpatterns = [
     path('reports/aging/', report_views.SupplierAgingReportView.as_view(), name='report-aging'),
     path('reports/open-orders/', report_views.OpenPurchaseOrdersReportView.as_view(), name='report-open-orders'),
     path('reports/returns-analysis/', report_views.PurchaseReturnAnalysisReportView.as_view(), name='report-returns-analysis'),
+    path('reports/item-price-fluctuations/', report_views.ItemPriceFluctuationReportView.as_view(), name='report-item-price-fluctuations'),
 ]

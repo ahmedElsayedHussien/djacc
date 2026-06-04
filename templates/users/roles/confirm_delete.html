@@ -17,6 +17,15 @@
                 </p>
                 <form method="post" class="mt-4 d-flex justify-content-center gap-3">
                     {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                     <a href="{% url 'users:role-list' %}" class="btn btn-outline-secondary px-4">إلغاء وتراجع</a>
                     <button type="submit" class="btn btn-danger px-4 fw-bold">نعم، احذف الدور</button>
                 </form>

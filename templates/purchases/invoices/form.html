@@ -5,6 +5,15 @@
 {% include 'partials/_form_errors.html' %}
 <form method="post" id="invoiceForm">
     {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
     <div class="card mb-4">
         <div class="card-body">
             <div class="row g-3">
@@ -52,14 +61,15 @@
             <table class="table table-bordered" id="linesTable">
                 <thead class="table-light">
                     <tr>
-                        <th style="width: 25%;">الصنف</th>
+                        <th style="width: 20%;">الصنف</th>
                         <th style="width: 10%;">الوحدة</th>
                         <th>المستودع</th>
-                        <th style="width: 10%;">الكمية</th>
-                        <th style="width: 12%;">تكلفة الوحدة</th>
+                        <th style="width: 8%;">الكمية</th>
+                        <th style="width: 10%;">تكلفة الوحدة</th>
+                        <th style="width: 8%;">خصم %</th>
                         <th style="width: 8%;">ضريبة 1</th>
                         <th style="width: 8%;">ضريبة 2</th>
-                        <th style="width: 15%;">الإجمالي</th>
+                        <th style="width: 12%;">الإجمالي</th>
                         <th>حذف</th>
                     </tr>
                 </thead>
@@ -71,6 +81,7 @@
                         <td data-label="المستودع">{{ line_form.warehouse }}</td>
                         <td data-label="الكمية">{{ line_form.quantity }}</td>
                         <td data-label="تكلفة الوحدة">{{ line_form.unit_cost }}</td>
+                        <td data-label="خصم %">{{ line_form.discount_percent }}</td>
                         <td data-label="ضريبة 1">
                             {{ line_form.tax_type }}
                             <input type="hidden" name="{{ line_form.prefix }}-tax_percent" id="id_{{ line_form.prefix }}-tax_percent" class="tax-rate" value="{{ line_form.tax_percent.value|default:'0' }}">
@@ -97,22 +108,33 @@
     </div>
 
     <div class="row">
-        <div class="col-md-8"></div>
-        <div class="col-md-4">
-            <div class="card">
+        <div class="col-md-7">
+            <div class="card h-100">
+                <div class="card-body">
+                    <label class="form-label fw-bold">ملاحظات</label>
+                    {{ form.notes }}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-5">
+            <div class="card totals-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between mb-2">
-                        <span>الإجمالي قبل الضريبة:</span>
+                        <span class="fw-bold">إجمالي قيمة الفاتورة:</span>
                         <span id="subtotal">0.00</span>
                     </div>
+                    <div class="d-flex justify-content-between mb-2 text-danger">
+                        <span class="fw-bold">إجمالي الخصم:</span>
+                        <span id="discountTotal">0.00</span>
+                    </div>
                     <div class="d-flex justify-content-between mb-2 text-primary">
-                        <span>إجمالي الضرائب:</span>
+                        <span class="fw-bold">إجمالي الضريبة:</span>
                         <span id="taxTotal">0.00</span>
                     </div>
                     <hr>
                     <div class="d-flex justify-content-between">
-                        <span class="h5 fw-bold">الصافي النهائي:</span>
-                        <span class="h5 fw-bold text-success" id="grandTotal">0.00</span>
+                        <span class="h4 fw-bold">الصافي النهائي:</span>
+                        <span class="h4 fw-bold text-success" id="grandTotal">0.00</span>
                     </div>
                 </div>
             </div>
@@ -129,21 +151,33 @@
 {% block extra_js %}
 <script>
     // Professional logic for Purchases: Capitalize Table/Customs, VAT on (Subtotal + Table), WHT sub
+    document.addEventListener('input', function(e) {
+        if (e.target.matches('.qty-input, .price-input, .discount-input')) {
+            calculateInvoice();
+        }
+    });
+
     function calculateInvoice() {
-        let subtotal = 0;
+        let grossTotal = 0;
+        let discountTotal = 0;
         let taxTotalAdd = 0;
         let taxTotalSub = 0;
         
         document.querySelectorAll('.line-row').forEach(row => {
             const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
             const price = parseFloat(row.querySelector('.price-input').value) || 0;
+            const discountPctInput = row.querySelector('.discount-input');
+            const discountPct = discountPctInput ? (parseFloat(discountPctInput.value) || 0) : 0;
             
             const tax1Select = row.querySelector('.tax-select');
             const tax2Select = row.querySelector('.tax-select2');
             const tax1Rate = parseFloat(row.querySelector('.tax-rate').value) || 0;
             const tax2Rate = parseFloat(row.querySelector('.tax-rate2').value) || 0;
             
-            const lineNet = qty * price;
+            // Apply discount
+            const grossLine = qty * price;
+            const discLine = grossLine * (discountPct / 100);
+            const lineNet = grossLine - discLine;
             
             const tax1Cat = tax1Select ? tax1Select.selectedOptions[0]?.dataset.category : '';
             const tax2Cat = tax2Select ? tax2Select.selectedOptions[0]?.dataset.category : '';
@@ -181,14 +215,16 @@
             const totalInput = row.querySelector('.line-total');
             if (totalInput) totalInput.value = lineTotal.toFixed(2);
             
-            subtotal += lineNet;
+            grossTotal += grossLine;
+            discountTotal += discLine;
             taxTotalAdd += lineTaxAdd;
             taxTotalSub += lineTaxSub;
         });
         
-        document.getElementById('subtotal').innerText = subtotal.toLocaleString(undefined, {minimumFractionDigits: 2});
-        document.getElementById('taxTotal').innerText = (taxTotalAdd - taxTotalSub).toLocaleString(undefined, {minimumFractionDigits: 2});
-        document.getElementById('grandTotal').innerText = (subtotal + taxTotalAdd - taxTotalSub).toLocaleString(undefined, {minimumFractionDigits: 2});
+        document.getElementById('subtotal').innerText = grossTotal.toFixed(2);
+        document.getElementById('discountTotal').innerText = discountTotal.toFixed(2);
+        document.getElementById('taxTotal').innerText = (taxTotalAdd - taxTotalSub).toFixed(2);
+        document.getElementById('grandTotal').innerText = (grossTotal - discountTotal + taxTotalAdd - taxTotalSub).toFixed(2);
     }
 
     async function fetchTaxRate(taxSelect, rateInputClass) {
@@ -225,7 +261,7 @@
     });
 
     document.addEventListener('input', function(e) {
-        if (e.target.matches('.qty-input, .price-input')) {
+        if (e.target.matches('.qty-input, .price-input, .discount-input')) {
             calculateInvoice();
         }
     });
@@ -240,6 +276,12 @@
     });
 
     document.getElementById('addRow').addEventListener('click', function() {
+        const supplier = document.getElementById('id_supplier').value;
+        if (!supplier) {
+            alert('برجاء اختيار المورد أولاً قبل إضافة أصناف');
+            return;
+        }
+
         const table = document.getElementById('linesTable').getElementsByTagName('tbody')[0];
         const lastRow = table.querySelector('.line-row:last-child');
         const newRow = lastRow.cloneNode(true);
@@ -257,15 +299,83 @@
         totalForms.value = currentCount + 1;
     });
 
+    // Fetch units based on item selection
+    async function fetchItemUnits(itemSelect) {
+        const row = itemSelect.closest('tr');
+        const unitSelect = row.querySelector('.unit-select');
+        if (!unitSelect) return;
+        
+        const itemId = itemSelect.value;
+        const currentUnit = unitSelect.value;
+        
+        if (!itemId) {
+            unitSelect.innerHTML = '<option value="">---------</option>';
+            return;
+        }
+
+        try {
+            const response = await fetch(`/inventory/api/item/${itemId}/`);
+            if (response.ok) {
+                const data = await response.json();
+                unitSelect.innerHTML = '<option value="">---------</option>';
+                data.units.forEach(u => {
+                    const option = document.createElement('option');
+                    option.value = u.id;
+                    option.text = u.name;
+                    unitSelect.appendChild(option);
+                });
+                
+                if (currentUnit && Array.from(unitSelect.options).some(opt => opt.value === currentUnit)) {
+                    unitSelect.value = currentUnit;
+                } else if (data.default_unit_id) {
+                    unitSelect.value = data.default_unit_id;
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching units:', error);
+        }
+    }
+
+    document.addEventListener('change', function(e) {
+        if (e.target.matches('.item-select')) {
+            const supplier = document.getElementById('id_supplier').value;
+            if (!supplier) {
+                e.target.value = '';
+                alert('برجاء اختيار المورد أولاً');
+                return;
+            }
+            fetchItemUnits(e.target);
+        }
+    });
+
+    // Initialize units for existing rows on load
+    document.querySelectorAll('.item-select').forEach(select => {
+        if (select.value) {
+            setTimeout(() => fetchItemUnits(select), 100);
+        }
+    });
+
     function togglePaymentType() {
         const paymentType = document.getElementById('id_payment_type').value;
         const methodDiv = document.getElementById('payment_method_div');
         const cashDiv = document.getElementById('cash_box_div');
         const bankDiv = document.getElementById('bank_account_div');
         const paymentMethod = document.getElementById('id_payment_method').value;
+        const dueDateInput = document.getElementById('id_due_date');
         
+        // Lock due date permanently for ALL payment types
+        if (dueDateInput) {
+            dueDateInput.readOnly = true;
+            dueDateInput.style.pointerEvents = 'none';
+            dueDateInput.style.backgroundColor = '#e9ecef';
+            dueDateInput.tabIndex = -1;
+            dueDateInput.addEventListener('keydown', preventInput);
+            dueDateInput.addEventListener('click', preventInput);
+        }
+
         if (paymentType === 'cash') {
             methodDiv.style.display = 'block';
+
             if (paymentMethod === 'bank') {
                 cashDiv.style.display = 'none';
                 bankDiv.style.display = 'block';
@@ -279,10 +389,66 @@
             bankDiv.style.display = 'none';
         }
     }
+    
+    function preventInput(e) {
+        e.preventDefault();
+        return false;
+    }
 
     document.getElementById('id_payment_type').addEventListener('change', togglePaymentType);
     document.getElementById('id_payment_method').addEventListener('change', togglePaymentType);
     togglePaymentType();
+
+    // Fetch supplier data to update payment_type and due_date
+    let supplierTermsDays = 0;
+    
+    async function fetchSupplierData() {
+        const supplierId = document.getElementById('id_supplier').value;
+        if (!supplierId) {
+            supplierTermsDays = 0;
+            return;
+        }
+        try {
+            const response = await fetch(`/purchases/api/supplier/${supplierId}/`);
+            if (response.ok) {
+                const data = await response.json();
+                supplierTermsDays = data.payment_terms_days || 0;
+                
+                // Update payment type
+                const paymentTypeSelect = document.getElementById('id_payment_type');
+                if (paymentTypeSelect && data.payment_type) {
+                    paymentTypeSelect.value = data.payment_type;
+                    togglePaymentType();
+                }
+                updateDueDate();
+            }
+        } catch (error) {
+            console.error('Error fetching supplier data:', error);
+        }
+    }
+
+    function updateDueDate() {
+        const dateInput = document.getElementById('id_date').value;
+        const paymentType = document.getElementById('id_payment_type').value;
+        const dueDateInput = document.getElementById('id_due_date');
+        
+        if (!dateInput || !dueDateInput) return;
+        
+        const baseDate = new Date(dateInput);
+        if (isNaN(baseDate.getTime())) return;
+
+        if (paymentType === 'cash') {
+            dueDateInput.value = dateInput; // Same day
+        } else {
+            // Credit
+            baseDate.setDate(baseDate.getDate() + supplierTermsDays);
+            dueDateInput.value = baseDate.toISOString().split('T')[0];
+        }
+    }
+
+    document.getElementById('id_supplier').addEventListener('change', fetchSupplierData);
+    document.getElementById('id_date').addEventListener('change', updateDueDate);
+    document.getElementById('id_payment_type').addEventListener('change', updateDueDate);
 
     calculateInvoice();
 </script>

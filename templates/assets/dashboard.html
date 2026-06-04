@@ -207,7 +207,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     const catLabels = [{% for c in category_stats %}'{{ c.name }}',{% endfor %}];
-    const catData = [{% for c in category_stats %}{{ c.total_cost|default:0 }},{% endfor %}];
+    const catData = [{% for c in category_stats %}{{ c.total_cost|stringformat:"f"|default:0 }},{% endfor %}];
 
     new Chart(document.getElementById('assetChart'), {
         type: 'pie',

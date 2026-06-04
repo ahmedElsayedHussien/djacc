@@ -276,6 +276,15 @@
                     <li class="nav-item mt-auto">
                         <form method="post" action="{% url 'account_logout' %}" class="px-3 py-3">
                             {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                             <button type="submit" class="btn btn-outline-danger w-100 btn-sm">
                                 <i class="bi bi-box-arrow-right me-2"></i> خروج
                             </button>

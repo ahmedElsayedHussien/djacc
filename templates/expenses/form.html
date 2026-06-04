@@ -10,6 +10,15 @@
             <div class="card-body">
                 <form method="post" enctype="multipart/form-data">
                     {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                     <div class="row">
                         <div class="col-md-4">{{ form.date|as_crispy_field }}</div>
                         <div class="col-md-4">{{ form.subtotal|as_crispy_field }}</div>
@@ -139,6 +148,34 @@
         document.getElementById('net_payment_display').value = finalNet.toLocaleString('en-US', {minimumFractionDigits: 2});
     }
 
+    async function handleTaxTypeChange(event) {
+        var isTax1 = event.target.id === 'id_tax_type';
+        var taxId = event.target.value;
+        var percentInput = document.getElementById(isTax1 ? 'id_tax_percent' : 'id_tax_percent2');
+        
+        if (!taxId) {
+            percentInput.value = '';
+            calculateNet();
+            return;
+        }
+        
+        if (!window.taxCache) window.taxCache = {};
+        if (!window.taxCache[taxId]) {
+            try {
+                const response = await fetch(`/api/taxes/${taxId}/`);
+                if (response.ok) {
+                    const data = await response.json();
+                    window.taxCache[taxId] = data;
+                }
+            } catch (e) { console.error("Tax fetch error", e); }
+        }
+        
+        if (window.taxCache[taxId]) {
+            percentInput.value = window.taxCache[taxId].rate || 0;
+            calculateNet();
+        }
+    }
+
     // Initial call on page load
     document.addEventListener('DOMContentLoaded', function() {
         var method = document.getElementById('id_payment_method').value;
@@ -149,6 +186,12 @@
             document.getElementById(id)?.addEventListener('change', calculateNet);
             document.getElementById(id)?.addEventListener('input', calculateNet);
         });
+
+        // Attach listeners for auto-filling tax rate
+        ['id_tax_type', 'id_tax_type2'].forEach(id => {
+            document.getElementById(id)?.addEventListener('change', handleTaxTypeChange);
+        });
+
         calculateNet();
     });
 </script>

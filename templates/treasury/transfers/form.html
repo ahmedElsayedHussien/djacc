@@ -9,6 +9,15 @@
                 {% include 'partials/_form_errors.html' %}
                 <form method="post" novalidate>
                     {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">التاريخ *</label>
@@ -18,23 +27,27 @@
                             <label class="form-label">المبلغ *</label>
                             {{ form.amount }}
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label">من خزنة</label>
                             {{ form.from_cash_box }}
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label">أو من بنك</label>
                             {{ form.from_bank }}
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
+                            <label class="form-label">أو شركة وسيطة</label>
+                            {{ form.from_intermediary }}
+                        </div>
+                        <div class="col-md-6 mt-3">
                             <label class="form-label">إلى خزنة</label>
                             {{ form.to_cash_box }}
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-6 mt-3">
                             <label class="form-label">أو إلى بنك</label>
                             {{ form.to_bank }}
                         </div>
-                        <div class="col-12">
+                        <div class="col-12 mt-3">
                             <label class="form-label">البيان / الوصف</label>
                             {{ form.description }}
                         </div>
@@ -56,30 +69,55 @@
     document.addEventListener('DOMContentLoaded', function() {
         const fromBox = document.getElementById('id_from_cash_box');
         const fromBank = document.getElementById('id_from_bank');
+        const fromIntermediary = document.getElementById('id_from_intermediary');
         const toBox = document.getElementById('id_to_cash_box');
         const toBank = document.getElementById('id_to_bank');
 
-        function toggleMutual(el1, el2) {
-            if (el1.value) {
-                el2.value = "";
-                el2.disabled = true;
-                el2.classList.add('bg-light');
+        function toggleSources(activeEl) {
+            const sources = [fromBox, fromBank, fromIntermediary];
+            if (activeEl.value) {
+                sources.forEach(el => {
+                    if (el !== activeEl) {
+                        el.value = "";
+                        el.disabled = true;
+                        el.classList.add('bg-light');
+                    }
+                });
             } else {
-                el2.disabled = false;
-                el2.classList.remove('bg-light');
+                sources.forEach(el => {
+                    el.disabled = false;
+                    el.classList.remove('bg-light');
+                });
+            }
+        }
+        
+        function toggleDests(activeEl, otherEl) {
+            if (activeEl.value) {
+                otherEl.value = "";
+                otherEl.disabled = true;
+                otherEl.classList.add('bg-light');
+            } else {
+                otherEl.disabled = false;
+                otherEl.classList.remove('bg-light');
             }
         }
 
-        fromBox.addEventListener('change', () => toggleMutual(fromBox, fromBank));
-        fromBank.addEventListener('change', () => toggleMutual(fromBank, fromBox));
-        toBox.addEventListener('change', () => toggleMutual(toBox, toBank));
-        toBank.addEventListener('change', () => toggleMutual(toBank, toBox));
+        fromBox.addEventListener('change', () => toggleSources(fromBox));
+        fromBank.addEventListener('change', () => toggleSources(fromBank));
+        if (fromIntermediary) {
+            fromIntermediary.addEventListener('change', () => toggleSources(fromIntermediary));
+        }
+        
+        toBox.addEventListener('change', () => toggleDests(toBox, toBank));
+        toBank.addEventListener('change', () => toggleDests(toBank, toBox));
 
         // Initial check
-        if (fromBox.value) toggleMutual(fromBox, fromBank);
-        if (fromBank.value) toggleMutual(fromBank, fromBox);
-        if (toBox.value) toggleMutual(toBox, toBank);
-        if (toBank.value) toggleMutual(toBank, toBox);
+        if (fromBox.value) toggleSources(fromBox);
+        else if (fromBank.value) toggleSources(fromBank);
+        else if (fromIntermediary && fromIntermediary.value) toggleSources(fromIntermediary);
+        
+        if (toBox.value) toggleDests(toBox, toBank);
+        else if (toBank.value) toggleDests(toBank, toBox);
     });
 </script>
 {% endblock %}

@@ -10,13 +10,28 @@
             <div class="card-body p-4">
                 <form method="post" novalidate>
                     {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                     <div class="row">
                         <div class="col-md-6">{{ form.bank_account|as_crispy_field }}</div>
                         <div class="col-md-6">{{ form.statement_date|as_crispy_field }}</div>
                     </div>
                     <div class="row">
                         <div class="col-md-6">{{ form.statement_balance|as_crispy_field }}</div>
-                        <div class="col-md-6">{{ form.book_balance|as_crispy_field }}</div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label class="form-label text-muted">الرصيد الدفتري*</label>
+                                <input type="text" class="form-control bg-light" value="سيتم جلبه آلياً عند الحفظ" readonly disabled>
+                                <small class="text-muted d-block mt-1">يُجلب تلقائياً من تقارير النظام للبنك المختار في تاريخ التسوية المختار.</small>
+                            </div>
+                        </div>
                     </div>
                     {{ form.notes|as_crispy_field }}
 

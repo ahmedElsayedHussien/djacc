@@ -9,6 +9,15 @@
                 {% include 'partials/_form_errors.html' %}
                 <form method="post" novalidate>
                     {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                     <div class="row g-3">
                         <div class="col-md-4">
                             <label class="form-label">كود الحساب (داخلي)</label>
@@ -41,6 +50,12 @@
                         <div class="col-md-4">
                             <label class="form-label">نوع الرصيد</label>
                             {{ form.initial_balance_type }}
+                        </div>
+                        <div class="col-md-12 mt-3">
+                            <div class="form-check">
+                                {{ form.is_active }}
+                                <label class="form-check-label" for="{{ form.is_active.id_for_label }}">حساب نشط (يظهر في القوائم المنسدلة)</label>
+                            </div>
                         </div>
                     </div>
                     

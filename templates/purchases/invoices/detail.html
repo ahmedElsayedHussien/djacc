@@ -54,6 +54,15 @@
                 {% if invoice.status == 'draft' and perms.purchases.change_purchaseinvoice %}
                 <form method="post" action="{% url 'purchases:invoice-post' invoice.pk %}" class="mt-3">
                     {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                     <button type="submit" class="btn btn-success w-100" onclick="return confirm('تأكيد ترحيل الفاتورة؟ سيتم إضافة الأصناف للمخزن وزيادة مديونية المورد.');">
                         <i class="bi bi-check-circle"></i> ترحيل الفاتورة
                     </button>
@@ -94,7 +103,9 @@
                                 <th>المستودع</th>
                                 <th>الكمية</th>
                                 <th>التكلفة</th>
-                                <th>الضريبة %</th>
+                                <th>الخصم %</th>
+                                <th>ضريبة 1</th>
+                                <th>ضريبة 2</th>
                                 <th>الإجمالي</th>
                             </tr>
                         </thead>
@@ -105,11 +116,25 @@
                                 <td>{{ line.warehouse.name }}</td>
                                 <td>{{ line.quantity|floatformat:2 }}</td>
                                 <td>{{ line.unit_cost|floatformat:2 }}</td>
-                                <td>{{ line.tax_percent }}%</td>
+                                <td>{{ line.discount_percent|floatformat:2 }}%</td>
+                                <td>
+                                    {% if line.tax_type %}
+                                        {{ line.tax_type.name }} ({{ line.tax_percent }}%)
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if line.tax_type2 %}
+                                        {{ line.tax_type2.name }} ({{ line.tax_percent2 }}%)
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
                                 <td>{{ line.total|floatformat:2 }}</td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="6" class="text-center">لا توجد بنود.</td></tr>
+                            <tr><td colspan="8" class="text-center">لا توجد بنود.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -118,8 +143,9 @@
                 <div class="row mt-4">
                     <div class="col-md-6 offset-md-6">
                         <table class="table table-sm">
-                            <tr><th>الإجمالي قبل الضريبة:</th><td class="text-end">{{ invoice.subtotal|floatformat:2 }}</td></tr>
-                            <tr><th>إجمالي الضريبة:</th><td class="text-end">{{ invoice.tax_amount|floatformat:2 }}</td></tr>
+                            <tr><th>الإجمالي قبل الخصم والضريبة:</th><td class="text-end">{{ invoice.subtotal|floatformat:2 }}</td></tr>
+                            <tr><th class="text-danger">إجمالي الخصم:</th><td class="text-end text-danger">{{ invoice.discount_amount|floatformat:2 }}</td></tr>
+                            <tr><th class="text-primary">صافي الضرائب (إضافة - خصم):</th><td class="text-end text-primary">{{ invoice.tax_amount|floatformat:2 }}</td></tr>
                             <tr class="fs-5 fw-bold border-top"><th>الإجمالي النهائي:</th><td class="text-end text-success">{{ invoice.total|floatformat:2 }}</td></tr>
                         </table>
                     </div>

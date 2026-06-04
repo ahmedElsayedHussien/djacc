@@ -41,10 +41,27 @@
                             <span class="badge bg-danger">ملغاة</span>
                             {% endif %}
                         </td>
-                        <td>
+                        <td class="d-flex gap-1">
                             <a href="{% url 'purchases:return-detail' ret.pk %}" class="btn btn-sm btn-outline-info">
                                 <i class="bi bi-eye"></i> عرض
                             </a>
+                            {% if ret.status == 'draft' and perms.purchases.delete_purchasereturn %}
+                            <form action="{% url 'purchases:return-delete' ret.pk %}" method="post" class="d-inline" onsubmit="return confirm('هل أنت متأكد من حذف هذا المرتجع؟');">
+                                {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i> حذف
+                                </button>
+                            </form>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}

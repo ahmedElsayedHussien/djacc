@@ -40,6 +40,15 @@
                 {% if purchase_return.status == 'draft' and perms.purchases.change_purchasereturn %}
                 <form method="post" action="{% url 'purchases:return-post' purchase_return.pk %}" class="mt-3">
                     {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                     <button type="submit" class="btn btn-success w-100" onclick="return confirm('تأكيد ترحيل المرتجع؟ سيتم خصم المخزون وتعديل حساب المورد.');">
                         <i class="bi bi-check-circle"></i> ترحيل المرتجع
                     </button>

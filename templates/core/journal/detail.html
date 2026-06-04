@@ -105,6 +105,15 @@
                     {% if not entry.is_posted and perms.core.change_journalentry %}
                     <form method="post" action="{% url 'core:journal-post' entry.pk %}">
                         {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                         <button type="submit" class="btn btn-success w-100" onclick="return confirm('هل أنت متأكد من ترحيل هذا القيد؟ لن يمكنك تعديله بعد الترحيل.')">
                             <i class="bi bi-check2-circle"></i> ترحيل القيد
                         </button>

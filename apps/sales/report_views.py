@@ -430,3 +430,29 @@ class QuotationAnalysisReportView(LoginRequiredMixin, PermRequiredMixin, Templat
         context['to_date'] = to_date_obj
         return context
 
+
+class CustomerBalancesReportView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
+    template_name = 'sales/reports/customer_balances.html'
+    permission_required = 'sales.view_customer'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        customers = Customer.objects.all()
+        report_data = []
+        
+        for cust in customers:
+            bal = cust.balance
+            if bal > 0:
+                report_data.append({
+                    'customer': cust,
+                    'balance': bal
+                })
+                
+        report_data = sorted(report_data, key=lambda x: x['balance'], reverse=True)
+        
+        paginator = Paginator(report_data, 50)
+        page_number = self.request.GET.get('page')
+        context['report'] = paginator.get_page(page_number)
+        
+        return context

@@ -6,7 +6,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from apps.core.mixins import PermRequiredMixin
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.db import transaction
 from django.urls import reverse as django_reverse
 from django.views import View
@@ -330,6 +330,7 @@ class BankReconciliationCreateView(LoginRequiredMixin, PermRequiredMixin, Create
     def form_valid(self, form):
         with transaction.atomic():
             obj = form.save(commit=False)
+            obj.book_balance = get_account_balance(obj.bank_account.account, as_of_date=obj.statement_date)
             obj.difference = obj.statement_balance - obj.book_balance
             obj.created_by = self.request.user
             obj.save()
@@ -341,6 +342,17 @@ class BankReconciliationDetailView(LoginRequiredMixin, PermRequiredMixin, Detail
     template_name = 'treasury/bankreconciliations/detail.html'
     permission_required = 'treasury.view_bankreconciliation'
     context_object_name = 'reconciliation'
+
+    def get_object(self, queryset=None):
+        obj = super().get_object(queryset)
+        if obj.status == BankReconciliation.Status.DRAFT:
+            # Recalculate book balance dynamically to reflect any newly posted transactions
+            current_book_balance = get_account_balance(obj.bank_account.account, as_of_date=obj.statement_date)
+            if obj.book_balance != current_book_balance:
+                obj.book_balance = current_book_balance
+                obj.difference = obj.statement_balance - obj.book_balance
+                obj.save(update_fields=['book_balance', 'difference'])
+        return obj
 
 class BankReconciliationUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
     model = BankReconciliation
@@ -364,10 +376,53 @@ class BankReconciliationUpdateView(LoginRequiredMixin, PermRequiredMixin, Update
     def form_valid(self, form):
         with transaction.atomic():
             obj = form.save(commit=False)
+            obj.book_balance = get_account_balance(obj.bank_account.account, as_of_date=obj.statement_date)
             obj.difference = obj.statement_balance - obj.book_balance
             obj.save(update_fields=['difference', 'statement_balance', 'book_balance', 'notes'])
         messages.success(self.request, f'تم تحديث تسوية بنكية للبيان {obj.statement_date}')
         return redirect(self.success_url)
+
+class BankReconciliationLinkTransactionsView(LoginRequiredMixin, PermRequiredMixin, View):
+    permission_required = 'treasury.change_bankreconciliation'
+    
+    def get(self, request, pk):
+        recon = get_object_or_404(BankReconciliation, pk=pk)
+        if recon.is_reconciled:
+            messages.error(request, "لا يمكن تعديل تسوية مكتملة.")
+            return redirect('treasury:bankreconciliation-detail', pk=pk)
+            
+        transactions = BankTransaction.objects.filter(
+            bank_account=recon.bank_account,
+            date__lte=recon.statement_date
+        ).filter(
+            Q(is_reconciled=False) | Q(pk__in=recon.transactions.values_list('pk', flat=True))
+        ).order_by('date')
+        
+        return render(request, 'treasury/bankreconciliations/link_transactions.html', {
+            'reconciliation': recon,
+            'transactions': transactions,
+            'linked_ids': set(recon.transactions.values_list('pk', flat=True))
+        })
+
+    def post(self, request, pk):
+        try:
+            with transaction.atomic():
+                recon = get_object_or_404(BankReconciliation.objects.select_for_update(), pk=pk)
+                if recon.is_reconciled:
+                    raise ValueError("التسوية مكتملة مسبقاً")
+                
+                selected_ids = request.POST.getlist('transaction_ids')
+                # Only link transactions that belong to this bank and date
+                valid_transactions = BankTransaction.objects.filter(
+                    pk__in=selected_ids,
+                    bank_account=recon.bank_account,
+                    date__lte=recon.statement_date
+                )
+                recon.transactions.set(valid_transactions)
+            messages.success(request, 'تم حفظ الحركات المرتبطة بالتسوية بنجاح')
+        except Exception as e:
+            messages.error(request, f'خطأ أثناء الربط: {e}')
+        return redirect('treasury:bankreconciliation-detail', pk=pk)
 
 class BankReconciliationMatchView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'treasury.change_bankreconciliation'

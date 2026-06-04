@@ -213,6 +213,14 @@
                                 <span><i class="bi bi-building me-2 text-danger"></i>سجل الشركات الوسيطة (فوري)</span>
                                 <i class="bi bi-chevron-left small"></i>
                             </a>
+                            <a href="{% url 'treasury:bankreconciliation-list' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-clipboard-check me-2 text-dark"></i>سجل التسويات البنكية</span>
+                                <i class="bi bi-chevron-left small"></i>
+                            </a>
+                            <a href="{% url 'treasury:banktransaction-list' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-file-earmark-ruled me-2 text-primary"></i>سجل المعاملات البنكية (عمولات/فوائد)</span>
+                                <i class="bi bi-chevron-left small"></i>
+                            </a>
                             <a href="{% url 'treasury:movement-report' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
                                 <span><i class="bi bi-list-columns-reverse me-2 text-secondary"></i>تقرير حركات الخزن</span>
                                 <i class="bi bi-chevron-left small"></i>
@@ -238,6 +246,13 @@
                             {% if perms.sales.add_intermediarycompany %}
                             <div class="col-6">
                                 <a href="{% url 'treasury:intermediary-create' %}" class="btn btn-sm btn-light border w-100 px-1 text-nowrap">إضافة شركة وسيطة</a>
+                            </div>
+                            {% endif %}
+                            {% if perms.treasury.add_banktransaction %}
+                            <div class="col-12">
+                                <a href="{% url 'treasury:banktransaction-create' %}" class="btn btn-sm btn-outline-primary border w-100 px-1 text-nowrap">
+                                    <i class="bi bi-plus-circle me-1"></i>تسجيل معاملة بنكية جديدة
+                                </a>
                             </div>
                             {% endif %}
                         </div>

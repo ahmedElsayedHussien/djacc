@@ -16,10 +16,13 @@ logger = logging.getLogger(__name__)
 class SupplierForm(forms.ModelForm):
     class Meta:
         model = Supplier
-        fields = ['name', 'tax_number', 'phone', 'email', 'payment_terms_days', 'address']
+        fields = ['name', 'commercial_register', 'tax_number', 'payment_type', 'is_active', 'phone', 'email', 'payment_terms_days', 'address']
         labels = {
             'name': 'اسم المورد',
+            'commercial_register': 'السجل التجاري',
             'tax_number': 'الرقم الضريبي',
+            'payment_type': 'طريقة السداد المعتادة',
+            'is_active': 'نشط',
             'phone': 'الهاتف',
             'email': 'البريد الإلكتروني',
             'payment_terms_days': 'مدة السداد (يوم)',
@@ -27,7 +30,10 @@ class SupplierForm(forms.ModelForm):
         }
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'commercial_register': forms.TextInput(attrs={'class': 'form-control'}),
             'tax_number': forms.TextInput(attrs={'class': 'form-control'}),
+            'payment_type': forms.Select(attrs={'class': 'form-select'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'phone': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'payment_terms_days': forms.NumberInput(attrs={'class': 'form-control'}),
@@ -117,12 +123,26 @@ class PurchaseInvoiceForm(forms.ModelForm):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         if 'cash_box' in self.fields:
+            from apps.sales.models import SalesRepresentative
+            rep_boxes = SalesRepresentative.objects.exclude(cash_box__isnull=True).values_list('cash_box_id', flat=True)
             if user:
-                self.fields['cash_box'].queryset = get_available_cash_boxes(user)
+                qs = get_available_cash_boxes(user)
             else:
-                self.fields['cash_box'].queryset = CashBox.objects.filter(is_active=True)
+                qs = CashBox.objects.filter(is_active=True)
+            self.fields['cash_box'].queryset = qs.exclude(id__in=rep_boxes)
         if 'cost_center' in self.fields:
             self.fields['cost_center'].queryset = CostCenter.objects.filter(is_active=True, is_leaf=True).order_by('code')
+            cc_80 = CostCenter.objects.filter(code='80').first()
+            if cc_80:
+                self.fields['cost_center'].initial = cc_80.id
+            self.fields['cost_center'].widget.attrs['readonly'] = 'readonly'
+            self.fields['cost_center'].widget.attrs['style'] = 'pointer-events: none; background-color: #e9ecef;'
+            self.fields['cost_center'].required = False
+        if 'supplier' in self.fields:
+            qs = Supplier.objects.filter(is_active=True)
+            if self.instance and self.instance.pk and self.instance.supplier_id:
+                qs = qs | Supplier.objects.filter(id=self.instance.supplier_id)
+            self.fields['supplier'].queryset = qs.distinct().order_by('name')
 
 class PurchaseInvoiceLineForm(forms.ModelForm):
     class Meta:
@@ -156,8 +176,19 @@ class PurchaseInvoiceLineForm(forms.ModelForm):
         rep_warehouses = SalesRepresentative.objects.values_list('warehouse_id', flat=True)
         if 'warehouse' in self.fields:
             self.fields['warehouse'].queryset = Warehouse.objects.filter(is_active=True).exclude(id__in=rep_warehouses)
-        self.fields['tax_type'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
-        self.fields['tax_type2'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
+        allowed_taxes = ['vat', 'wht', 'table', 'customs']
+        from django.db.models import Q
+        tax_qs = TaxType.objects.filter(
+            appear_in_invoices=True, 
+            is_active=True, 
+            category__in=allowed_taxes
+        ).filter(
+            Q(name__icontains='مدخلات') | 
+            Q(name__icontains='مشتريات') |
+            Q(name__icontains='جمرك')
+        )
+        self.fields['tax_type'].queryset = tax_qs
+        self.fields['tax_type2'].queryset = tax_qs
 
     def clean_quantity(self):
         qty = self.cleaned_data.get('quantity')
@@ -258,10 +289,13 @@ class SupplierPaymentForm(forms.ModelForm):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         if 'cash_box' in self.fields:
+            from apps.sales.models import SalesRepresentative
+            rep_boxes = SalesRepresentative.objects.exclude(cash_box__isnull=True).values_list('cash_box_id', flat=True)
             if user:
-                self.fields['cash_box'].queryset = get_available_cash_boxes(user)
+                qs = get_available_cash_boxes(user)
             else:
-                self.fields['cash_box'].queryset = CashBox.objects.filter(is_active=True)
+                qs = CashBox.objects.filter(is_active=True)
+            self.fields['cash_box'].queryset = qs.exclude(id__in=rep_boxes)
         if 'invoices' in self.fields:
             supplier = self.instance.supplier_id if self.instance and self.instance.pk else None
             self.fields['invoices'].queryset = PurchaseInvoice.objects.filter(
@@ -269,6 +303,11 @@ class SupplierPaymentForm(forms.ModelForm):
                 status=PurchaseInvoice.Status.POSTED,
                 paid_amount__lt=F('total')
             ) if supplier else PurchaseInvoice.objects.none()
+        if 'supplier' in self.fields:
+            qs = Supplier.objects.filter(is_active=True)
+            if self.instance and self.instance.pk and self.instance.supplier_id:
+                qs = qs | Supplier.objects.filter(id=self.instance.supplier_id)
+            self.fields['supplier'].queryset = qs.distinct().order_by('name')
 
 class PurchaseReturnForm(forms.ModelForm):
     number = forms.CharField(
@@ -277,11 +316,13 @@ class PurchaseReturnForm(forms.ModelForm):
     )
     class Meta:
         model = PurchaseReturn
-        fields = ['number', 'date', 'invoice', 'supplier', 'cost_center', 'notes']
+        fields = ['number', 'date', 'invoice', 'supplier', 'payment_type', 'cash_box', 'cost_center', 'notes']
         labels = {
             'date': 'تاريخ المرتجع',
             'invoice': 'الفاتورة الأصلية',
             'supplier': 'المورد',
+            'payment_type': 'طريقة الدفع',
+            'cash_box': 'الخزينة (للنقدي)',
             'cost_center': 'مركز التكلفة',
             'notes': 'ملاحظات',
         }
@@ -289,6 +330,8 @@ class PurchaseReturnForm(forms.ModelForm):
             'date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'invoice': forms.Select(attrs={'class': 'form-select'}),
             'supplier': forms.Select(attrs={'class': 'form-select'}),
+            'payment_type': forms.Select(attrs={'class': 'form-select'}),
+            'cash_box': forms.Select(attrs={'class': 'form-select'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
         }
 
@@ -308,6 +351,25 @@ class PurchaseReturnForm(forms.ModelForm):
             raise forms.ValidationError('يمكن فقط إرجاع فواتير مرحّلة')
         return cleaned
 
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        if 'supplier' in self.fields:
+            qs = Supplier.objects.filter(is_active=True)
+            if self.instance and self.instance.pk and self.instance.supplier_id:
+                qs = qs | Supplier.objects.filter(id=self.instance.supplier_id)
+            self.fields['supplier'].queryset = qs.distinct().order_by('name')
+        
+        if 'cash_box' in self.fields:
+            from apps.sales.models import SalesRepresentative
+            rep_boxes = SalesRepresentative.objects.exclude(cash_box__isnull=True).values_list('cash_box_id', flat=True)
+            if user:
+                from apps.treasury.utils import get_available_cash_boxes
+                qs = get_available_cash_boxes(user)
+            else:
+                qs = CashBox.objects.filter(is_active=True)
+            self.fields['cash_box'].queryset = qs.exclude(id__in=rep_boxes)
+
 class PurchaseReturnLineForm(forms.ModelForm):
     class Meta:
         model = PurchaseReturnLine
@@ -325,13 +387,16 @@ class PurchaseReturnLineForm(forms.ModelForm):
             'tax_percent2': 'نسبة الضريبة 2 %',
         }
         widgets = {
-            'item': forms.Select(attrs={'class': 'form-select'}),
+            'item': forms.Select(attrs={'class': 'form-select item-select'}),
             'warehouse': forms.Select(attrs={'class': 'form-select'}),
-            'unit': forms.Select(attrs={'class': 'form-select'}),
-            'quantity': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
-            'unit_cost': forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
-            'tax_type': forms.Select(attrs={'class': 'form-select'}),
-            'tax_type2': forms.Select(attrs={'class': 'form-select'}),
+            'unit': forms.Select(attrs={'class': 'form-select unit-select'}),
+            'quantity': forms.NumberInput(attrs={'class': 'form-control qty-input', 'step': 'any'}),
+            'unit_cost': forms.NumberInput(attrs={'class': 'form-control price-input', 'step': 'any'}),
+            'discount_percent': forms.NumberInput(attrs={'class': 'form-control discount-input', 'step': 'any'}),
+            'tax_type': forms.Select(attrs={'class': 'form-select tax-select'}),
+            'tax_percent': forms.HiddenInput(attrs={'class': 'tax-rate'}),
+            'tax_type2': forms.Select(attrs={'class': 'form-select tax-select2'}),
+            'tax_percent2': forms.HiddenInput(attrs={'class': 'tax-rate2'}),
         }
 
     def __init__(self, *args, **kwargs):

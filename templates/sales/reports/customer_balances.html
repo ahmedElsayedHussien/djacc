@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}مديونية العملاء{% endblock %}
+{% block header %}تقرير مديونية العملاء (العملاء المدينون){% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="card shadow-sm border-0" style="border-radius: 15px;">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">كود العميل</th>
+                            <th>اسم العميل</th>
+                            <th>الهاتف</th>
+                            <th class="text-end pe-4">إجمالي المديونية (الرصيد)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in report %}
+                        <tr style="cursor: pointer;" onclick="window.location.href='{% url 'reports:customer_statement' %}?customer={{ row.customer.id }}'">
+                            <td class="ps-4">{{ row.customer.code }}</td>
+                            <td class="fw-bold text-primary">{{ row.customer.name }}</td>
+                            <td>{{ row.customer.phone|default:'-' }}</td>
+                            <td class="text-end pe-4 fw-bold text-danger">
+                                {{ row.balance|floatformat:2|intcomma }}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center py-5 text-muted">لا يوجد عملاء مدينون حالياً</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {% if report.paginator.num_pages > 1 %}
+        {% include 'partials/pagination.html' with page_obj=report is_paginated=True %}
+    {% endif %}
+</div>
+{% endblock %}

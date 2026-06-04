@@ -56,6 +56,15 @@
                             {% if req.status == 'pending' and perms.hr.change_leaverequest %}
                             <form method="post" action="{% url 'hr:leave-approve' req.pk %}" class="d-inline" onsubmit="return confirm('هل أنت متأكد من الموافقة وتخفيض رصيد إجازات الموظف؟');">
                                 {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                                 <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> موافقة</button>
                             </form>
                             <form method="post" action="{% url 'hr:leave-reject' req.pk %}" class="d-inline" onsubmit="return confirm('هل أنت متأكد من الرفض؟');">

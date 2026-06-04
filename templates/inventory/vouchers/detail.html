@@ -41,6 +41,15 @@
                 {% if voucher.status == 'draft' and perms.inventory.change_stockvoucher %}
                 <form method="post" action="{% url 'inventory:voucher-post' voucher.pk %}" class="mt-3">
                     {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                     <button type="submit" class="btn btn-success w-100" onclick="return confirm('تأكيد الترحيل؟ سيتم تحديث المخزون ولن يمكنك تعديل الإذن بعد ذلك.');">
                         <i class="bi bi-check-circle"></i> ترحيل الإذن
                     </button>

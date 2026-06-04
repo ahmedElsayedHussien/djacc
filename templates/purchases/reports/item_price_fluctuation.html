@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}تقلبات أسعار الأصناف والربحية{% endblock %}
+{% block header %}تحليل تقلبات الشراء وأثرها على الربحية{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="card shadow-sm mb-4 border-0" style="border-radius: 15px;">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">اختر الصنف</label>
+                    <select name="item" class="form-select" required>
+                        <option value="">-- اختر الصنف --</option>
+                        {% for item in items %}
+                            <option value="{{ item.id }}" {% if selected_item == item.id %}selected{% endif %}>
+                                {{ item.code }} | {{ item.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">من تاريخ</label>
+                    <input type="date" name="from" class="form-control" value="{{ from_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">إلى تاريخ</label>
+                    <input type="date" name="to" class="form-control" value="{{ to_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-filter me-2"></i>عرض</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if selected_item %}
+    <div class="card shadow-sm border-0" style="border-radius: 15px;">
+        <div class="card-header bg-white border-0 pt-4 pb-0">
+            <h5 class="mb-0 fw-bold"><i class="bi bi-graph-up-arrow me-2 text-primary"></i> الفترات الزمنية للأسعار</h5>
+        </div>
+        <div class="card-body p-0 mt-3">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">الفترة من</th>
+                            <th>الفترة إلى</th>
+                            <th class="text-end text-primary">سعر الشراء (التكلفة)</th>
+                            <th class="text-end text-success">متوسط سعر البيع</th>
+                            <th class="text-center">الكمية المباعة</th>
+                            <th class="text-end">الربح في القطعة</th>
+                            <th class="text-end pe-4">نسبة الربحية</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in report %}
+                        <tr class="{% if row.is_current %}table-primary{% endif %}">
+                            <td class="ps-4 fw-bold">{{ row.start_date|date:"Y-m-d" }}</td>
+                            <td>
+                                {% if row.is_current %}
+                                    <span class="badge bg-primary">الآن</span> ({{ row.end_date|date:"Y-m-d" }})
+                                {% else %}
+                                    {{ row.end_date|date:"Y-m-d" }}
+                                {% endif %}
+                            </td>
+                            <td class="text-end text-primary fw-bold">{{ row.purchase_cost|floatformat:2|intcomma }}</td>
+                            <td class="text-end text-success">{{ row.avg_selling_price|floatformat:2|intcomma }}</td>
+                            <td class="text-center">{{ row.sales_quantity|floatformat:2|intcomma }}</td>
+                            <td class="text-end fw-bold {% if row.unit_profit > 0 %}text-success{% elif row.unit_profit < 0 %}text-danger{% endif %}">
+                                {{ row.unit_profit|floatformat:2|intcomma }}
+                            </td>
+                            <td class="text-end pe-4">
+                                <span class="badge {% if row.profit_percentage > 20 %}bg-success{% elif row.profit_percentage > 0 %}bg-warning text-dark{% else %}bg-danger{% endif %} fs-6">
+                                    {{ row.profit_percentage|floatformat:2 }}%
+                                </span>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-center py-5 text-muted">لا توجد مشتريات مسجلة لهذا الصنف في هذه الفترة</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {% if report.paginator.num_pages > 1 %}
+        {% include 'partials/pagination.html' with page_obj=report is_paginated=True %}
+    {% endif %}
+    
+    {% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-funnel text-muted" style="font-size: 4rem;"></i>
+        <h4 class="text-muted mt-3">يرجى اختيار الصنف لعرض تقلبات أسعاره</h4>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

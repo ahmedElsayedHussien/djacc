@@ -146,6 +146,15 @@
             <!-- Form -->
             <form action="{% url 'pos:session-open' %}" method="POST" class="p-6 space-y-5">
                 {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                 
                 <div>
                     <label class="block text-gray-700 font-bold mb-2 text-lg">نقطة البيع (الكاشير):</label>

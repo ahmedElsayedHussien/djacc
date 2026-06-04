@@ -59,6 +59,7 @@ class BankAccountForm(forms.ModelForm):
             'account_number': forms.TextInput(attrs={'class': 'form-control'}),
             'iban': forms.TextInput(attrs={'class': 'form-control'}),
             'currency': forms.TextInput(attrs={'class': 'form-control', 'value': 'EGP'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input', 'checked': 'checked'}),
         }
 
     initial_balance = forms.DecimalField(label='رصيد أول المدة', initial=0, min_value=0, widget=forms.NumberInput(attrs={'class': 'form-control', 'min': '0'}))
@@ -73,11 +74,12 @@ class BankAccountForm(forms.ModelForm):
 class CashTransferForm(forms.ModelForm):
     class Meta:
         model = CashTransfer
-        fields = ['date', 'from_cash_box', 'from_bank', 'to_cash_box', 'to_bank', 'amount', 'description']
+        fields = ['date', 'from_cash_box', 'from_bank', 'from_intermediary', 'to_cash_box', 'to_bank', 'amount', 'description']
         labels = {
             'date': 'تاريخ التحويل',
             'from_cash_box': 'من خزنة',
             'from_bank': 'من حساب بنكي',
+            'from_intermediary': 'من شركة وسيطة',
             'to_cash_box': 'إلى خزنة',
             'to_bank': 'إلى حساب بنكي',
             'amount': 'المبلغ',
@@ -87,6 +89,7 @@ class CashTransferForm(forms.ModelForm):
             'date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'from_cash_box': forms.Select(attrs={'class': 'form-select'}),
             'from_bank': forms.Select(attrs={'class': 'form-select'}),
+            'from_intermediary': forms.Select(attrs={'class': 'form-select'}),
             'to_cash_box': forms.Select(attrs={'class': 'form-select'}),
             'to_bank': forms.Select(attrs={'class': 'form-select'}),
             'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
@@ -104,10 +107,13 @@ class CashTransferForm(forms.ModelForm):
                 self.fields['to_cash_box'].queryset = qs
                 
         active_banks = BankAccount.objects.filter(is_active=True)
+        active_intermediaries = IntermediaryCompany.objects.filter(is_active=True)
         if 'from_bank' in self.fields:
             self.fields['from_bank'].queryset = active_banks
         if 'to_bank' in self.fields:
             self.fields['to_bank'].queryset = active_banks
+        if 'from_intermediary' in self.fields:
+            self.fields['from_intermediary'].queryset = active_intermediaries
 
     def clean_date(self):
         d = self.cleaned_data.get('date')
@@ -119,17 +125,21 @@ class CashTransferForm(forms.ModelForm):
         cleaned_data = super().clean()
         from_cash = cleaned_data.get('from_cash_box')
         from_bank = cleaned_data.get('from_bank')
+        from_intermediary = cleaned_data.get('from_intermediary')
         to_cash = cleaned_data.get('to_cash_box')
         to_bank = cleaned_data.get('to_bank')
 
-        if from_cash and from_bank:
-            self.add_error('from_cash_box', 'لا يمكن تحديد مصدرين للتحويل')
-            self.add_error('from_bank', 'لا يمكن تحديد مصدرين للتحويل')
+        sources = [from_cash, from_bank, from_intermediary]
+        active_sources = [s for s in sources if s is not None]
+
+        if len(active_sources) > 1:
+            self.add_error(None, 'لا يمكن تحديد أكثر من مصدر للتحويل')
+        elif len(active_sources) == 0:
+            self.add_error(None, 'يجب تحديد مصدر التحويل')
+            
         if to_cash and to_bank:
             self.add_error('to_cash_box', 'لا يمكن تحديد وجهتين للتحويل')
             self.add_error('to_bank', 'لا يمكن تحديد وجهتين للتحويل')
-        if not from_cash and not from_bank:
-            self.add_error('from_cash_box', 'يجب تحديد مصدر التحويل')
         if not to_cash and not to_bank:
             self.add_error('to_cash_box', 'يجب تحديد وجهة التحويل')
 
@@ -182,19 +192,17 @@ class BankTransactionForm(forms.ModelForm):
 class BankReconciliationForm(forms.ModelForm):
     class Meta:
         model = BankReconciliation
-        fields = ['bank_account', 'statement_date', 'statement_balance', 'book_balance', 'notes']
+        fields = ['bank_account', 'statement_date', 'statement_balance', 'notes']
         labels = {
             'bank_account': 'الحساب البنكي',
             'statement_date': 'تاريخ كشف الحساب',
             'statement_balance': 'رصيد كشف الحساب',
-            'book_balance': 'الرصيد الدفتري',
             'notes': 'ملاحظات',
         }
         widgets = {
             'bank_account': forms.Select(attrs={'class': 'form-select'}),
             'statement_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'statement_balance': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-            'book_balance': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
         }
 

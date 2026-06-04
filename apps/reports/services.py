@@ -1,10 +1,10 @@
 from datetime import date
 from decimal import Decimal
-from django.db.models import Sum, Q, F, Func, Value, Count, Case, When, IntegerField
+from django.db.models import Sum, Q, F, Func, Value, Count, Case, When, IntegerField, Max, Min, Avg
 from django.db.models.functions import TruncMonth, Coalesce
 from django.utils import timezone
 from apps.core.models import Account, JournalLine, JournalEntry, FiscalYear, AccountType, CostCenter
-from apps.sales.models import Customer, SalesInvoice, SalesInvoiceLine, SalesReturn, SalesReturnLine, CustomerReceipt, SalesRepresentative, RepDailySettlement, IntermediaryCompany
+from apps.sales.models import Customer, SalesInvoice, SalesInvoiceLine, SalesReturn, SalesReturnLine, CustomerReceipt, SalesRepresentative, RepDailySettlement, IntermediaryCompany, Quotation, SalesTarget
 from apps.purchases.models import Supplier, PurchaseInvoice, PurchaseInvoiceLine, PurchaseReturn, PurchaseReturnLine, SupplierPayment
 from apps.hr.models import Employee, PayrollPeriod, Payslip, LeaveRequest, Loan
 from apps.inventory.models import Item, ItemLedger, Warehouse, StockVoucher, StockMovement
@@ -308,25 +308,37 @@ class ReportService:
         كشف حساب مندوب
         """
         rep = SalesRepresentative.objects.get(id=rep_id)
-        account = rep.account
+        accounts = []
+        if rep.account:
+            accounts.append(rep.account)
+        if hasattr(rep, 'cash_box') and rep.cash_box and rep.cash_box.account:
+            accounts.append(rep.cash_box.account)
+            
+        if not accounts:
+            return {
+                'rep': rep,
+                'opening_balance': Decimal(0),
+                'lines': [],
+                'closing_balance': Decimal(0)
+            }
         
-        # This logic is identical to account statement logic
-        # 1. Check for opening entry
-        has_opening = JournalLine.objects.filter(
-            account=account,
-            entry__entry_type=JournalEntry.EntryType.OPENING,
-            entry__is_posted=True
-        ).exists()
-
         init_debit = Decimal(0)
         init_credit = Decimal(0)
-        if not has_opening:
-            if account.initial_balance_type == 'debit': init_debit = account.initial_balance
-            else: init_credit = account.initial_balance
+        
+        for acc in accounts:
+            has_opening = JournalLine.objects.filter(
+                account=acc,
+                entry__entry_type=JournalEntry.EntryType.OPENING,
+                entry__is_posted=True
+            ).exists()
+
+            if not has_opening:
+                if acc.initial_balance_type == 'debit': init_debit += acc.initial_balance
+                else: init_credit += acc.initial_balance
 
         # 2. Add movements before from_date
         pre_movements = JournalLine.objects.filter(
-            account=account, 
+            account__in=accounts, 
             entry__is_posted=True, 
             entry__date__lt=from_date
         ).aggregate(d=Sum('debit'), c=Sum('credit'))
@@ -335,7 +347,7 @@ class ReportService:
         
         # Movements in period
         movements = JournalLine.objects.filter(
-            account=account,
+            account__in=accounts,
             entry__is_posted=True,
             entry__date__range=[from_date, to_date]
         ).select_related('entry').order_by('entry__date', 'id')
@@ -880,6 +892,7 @@ class ReportService:
             ).filter(remaining__gt=0)
             
             buckets = {
+                'current': Decimal('0'),
                 '1_30': Decimal('0'),
                 '31_60': Decimal('0'),
                 '61_90': Decimal('0'),
@@ -892,12 +905,25 @@ class ReportService:
                 age = (today - due_date).days
                 amount = inv.remaining
                 buckets['total'] += amount
-                if age <= 30: buckets['1_30'] += amount
+                if age <= 0: buckets['current'] += amount
+                elif age <= 30: buckets['1_30'] += amount
                 elif age <= 60: buckets['31_60'] += amount
                 elif age <= 90: buckets['61_90'] += amount
                 else: buckets['90_plus'] += amount
             
-            if buckets['total'] > 0:
+            # Account for unallocated balances (e.g. opening balance, advance receipts)
+            unallocated = cust.balance - buckets['total']
+            
+            if unallocated > 0:
+                # Positive unallocated usually means Opening Balance, which is old debt.
+                buckets['90_plus'] += unallocated
+            else:
+                # Negative unallocated usually means Advance Payments or Unapplied Returns.
+                buckets['current'] += unallocated
+                
+            buckets['total'] = cust.balance
+            
+            if buckets['total'] != 0 or unpaid_invoices.exists():
                 aging_results.append({
                     'customer': cust,
                     'buckets': buckets,
@@ -908,7 +934,7 @@ class ReportService:
     @staticmethod
     def quotation_analysis_report(from_date, to_date):
         
-        qs = Quotation.objects.filter(date__range=[from_date, to_date])
+        qs = Quotation.objects.filter(start_date__range=[from_date, to_date])
         total_count = qs.count()
         total_value = qs.aggregate(total=Sum('total'))['total'] or Decimal('0')
         
@@ -984,6 +1010,89 @@ class ReportService:
         return report
 
     @staticmethod
+    def item_price_fluctuation_report(item_id, from_date, to_date):
+        if not item_id:
+            return []
+
+        purchases = PurchaseInvoiceLine.objects.filter(
+            item_id=item_id,
+            invoice__status=PurchaseInvoice.Status.POSTED,
+            invoice__date__range=[from_date, to_date]
+        ).select_related('invoice').order_by('invoice__date', 'id')
+
+        periods = []
+        current_period = None
+
+        for line in purchases:
+            cost = line.unit_cost
+            date_val = line.invoice.date
+
+            if current_period is None:
+                current_period = {
+                    'start_date': date_val,
+                    'cost': cost,
+                    'lines': [line]
+                }
+            elif current_period['cost'] == cost:
+                # Same cost, extend the period implicitly by just recording the line
+                current_period['lines'].append(line)
+            else:
+                # Cost changed, close the current period
+                current_period['end_date'] = date_val
+                periods.append(current_period)
+                # Start new period
+                current_period = {
+                    'start_date': date_val,
+                    'cost': cost,
+                    'lines': [line]
+                }
+
+        if current_period is not None:
+            # The last period extends to the end of the report date range
+            current_period['end_date'] = to_date
+            periods.append(current_period)
+
+        results = []
+        for p in periods:
+            # Determine Sales during this period
+            # If the end_date is the same as the start of the next period, we filter by < end_date for exclusivity,
+            # except for the last period where we include the to_date (<= end_date)
+            is_last = p is periods[-1]
+            end_date_filter = Q(invoice__date__lte=p['end_date']) if is_last else Q(invoice__date__lt=p['end_date'])
+            
+            sales_data = SalesInvoiceLine.objects.filter(
+                Q(item_id=item_id) &
+                Q(invoice__status=SalesInvoice.Status.POSTED) &
+                Q(invoice__date__gte=p['start_date']) &
+                end_date_filter
+            ).aggregate(
+                total_qty=Sum('quantity'),
+                total_revenue=Sum(F('quantity') * F('unit_price'))
+            )
+
+            qty = sales_data['total_qty'] or Decimal('0')
+            rev = sales_data['total_revenue'] or Decimal('0')
+            avg_selling_price = (rev / qty).quantize(Decimal('0.00')) if qty > 0 else Decimal('0')
+            
+            unit_profit = avg_selling_price - p['cost'] if qty > 0 else Decimal('0')
+            profit_percentage = ((unit_profit / avg_selling_price) * 100).quantize(Decimal('0.00')) if avg_selling_price > 0 else Decimal('0')
+
+            results.append({
+                'start_date': p['start_date'],
+                'end_date': p['end_date'],
+                'purchase_cost': p['cost'],
+                'avg_selling_price': avg_selling_price,
+                'sales_quantity': qty,
+                'unit_profit': unit_profit,
+                'profit_percentage': profit_percentage,
+                'is_current': is_last
+            })
+
+        # Reverse the results so the newest periods appear first
+        results.reverse()
+        return results
+
+    @staticmethod
     def supplier_balances_report(from_date, to_date):
         
         suppliers = Supplier.objects.all()
@@ -1023,6 +1132,7 @@ class ReportService:
             ).filter(remaining__gt=0)
             
             buckets = {
+                'current': Decimal('0'),
                 '1_30': Decimal('0'),
                 '31_60': Decimal('0'),
                 'over_60': Decimal('0'),
@@ -1033,11 +1143,25 @@ class ReportService:
                 age = (today - (inv.due_date or inv.date)).days
                 amount = inv.remaining
                 buckets['total'] += amount
-                if age <= 30: buckets['1_30'] += amount
+                if age <= 0: buckets['current'] += amount
+                elif age <= 30: buckets['1_30'] += amount
                 elif age <= 60: buckets['31_60'] += amount
                 else: buckets['over_60'] += amount
                 
-            if buckets['total'] > 0:
+            # Account for unallocated balances (e.g. opening balance, unapplied payments)
+            # Make sure the total matches the actual supplier balance
+            unallocated = sup.balance - buckets['total']
+            
+            if unallocated > 0:
+                # Positive unallocated usually means Opening Balance, which is old debt.
+                buckets['over_60'] += unallocated
+            else:
+                # Negative unallocated usually means Advance Payments or Unapplied Returns.
+                buckets['current'] += unallocated
+                
+            buckets['total'] = sup.balance
+                
+            if buckets['total'] != 0 or unpaid_invoices.exists():
                 aging_results.append({
                     'supplier': sup,
                     'buckets': buckets,

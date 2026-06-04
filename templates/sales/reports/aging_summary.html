@@ -33,6 +33,7 @@
                         <tr>
                             <th class="ps-4">العميل / حد الائتمان</th>
                             <th class="text-end">الرصيد الإجمالي</th>
+                            <th class="text-end text-secondary">جاري / غير مستحق</th>
                             <th class="text-end">1 - 30 يوم</th>
                             <th class="text-end">31 - 60 يوم</th>
                             <th class="text-end text-warning">61 - 90 يوم</th>
@@ -47,6 +48,7 @@
                                 <small class="text-muted">حد الائتمان: {{ row.customer.credit_limit|intcomma }} | سداد خلال: {{ row.customer.payment_terms_days }} يوم</small>
                             </td>
                             <td class="text-end fw-bold text-primary">{{ row.buckets.total|floatformat:2|intcomma }}</td>
+                            <td class="text-end text-secondary">{{ row.buckets.current|floatformat:2|intcomma }}</td>
                             <td class="text-end">{{ row.buckets.1_30|floatformat:2|intcomma }}</td>
                             <td class="text-end">{{ row.buckets.31_60|floatformat:2|intcomma }}</td>
                             <td class="text-end text-warning">{{ row.buckets.61_90|floatformat:2|intcomma }}</td>

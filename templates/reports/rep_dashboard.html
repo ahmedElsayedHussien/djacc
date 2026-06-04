@@ -641,6 +641,15 @@
                                                     {% if inv.status == 'draft' %}
                                                     <form method="post" action="{% url 'sales:invoice-post' inv.pk %}" class="d-inline ms-1 no-print">
                                                         {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                                                         <button type="submit" class="btn btn-xs btn-success rounded-pill px-2 py-0" style="font-size: 0.65rem;" onclick="return confirm('تأكيد ترحيل الفاتورة {{ inv.number }}؟');">
                                                             ترحيل
                                                         </button>

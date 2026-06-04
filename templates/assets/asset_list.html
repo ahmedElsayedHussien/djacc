@@ -17,6 +17,15 @@
     {% if perms.assets.add_depreciationlog %}
     <form method="post" action="{% url 'assets:run-depreciation' %}" onsubmit="return confirm('هل تريد تشغيل الإهلاك لكافة الأصول عن الشهر الحالي؟');">
         {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
         <div class="d-flex align-items-center gap-3">
             <div class="text-muted small text-end" style="max-width: 300px; line-height: 1.4;">
                 <i class="bi bi-info-circle text-warning me-1"></i>

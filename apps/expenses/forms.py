@@ -3,7 +3,7 @@ from django.utils.timezone import localdate
 from django import forms
 from django.conf import settings
 from django.db.models import Sum
-from apps.core.models import Account, CostCenter
+from apps.core.models import Account, CostCenter, TaxType
 from apps.treasury.models import CashBox
 from apps.treasury.utils import get_available_cash_boxes
 from apps.hr.models import Employee
@@ -44,9 +44,9 @@ class ExpenseForm(forms.ModelForm):
             'category': forms.Select(attrs={'class': 'form-select'}),
             'subtotal': forms.NumberInput(attrs={'class': 'form-control', 'min': '0.01', 'step': '0.01'}),
             'tax_type': forms.Select(attrs={'class': 'form-select'}),
-            'tax_percent': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'tax_percent': forms.NumberInput(attrs={'class': 'form-control bg-light', 'step': '0.01', 'readonly': 'readonly'}),
             'tax_type2': forms.Select(attrs={'class': 'form-select'}),
-            'tax_percent2': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'tax_percent2': forms.NumberInput(attrs={'class': 'form-control bg-light', 'step': '0.01', 'readonly': 'readonly'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
             'payment_method': forms.Select(attrs={
                 'class': 'form-select',
@@ -79,12 +79,25 @@ class ExpenseForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if 'cash_box' in self.fields:
             if user:
-                self.fields['cash_box'].queryset = get_available_cash_boxes(user)
+                self.fields['cash_box'].queryset = get_available_cash_boxes(user).filter(salesrepresentative__isnull=True)
             else:
-                self.fields['cash_box'].queryset = CashBox.objects.filter(is_active=True).order_by('name')
+                self.fields['cash_box'].queryset = CashBox.objects.filter(is_active=True, salesrepresentative__isnull=True).order_by('name')
 
         if 'cost_center' in self.fields:
             self.fields['cost_center'].queryset = CostCenter.objects.filter(is_active=True, is_leaf=True).order_by('code')
+
+        # Filter taxes to show only purchase/expense related taxes (Inputs)
+        from django.db.models import Q
+        tax_qs = TaxType.objects.filter(appear_in_invoices=True, is_active=True).filter(
+            Q(name__icontains='مدخلات') | 
+            Q(name__icontains='مشتريات') |
+            Q(name__icontains='جمرك') |
+            Q(name__icontains='جدول')
+        )
+        if 'tax_type' in self.fields:
+            self.fields['tax_type'].queryset = tax_qs
+        if 'tax_type2' in self.fields:
+            self.fields['tax_type2'].queryset = tax_qs
 
     def clean_date(self):
         d = self.cleaned_data.get('date')
@@ -119,18 +132,41 @@ class ExpenseForm(forms.ModelForm):
             raise forms.ValidationError('يجب تحديد الخزنة عند الدفع نقداً')
         if method == 'custody' and not cleaned.get('custody'):
             raise forms.ValidationError('يجب تحديد العهدة')
+            
+        # Calculate taxes and assign to instance to pass model validation
+        subtotal = cleaned.get('subtotal') or 0
+        tax_type = cleaned.get('tax_type')
+        tax_percent = cleaned.get('tax_percent') or 0
+        tax_type2 = cleaned.get('tax_type2')
+        tax_percent2 = cleaned.get('tax_percent2') or 0
+        
+        from decimal import Decimal
+        from apps.core.tax_utils import calculate_line_taxes
+        
+        res = calculate_line_taxes(
+            Decimal(str(subtotal)),
+            tax_type,
+            tax_percent,
+            tax_type2,
+            tax_percent2,
+            is_purchase_or_expense=True
+        )
+        
+        self.instance.tax_amount = res['tax_total_added'] + res['tax_total_deducted']
+        self.instance.total = Decimal(str(subtotal)) + res['tax1_signed'] + res['tax2_signed']
+        self.instance.amount = self.instance.total
+        
         return cleaned
 
 class CustodyForm(forms.ModelForm):
     class Meta:
         model = Custody
-        fields = ['date', 'employee', 'amount', 'purpose', 'account', 'cash_box']
+        fields = ['date', 'employee', 'amount', 'purpose', 'cash_box']
         widgets = {
             'date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'employee': forms.Select(attrs={'class': 'form-select'}),
-            'amount': forms.NumberInput(attrs={'class': 'form-control', 'min': '0.01', 'step': '0.01'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'purpose': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
-            'account': forms.Select(attrs={'class': 'form-select'}),
             'cash_box': forms.Select(attrs={'class': 'form-select'}),
         }
         labels = {
@@ -138,7 +174,6 @@ class CustodyForm(forms.ModelForm):
             'employee': 'الموظف (المستلم)',
             'amount': 'قيمة العهدة',
             'purpose': 'الغرض من العهدة',
-            'account': 'حساب العهدة (ذمة موظف)',
             'cash_box': 'خزنة الصرف',
         }
 
@@ -146,16 +181,12 @@ class CustodyForm(forms.ModelForm):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         self.fields['employee'].queryset = Employee.objects.filter(status=Employee.Status.ACTIVE)
-        custody_parent = getattr(settings, 'CUSTODY_ACCOUNTS_PARENT', '1142')
-        self.fields['account'].queryset = Account.objects.filter(
-            code__startswith=custody_parent, is_leaf=True, is_active=True
-        )
         
         if 'cash_box' in self.fields:
             if user:
-                self.fields['cash_box'].queryset = get_available_cash_boxes(user)
+                self.fields['cash_box'].queryset = get_available_cash_boxes(user).filter(salesrepresentative__isnull=True)
             else:
-                self.fields['cash_box'].queryset = CashBox.objects.filter(is_active=True).order_by('name')
+                self.fields['cash_box'].queryset = CashBox.objects.filter(is_active=True, salesrepresentative__isnull=True).order_by('name')
     
     def clean_date(self):
         d = self.cleaned_data.get('date')
@@ -204,9 +235,9 @@ class CustodySettlementForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if 'cash_box' in self.fields:
             if user:
-                self.fields['cash_box'].queryset = get_available_cash_boxes(user)
+                self.fields['cash_box'].queryset = get_available_cash_boxes(user).filter(salesrepresentative__isnull=True)
             else:
-                self.fields['cash_box'].queryset = CashBox.objects.filter(is_active=True).order_by('name')
+                self.fields['cash_box'].queryset = CashBox.objects.filter(is_active=True, salesrepresentative__isnull=True).order_by('name')
 
     def clean_date(self):
         d = self.cleaned_data.get('date')

@@ -80,6 +80,15 @@
                                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">رجوع</button>
                                                 <form action="{% url 'sales:quotation-cancel' quotation.pk %}" method="post" class="d-inline">
                                                     {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                                                     <button type="submit" class="btn btn-warning">تأكيد الإلغاء</button>
                                                 </form>
                                             </div>

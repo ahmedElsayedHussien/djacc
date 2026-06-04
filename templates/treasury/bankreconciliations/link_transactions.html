@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% block title %}ربط المعاملات البنكية{% endblock %}
+{% block header %}ربط المعاملات بالتسوية البنكية{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card shadow-sm mb-4 border-0">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-1">البنك: {{ reconciliation.bank_account }}</h5>
+                        <p class="text-muted mb-0">تاريخ كشف الحساب: {{ reconciliation.statement_date }}</p>
+                    </div>
+                    <div class="text-end">
+                        <span class="d-block mb-1">الفرق الحالي:</span>
+                        <h4 class="{% if reconciliation.difference == 0 %}text-success{% else %}text-danger{% endif %} mb-0 fw-bold">
+                            {{ reconciliation.difference }}
+                        </h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">اختر المعاملات المراد ربطها</h5>
+                <a href="{% url 'treasury:banktransaction-create' %}" class="btn btn-sm btn-outline-primary" target="_blank">
+                    <i class="bi bi-plus-lg"></i> تسجيل معاملة جديدة
+                </a>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;">
+                                        <input type="checkbox" class="form-check-input" id="selectAll">
+                                    </th>
+                                    <th>التاريخ</th>
+                                    <th>رقم الحركة</th>
+                                    <th>النوع</th>
+                                    <th>البيان</th>
+                                    <th>المبلغ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for trans in transactions %}
+                                <tr>
+                                    <td>
+                                        <input type="checkbox" name="transaction_ids" value="{{ trans.pk }}" class="form-check-input trans-checkbox" {% if trans.pk in linked_ids %}checked{% endif %}>
+                                    </td>
+                                    <td>{{ trans.date }}</td>
+                                    <td>{{ trans.number }}</td>
+                                    <td>{{ trans.get_transaction_type_display }}</td>
+                                    <td>{{ trans.description }}</td>
+                                    <td><strong>{{ trans.amount }}</strong></td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-5 text-muted">
+                                        <i class="bi bi-inbox d-block fs-1 mb-3"></i>
+                                        لا توجد معاملات بنكية غير مسواة لهذا الحساب حتى تاريخ {{ reconciliation.statement_date }}.
+                                        <br>
+                                        إذا كان هناك عمولات أو مصاريف بنكية لم تسجلها، يرجى <a href="{% url 'treasury:banktransaction-create' %}" target="_blank">تسجيلها أولاً</a> ثم تحديث هذه الصفحة.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-4 d-flex gap-2 justify-content-end">
+                        <a href="{% url 'treasury:bankreconciliation-detail' reconciliation.pk %}" class="btn btn-outline-secondary">إلغاء والعودة</a>
+                        <button type="submit" class="btn btn-primary px-4">حفظ المعاملات المحددة</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.trans-checkbox');
+    
+    if(selectAll) {
+        selectAll.addEventListener('change', function() {
+            checkboxes.forEach(cb => {
+                cb.checked = selectAll.checked;
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -24,6 +24,15 @@
                     {% if quotation.status != 'invoiced' and perms.sales.add_salesinvoice %}
                     <form method="post" action="{% url 'sales:quotation-convert' quotation.pk %}">
                         {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                         <button type="submit" class="btn btn-success w-100" onclick="return confirm('تأكيد تحويل عرض السعر إلى فاتورة مبيعات؟');">
                             <i class="bi bi-file-earmark-plus"></i> تحويل إلى فاتورة
                         </button>

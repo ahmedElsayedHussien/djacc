@@ -67,8 +67,12 @@ class CustomerForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['default_tax1'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
-        self.fields['default_tax2'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
+        from django.db.models import Q
+        tax_qs = TaxType.objects.filter(appear_in_invoices=True, is_active=True).filter(
+            Q(name__icontains='مخرجات') | Q(name__icontains='مبيعات')
+        )
+        self.fields['default_tax1'].queryset = tax_qs
+        self.fields['default_tax2'].queryset = tax_qs
 
         if self.instance and self.instance.pk and self.instance.account_id:
             self.fields['initial_balance'].initial = self.instance.account.initial_balance
@@ -325,8 +329,12 @@ class SalesInvoiceLineForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['tax_type'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
-        self.fields['tax_type2'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
+        from django.db.models import Q
+        tax_qs = TaxType.objects.filter(appear_in_invoices=True, is_active=True).filter(
+            Q(name__icontains='مخرجات') | Q(name__icontains='مبيعات')
+        )
+        self.fields['tax_type'].queryset = tax_qs
+        self.fields['tax_type2'].queryset = tax_qs
 
     def clean_quantity(self):
         qty = self.cleaned_data.get('quantity')
@@ -669,9 +677,13 @@ class SalesReturnLineForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        self.fields['tax_type'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
+        from django.db.models import Q
+        tax_qs = TaxType.objects.filter(appear_in_invoices=True, is_active=True).filter(
+            Q(name__icontains='مخرجات') | Q(name__icontains='مبيعات')
+        )
+        self.fields['tax_type'].queryset = tax_qs
         if 'tax_type2' in self.fields:
-            self.fields['tax_type2'].queryset = TaxType.objects.filter(appear_in_invoices=True, is_active=True)
+            self.fields['tax_type2'].queryset = tax_qs
             
         self.fields['return_account'].required = False
         self.fields['cogs_account'].required = False

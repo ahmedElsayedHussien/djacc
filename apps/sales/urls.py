@@ -94,5 +94,6 @@ urlpatterns = [
     path('reports/rep-performance-enhanced/', report_views.RepPerformanceEnhancedReportView.as_view(), name='report-rep-performance-enhanced'),
     path('reports/aging-summary/', report_views.CustomerAgingSummaryReportView.as_view(), name='report-aging-summary'),
     path('reports/quotation-analysis/', report_views.QuotationAnalysisReportView.as_view(), name='report-quotation-analysis'),
+    path('reports/customer-balances/', report_views.CustomerBalancesReportView.as_view(), name='report-customer-balances'),
 ]
 

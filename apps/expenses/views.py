@@ -208,6 +208,37 @@ class CustodyCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
         with transaction.atomic():
             form.instance.number = DocumentService.generate_number(Custody, 'CUS')
             form.instance.created_by = self.request.user
+            
+            # Fetch or Auto-create custody account
+            employee = form.cleaned_data['employee']
+            from apps.core.models import Account
+            from django.conf import settings
+            custody_parent_code = getattr(settings, 'CUSTODY_ACCOUNTS_PARENT', '1142')
+            parent_account = Account.objects.filter(code=custody_parent_code).first()
+            if not parent_account:
+                messages.error(self.request, f'خطأ: لم يتم العثور على الحساب الرئيسي للعهد ({custody_parent_code}). يرجى التحقق من إعدادات النظام.')
+                return super().form_invalid(form)
+            
+            account_name = f'عهدة - {employee.first_name} {employee.last_name}'.strip()
+            account = Account.objects.filter(name=account_name, parent=parent_account).first()
+            if not account:
+                last_acc = Account.objects.filter(parent=parent_account).order_by('code').last()
+                if last_acc:
+                    try:
+                        next_seq = int(last_acc.code[len(parent_account.code):]) + 1
+                    except ValueError:
+                        next_seq = Account.objects.filter(parent=parent_account).count() + 1
+                else:
+                    next_seq = 1
+                account = Account.objects.create(
+                    code=f'{parent_account.code}{next_seq:03d}',
+                    name=account_name,
+                    account_type=parent_account.account_type,
+                    parent=parent_account,
+                    is_leaf=True,
+                )
+            form.instance.account = account
+            
             response = super().form_valid(form)
             CustodyService.issue_custody(self.object, self.request.user)
             messages.success(self.request, f'تم صرف العهدة رقم {self.object.number} وإنشاء القيد المحاسبي بنجاح.')

@@ -52,8 +52,21 @@
                         <div class="icon-shape bg-info bg-opacity-10 text-info">
                             <i class="bi bi-tags fs-3"></i>
                         </div>
-                        <h6 class="fw-bold text-dark">تحليل تكلفة المشتريات (أصناف)</h6>
-                        <p class="text-muted small mb-0">مراقبة أسعار شراء الأصناف وتقلباتها ومتوسط التكلفة.</p>
+                        <h6 class="fw-bold text-dark">تحليل أسعار الشراء للأصناف</h6>
+                        <p class="text-muted small mb-0">مراقبة أسعار الشراء، أعلى/أقل سعر، ومتوسط التكلفة.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4 col-lg-3">
+            <a href="{% url 'purchases:report-item-price-fluctuations' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm border-start border-warning border-4">
+                    <div class="card-body">
+                        <div class="icon-shape bg-warning bg-opacity-10 text-warning">
+                            <i class="bi bi-graph-up-arrow fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">تقلبات أسعار الأصناف والربحية</h6>
+                        <p class="text-muted small mb-0">تتبع تغيرات التكلفة عبر الفترات الزمنية وتأثيرها المباشر على الأرباح.</p>
                     </div>
                 </div>
             </a>
@@ -117,22 +130,6 @@
         </div>
     </div>
 
-    <!-- تقارير لوجستية وطلبيات -->
-    <h5 class="mb-4 fw-bold text-dark"><i class="bi bi-truck me-2 text-warning"></i>المراقبة اللوجستية والطلبيات</h5>
-    <div class="row g-4">
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'purchases:report-open-orders' %}" class="text-decoration-none">
-                <div class="card h-100 report-card shadow-sm">
-                    <div class="card-body">
-                        <div class="icon-shape bg-warning bg-opacity-10 text-warning">
-                            <i class="bi bi-clipboard-check fs-3"></i>
-                        </div>
-                        <h6 class="fw-bold text-dark">أوامر الشراء المعلقة</h6>
-                        <p class="text-muted small mb-0">متابعة البضائع المطلوبة التي لم تصل أو لم تفوتر بعد.</p>
-                    </div>
-                </div>
-            </a>
-        </div>
-    </div>
+
 </div>
 {% endblock %}

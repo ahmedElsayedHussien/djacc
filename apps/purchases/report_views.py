@@ -6,6 +6,7 @@ from datetime import date
 from .models import Supplier
 from apps.reports.services import ReportService
 from django.core.paginator import Paginator
+from apps.inventory.models import Item
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,33 @@ class PurchaseReturnAnalysisReportView(LoginRequiredMixin, PermRequiredMixin, Te
         to_date_obj = date.fromisoformat(to_date)
         
         context['report'] = ReportService.purchase_returns_analysis_report(from_date_obj, to_date_obj)
+        context['from_date'] = from_date_obj
+        context['to_date'] = to_date_obj
+        return context
+
+class ItemPriceFluctuationReportView(LoginRequiredMixin, PermRequiredMixin, TemplateView):
+    template_name = 'purchases/reports/item_price_fluctuation.html'
+    permission_required = 'purchases.view_purchaseinvoice'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from_date = self.request.GET.get('from', date.today().replace(day=1).isoformat())
+        to_date = self.request.GET.get('to', date.today().isoformat())
+        item_id = self.request.GET.get('item')
+        
+        from_date_obj = date.fromisoformat(from_date)
+        to_date_obj = date.fromisoformat(to_date)
+        
+        report_data = []
+        if item_id:
+            report_data = ReportService.item_price_fluctuation_report(item_id, from_date_obj, to_date_obj)
+            context['selected_item'] = int(item_id)
+            
+        paginator = Paginator(report_data, 50)
+        page_number = self.request.GET.get('page')
+        context['report'] = paginator.get_page(page_number)
+        
+        context['items'] = Item.objects.all().order_by('name')
         context['from_date'] = from_date_obj
         context['to_date'] = to_date_obj
         return context

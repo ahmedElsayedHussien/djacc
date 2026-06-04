@@ -19,9 +19,11 @@
                         <th>الكود</th>
                         <th>الاسم</th>
                         <th>حساب المحاسبة</th>
-                        <th>الرقم الضريبي</th>
+                        <th>السجل / الضريبي</th>
                         <th>الهاتف</th>
+                        <th>نوع السداد</th>
                         <th>الرصيد الحالي</th>
+                        <th>الحالة</th>
                         <th>إجراءات</th>
                     </tr>
                 </thead>
@@ -31,9 +33,26 @@
                         <td>{{ supplier.code }}</td>
                         <td><a href="{% url 'purchases:supplier-detail' supplier.pk %}">{{ supplier.name }}</a></td>
                         <td><code>{{ supplier.account.code }}</code></td>
-                        <td>{{ supplier.tax_number|default:"---" }}</td>
+                        <td>
+                            <div class="small">س: {{ supplier.commercial_register|default:"---" }}</div>
+                            <div class="small">ض: {{ supplier.tax_number|default:"---" }}</div>
+                        </td>
                         <td>{{ supplier.phone|default:"---" }}</td>
+                        <td>
+                            {% if supplier.payment_type == 'cash' %}
+                            <span class="badge bg-info">نقدي</span>
+                            {% else %}
+                            <span class="badge bg-secondary">آجل</span>
+                            {% endif %}
+                        </td>
                         <td>{{ supplier.balance|floatformat:2 }}</td>
+                        <td>
+                            {% if supplier.is_active %}
+                            <span class="badge bg-success">نشط</span>
+                            {% else %}
+                            <span class="badge bg-danger">موقوف</span>
+                            {% endif %}
+                        </td>
                         <td>
                             {% if perms.purchases.change_supplier %}<a href="{% url 'purchases:supplier-edit' supplier.pk %}" class="btn btn-sm btn-outline-primary">تعديل</a>{% endif %}
                         </td>

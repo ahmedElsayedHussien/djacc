@@ -8,6 +8,15 @@
     <div class="col-lg-10">
         <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
             
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-white"><h5 class="mb-0 text-primary"><i class="bi bi-person-lines-fill"></i> البيانات الشخصية</h5></div>

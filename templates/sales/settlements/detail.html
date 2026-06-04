@@ -11,6 +11,15 @@
                 {% if settlement.status == 'draft' and perms.sales.change_repdailysettlement %}
                 <form action="{% url 'sales:settlement-post' settlement.pk %}" method="post" class="d-inline">
                     {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                     <button type="submit" class="btn btn-sm btn-primary" onclick="return confirm('هل أنت متأكد من ترحيل التسوية واعتماد الكاش؟')">
                         ترحيل التسوية
                     </button>

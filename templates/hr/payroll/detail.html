@@ -30,6 +30,15 @@
                 <div class="d-flex gap-2">
                     <form method="post" action="{% url 'hr:payroll-generate' period.pk %}">
                         {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                         <button type="submit" class="btn btn-primary"><i class="bi bi-magic"></i> توليد قسائم الرواتب</button>
                     </form>
                     

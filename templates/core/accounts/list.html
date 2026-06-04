@@ -134,6 +134,15 @@
         <div class="modal-content">
             <form method="post" action="{% url 'core:account-initialize' %}">
                 {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                 <div class="modal-header bg-warning text-dark">
                     <h5 class="modal-title" id="initChartModalLabel">
                         <i class="bi bi-exclamation-triangle-fill me-2"></i> تحذير: تحديث الشجرة الافتراضية

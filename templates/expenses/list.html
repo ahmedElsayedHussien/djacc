@@ -49,13 +49,22 @@
                         <td>{% if expense.journal_entry %}{{ expense.journal_entry.created_by.username }}{% else %}-{% endif %}</td>
                         <td>
                             <a href="{% url 'expenses:expense-detail' expense.pk %}" class="btn btn-sm btn-outline-info">
-                                <i class="bi bi-eye"></i>
+                                <i class="bi bi-eye me-1"></i> عرض
                             </a>
                             {% if expense.status == 'draft' and perms.expenses.change_expense %}
                             <form method="post" action="{% url 'expenses:expense-approve' expense.pk %}" class="d-inline">
                                 {% csrf_token %}
-                                <button type="submit" class="btn btn-sm btn-success" title="اعتماد وترحيل" onclick="return confirm('تأكيد الاعتماد والترحيل؟');">
-                                    <i class="bi bi-check-circle"></i>
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+                                <button type="submit" class="btn btn-sm btn-success" title="اعتماد" onclick="return confirm('هل أنت متأكد من اعتماد المصروف؟');">
+                                    <i class="bi bi-check-circle me-1"></i> اعتماد
                                 </button>
                             </form>
                             {% endif %}

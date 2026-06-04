@@ -94,6 +94,15 @@
                                 {% if perms.sales.change_salesinvoice or request.user.salesrepresentative and inv.sales_rep == request.user.salesrepresentative %}
                                 <form method="post" action="{% url 'sales:invoice-post' inv.pk %}" style="display:inline;">
                                     {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                                     <button type="submit" class="btn btn-sm btn-success">ترحيل</button>
                                 </form>
                                 <a href="{% url 'sales:invoice-edit' inv.pk %}" class="btn btn-sm btn-outline-primary">

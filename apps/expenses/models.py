@@ -67,9 +67,7 @@ class Expense(ConcurrencyModel):
         if self.date and self.date > date.today():
             raise ValidationError({'date': 'تاريخ المصروف لا يمكن أن يكون في المستقبل'})
             
-        if self.subtotal + self.tax_amount != self.total:
-            raise ValidationError("الإجمالي يجب أن يساوي مجموع المبلغ قبل الضريبة مع إجمالي الضريبة")
-            
+        # Validation for total is removed as tax can be deductions (WHT) which decreases total.            
         if self.tax_type and self.tax_percent <= 0:
             raise ValidationError({'tax_percent': 'يجب إدخال نسبة ضريبة'})
         if not self.tax_type and (self.tax_percent > 0 or self.tax_amount > 0):

@@ -39,6 +39,7 @@ urlpatterns = [
     path('bank-reconciliations/create/', views.BankReconciliationCreateView.as_view(), name='bankreconciliation-create'),
     path('bank-reconciliations/<int:pk>/', views.BankReconciliationDetailView.as_view(), name='bankreconciliation-detail'),
     path('bank-reconciliations/<int:pk>/update/', views.BankReconciliationUpdateView.as_view(), name='bankreconciliation-update'),
+    path('bank-reconciliations/<int:pk>/link/', views.BankReconciliationLinkTransactionsView.as_view(), name='bankreconciliation-link'),
     path('bank-reconciliations/<int:pk>/match/', views.BankReconciliationMatchView.as_view(), name='bankreconciliation-match'),
 
     # Bank Transactions

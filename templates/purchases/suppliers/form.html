@@ -8,14 +8,37 @@
       <div class="card-body">
         <form method="post" novalidate>
           {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
           <div class="row g-3">
-            <div class="col-md-12">
+            <div class="col-md-9">
               <label class="form-label">اسم المورد *</label>
               {{ form.name }}
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+              <div class="form-check form-switch mb-2">
+                {{ form.is_active }}
+                <label class="form-check-label" for="{{ form.is_active.id_for_label }}">مورد نشط</label>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">السجل التجاري</label>
+              {{ form.commercial_register }}
             </div>
             <div class="col-md-6">
               <label class="form-label">الرقم الضريبي</label>
               {{ form.tax_number }}
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">طريقة السداد المعتادة</label>
+                {{ form.payment_type }}
             </div>
             <div class="col-md-6">
                 <label class="form-label">أجل السداد (يوم)</label>

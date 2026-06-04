@@ -131,6 +131,7 @@ class CashTransfer(ConcurrencyModel):
     date = models.DateField(verbose_name="تاريخ التحويل")
     from_cash_box = models.ForeignKey(CashBox, null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_out', verbose_name="من خزينة")
     from_bank = models.ForeignKey(BankAccount, null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_out', verbose_name="من بنك")
+    from_intermediary = models.ForeignKey('sales.IntermediaryCompany', null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_out', verbose_name="من شركة وسيطة")
     to_cash_box = models.ForeignKey(CashBox, null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_in', verbose_name="إلى خزينة")
     to_bank = models.ForeignKey(BankAccount, null=True, blank=True, on_delete=models.PROTECT, related_name='transfers_in', verbose_name="إلى بنك")
     amount = models.DecimalField(
@@ -155,15 +156,19 @@ class CashTransfer(ConcurrencyModel):
         if self.date and self.date > date.today():
             raise ValidationError({'date': 'تاريخ التحويل لا يمكن أن يكون في المستقبل'})
 
-        if self.from_cash_box and self.from_bank:
-            raise ValidationError('لا يمكن تحديد مصدرين للتحويل (خزنة وبنك معاً)')
+        sources = [self.from_cash_box, self.from_bank, self.from_intermediary]
+        active_sources = [s for s in sources if s is not None]
+        
+        if len(active_sources) > 1:
+            raise ValidationError('لا يمكن تحديد أكثر من مصدر للتحويل')
+
         if self.to_cash_box and self.to_bank:
             raise ValidationError('لا يمكن تحديد وجهتين للتحويل (خزنة وبنك معاً)')
 
-        source = self.from_cash_box or self.from_bank
+        source = active_sources[0] if active_sources else None
         dest = self.to_cash_box or self.to_bank
         if not source:
-            raise ValidationError('يجب تحديد مصدر التحويل (خزنة أو بنك)')
+            raise ValidationError('يجب تحديد مصدر التحويل (خزنة أو بنك أو شركة وسيطة)')
         if not dest:
             raise ValidationError('يجب تحديد وجهة التحويل (خزنة أو بنك)')
         
@@ -175,7 +180,7 @@ class CashTransfer(ConcurrencyModel):
 
     @property
     def from_source(self):
-        return str(self.from_cash_box or self.from_bank or '')
+        return str(self.from_cash_box or self.from_bank or self.from_intermediary or '')
 
     @property
     def to_destination(self):

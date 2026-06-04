@@ -19,6 +19,14 @@ class Supplier(ConcurrencyModel):
     tax_number = models.CharField(max_length=50, blank=True, verbose_name="الرقم الضريبي")
     phone = models.CharField(max_length=20, blank=True, verbose_name="الهاتف")
     email = models.EmailField(blank=True, verbose_name="البريد الإلكتروني")
+    commercial_register = models.CharField(max_length=50, blank=True, verbose_name="السجل التجاري")
+    payment_type = models.CharField(
+        max_length=10, 
+        choices=[('cash', 'نقدي'), ('credit', 'آجل')], 
+        default='credit', 
+        verbose_name="طريقة السداد المعتادة"
+    )
+    is_active = models.BooleanField(default=True, verbose_name="نشط")
     payment_terms_days = models.IntegerField(default=30, validators=[MinValueValidator(0)], verbose_name="فترة السداد (أيام)")
     address = models.TextField(blank=True, verbose_name="العنوان")
 
@@ -264,6 +272,19 @@ class PurchaseReturn(ConcurrencyModel):
     journal_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, verbose_name="قيد اليومية")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name="أنشئ بواسطة")
 
+    payment_type = models.CharField(
+        max_length=10,
+        choices=[('cash', 'نقدي'), ('credit', 'آجل')],
+        default='credit',
+        verbose_name="نوع السداد"
+    )
+    cash_box = models.ForeignKey(
+        'treasury.CashBox',
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        verbose_name="الخزينة (للنقدي)"
+    )
+
     class Meta:
         verbose_name = "مرتجع مشتريات"
         verbose_name_plural = "مرتجعات المشتريات"
@@ -272,15 +293,8 @@ class PurchaseReturn(ConcurrencyModel):
     def __str__(self):
         return self.number
 
-    def save(self, *args, **kwargs):
-        if not self.number:
-            self.number = DocumentService.generate_number(PurchaseOrder, 'PO')
-        self.full_clean()
-        super().save(*args, **kwargs)
-
-    def clean(self):
-        if self.expected_delivery_date and self.date and self.expected_delivery_date < self.date:
-            raise ValidationError({'expected_delivery_date': 'تاريخ الاستلام لا يمكن أن يسبق تاريخ الأمر'})
+    def get_absolute_url(self):
+        return reverse('purchases:return-detail', kwargs={'pk': self.pk})
 
     def save(self, *args, **kwargs):
         if not self.number:
@@ -290,9 +304,15 @@ class PurchaseReturn(ConcurrencyModel):
 
     def clean(self):
         if self.invoice and self.supplier and self.invoice.supplier != self.supplier:
-            raise ValidationError({'supplier': 'مورد المرتجع يجب أن يطابق مورد الفاتورة الأصلية'})
+            raise ValidationError('يجب أن تكون الفاتورة لنفس المورد')
+        if self.payment_type == 'cash' and not self.cash_box:
+            raise ValidationError({'cash_box': 'يرجى تحديد الخزينة للمرتجع النقدي'})
         if self.date and self.date > date.today():
             raise ValidationError({'date': 'تاريخ المرتجع لا يمكن أن يكون في المستقبل'})
+
+    @property
+    def payment_type_display(self):
+        return 'نقدي' if self.payment_type == 'cash' else 'آجل'
 
 class PurchaseReturnLine(ConcurrencyModel):
     purchase_return = models.ForeignKey(PurchaseReturn, on_delete=models.CASCADE, related_name='lines', db_index=True, verbose_name="سند المرتجع")

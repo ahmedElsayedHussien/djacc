@@ -99,6 +99,15 @@
                     <div class="card-body">
                         <form method="post" action="{% url 'sales:collect-cheque' receipt.pk %}" class="row g-2 align-items-end">
                             {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                             <div class="col-md-5">
                                 <label class="form-label small">البنك المستلم</label>
                                 <select name="bank" class="form-select form-select-sm" required>

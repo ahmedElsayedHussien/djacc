@@ -102,6 +102,15 @@
                                 {% if perms.pos.change_posorder %}
                                 <form method="POST" action="{% url 'pos:order-cancel' order.pk %}" style="display:inline">
                                     {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                                     <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill mb-1" onclick="return confirm('تأكيد إلغاء الفاتورة {{ order.receipt_number }}؟')">
                                         <i class="bi bi-x-circle"></i> إلغاء
                                     </button>

@@ -8,20 +8,43 @@
     <div class="col-md-10">
         <form method="post">
             {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
             <div class="card mb-4">
                 <div class="card-header"><h5 class="mb-0">بيانات المرتجع الأساسية</h5></div>
                 <div class="card-body">
-                    <div class="row">
+                    <div class="row mb-3">
                         <div class="col-md-4">{{ form.date|as_crispy_field }}</div>
-                        <div class="col-md-4">{{ form.supplier|as_crispy_field }}</div>
+                        <div class="col-md-4">
+                            {{ form.supplier|as_crispy_field }}
+                            <div class="alert alert-warning py-2 px-3 border-0 small mt-2 d-none shadow-sm" id="cashCustomerCreditWarning">
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i>تنبيه: المورد نقدي وتم اختيار الدفع آجل! (سيتم إخطار الإدارة والمحاسب)
+                            </div>
+                        </div>
                         <div class="col-md-4">{{ form.invoice|as_crispy_field }}</div>
                     </div>
-                    {{ form.notes|as_crispy_field }}
+                    <div class="row">
+                        <div class="col-md-4">{{ form.payment_type|as_crispy_field }}</div>
+                        <div class="col-md-4" id="cash-box-container">{{ form.cash_box|as_crispy_field }}</div>
+                        <div class="col-md-4"></div>
+                    </div>
+                    <div class="mt-3">
+                        {{ form.notes|as_crispy_field }}
+                    </div>
                 </div>
             </div>
 
             <div class="card mb-4">
-                <div class="card-header"><h5 class="mb-0">أصناف المرتجع</h5></div>
+                <div class="card-header d-flex justify-content-between">
+                    <h5 class="mb-0">أصناف المرتجع</h5>
+                </div>
                 <div class="card-body">
                     {{ lines.management_form }}
                     <div class="table-responsive">
@@ -32,29 +55,75 @@
                                     <th>الوحدة</th>
                                     <th>المستودع</th>
                                     <th>الكمية</th>
-                                    <th>التكلفة</th>
-                                    <th>الضريبة %</th>
+                                    <th>السعر</th>
+                                    <th>خصم %</th>
+                                    <th>الضريبة 1 %</th>
+                                    <th>الضريبة 2 %</th>
+                                    <th>الإجمالي</th>
+                                    
                                     <th>حذف</th>
                                 </tr>
                             </thead>
                             <tbody id="line-items">
                                 {% for l_form in lines %}
-                                <tr class="line-form">
+                                <tr class="line-form line-row">
                                     <td data-label="الصنف">{{ l_form.id }}{{ l_form.item|as_crispy_field }}</td>
                                     <td data-label="الوحدة">{{ l_form.unit|as_crispy_field }}</td>
                                     <td data-label="المستودع">{{ l_form.warehouse|as_crispy_field }}</td>
                                     <td data-label="الكمية">{{ l_form.quantity|as_crispy_field }}</td>
-                                    <td data-label="التكلفة">{{ l_form.unit_cost|as_crispy_field }}</td>
-                                    <td data-label="الضريبة %">{{ l_form.tax_type|as_crispy_field }}</td>
+                                    <td data-label="السعر">{{ l_form.unit_cost|as_crispy_field }}</td>
+                                    <td data-label="خصم %">{{ l_form.discount_percent|as_crispy_field }}</td>
+                                    <td data-label="الضريبة 1 %">
+                                        {{ l_form.tax_type|as_crispy_field }}
+                                        {{ l_form.tax_percent|as_crispy_field }}
+                                    </td>
+                                    <td data-label="الضريبة 2 %">
+                                        {{ l_form.tax_type2|as_crispy_field }}
+                                        {{ l_form.tax_percent2|as_crispy_field }}
+                                    </td>
+                                    <td data-label="الإجمالي">
+                                        <input type="text" class="form-control line-total-display" readonly value="0.00">
+                                        {{ l_form.total }}
+                                    </td>
+                                    <td data-label="حساب المردودات"></td>
                                     <td data-label="حذف">{{ l_form.DELETE|as_crispy_field }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm mt-2" id="addRow">
+                        <i class="bi bi-plus"></i> إضافة صنف
+                    </button>
                 </div>
             </div>
 
+            <div class="row mb-4 justify-content-end">
+                <div class="col-md-5">
+                    <div class="card totals-card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="fw-bold">إجمالي قيمة المرتجع:</span>
+                                <span id="subtotal">0.00</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2 text-danger">
+                                <span class="fw-bold">إجمالي الخصم:</span>
+                                <span id="discountTotal">0.00</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2 text-primary">
+                                <span class="fw-bold">إجمالي الضريبة:</span>
+                                <span id="taxTotal">0.00</span>
+                            </div>
+                            <hr>
+                            <div class="d-flex justify-content-between">
+                                <span class="h4 fw-bold">الصافي النهائي للمرتجع:</span>
+                                <span class="h4 fw-bold text-success" id="grandTotal">0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+ 
             <div class="d-flex gap-2 mb-5">
                 <button type="submit" class="btn btn-primary">حفظ كمسودة</button>
                 <a href="{% url 'purchases:return-list' %}" class="btn btn-secondary">إلغاء</a>
@@ -64,7 +133,809 @@
 </div>
 
 <style>
+    /* Hide crispy labels in table for better layout */
     .line-form .mb-3 { margin-bottom: 0 !important; }
     .line-form label { display: none; }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const supplierSelect = document.getElementById('id_supplier');
+        const invoiceSelect = document.getElementById('id_invoice');
+        
+        // Dynamic Item Select Lock Logic
+        function updateItemSelectsState() {
+            const supplierSelected = supplierSelect && !!supplierSelect.value;
+            document.querySelectorAll('.item-select').forEach(select => {
+                select.disabled = !supplierSelected;
+                
+                let firstOpt = select.options[0];
+                if (!firstOpt) {
+                    firstOpt = document.createElement('option');
+                    firstOpt.value = '';
+                    select.insertBefore(firstOpt, select.firstChild);
+                }
+                
+                if (!supplierSelected) {
+                    firstOpt.text = "الرجاء اختيار المورد أولاً...";
+                    select.value = '';
+                    const row = select.closest('.line-row');
+                    const unitSelect = row ? row.querySelector('.unit-select') : null;
+                    if (unitSelect) unitSelect.innerHTML = '<option value="">---------</option>';
+                    const priceInput = row ? row.querySelector('.price-input') : null;
+                    if (priceInput) {
+                        priceInput.value = '';
+                        priceInput.dataset.basePrice = '';
+                    }
+                } else {
+                    firstOpt.text = "---------";
+                }
+            });
+            calculateReturn();
+        }
+        
+        let currentInvoiceLines = [];
+        let currentSupplierPriceList = null;
+        let currentSupplierTax1 = null;
+        let currentSupplierTax2 = null;
+        let currentSupplierIsTaxable = true;
+        let currentSupplierType = null;
+        let currentSectorOffers_UNUSED = [];
+
+        // 1. Calculate Return Totals (Standardized Premium Pricing/Tax Logic)
+        function calculateReturn() {
+            let grossTotal = 0;
+            let discountTotal = 0;
+            let taxTotalAdd = 0;
+            let taxTotalSub = 0;
+            
+            document.querySelectorAll('.line-row').forEach(row => {
+                const qtyInput = row.querySelector('.qty-input');
+                const priceInput = row.querySelector('.price-input');
+                const discInput = row.querySelector('.discount-input');
+                
+                const tax1Select = row.querySelector('.tax-select');
+                const tax2Select = row.querySelector('.tax-select2');
+                const tax1RateInput = row.querySelector('.tax-rate');
+                const tax2RateInput = row.querySelector('.tax-rate2');
+                
+                if (!qtyInput || !priceInput) return;
+
+                const qty = parseFloat(qtyInput.value) || 0;
+                const price = parseFloat(priceInput.value) || 0;
+                const discPercent = discInput ? (parseFloat(discInput.value) || 0) : 0;
+                
+                const grossLine = qty * price;
+                const discLine = grossLine * (discPercent / 100);
+                const netLine = grossLine - discLine;
+                
+                const tax1Rate = tax1RateInput ? (parseFloat(tax1RateInput.value) || 0) : 0;
+                const tax2Rate = tax2RateInput ? (parseFloat(tax2RateInput.value) || 0) : 0;
+                
+                const tax1Cat = tax1Select ? tax1Select.selectedOptions[0]?.dataset.category : '';
+                const tax2Cat = tax2Select ? tax2Select.selectedOptions[0]?.dataset.category : '';
+
+                // Table Tax first
+                let tableTaxAmount = 0;
+                if (tax1Cat === 'table') tableTaxAmount += netLine * (tax1Rate / 100);
+                if (tax2Cat === 'table') tableTaxAmount += netLine * (tax2Rate / 100);
+
+                // VAT and other taxes
+                let lineTaxAdd = 0;
+                let lineTaxSub = 0;
+
+                [
+                    {cat: tax1Cat, rate: tax1Rate},
+                    {cat: tax2Cat, rate: tax2Rate}
+                ].forEach(tx => {
+                    if (!tx.cat || tx.rate === 0) return;
+                    
+                    let val = 0;
+                    if (tx.cat === 'vat') {
+                        val = (netLine + tableTaxAmount) * (tx.rate / 100);
+                    } else {
+                        val = netLine * (tx.rate / 100);
+                    }
+
+                    if (['wht', 'salary', 'insurance'].includes(tx.cat)) {
+                        lineTaxSub += val;
+                    } else {
+                        lineTaxAdd += val;
+                    }
+                });
+
+                const lineTotal = netLine + lineTaxAdd - lineTaxSub;
+                
+                const displayEl = row.querySelector('.line-total-display');
+                const totalInput = row.querySelector('.total-input');
+                if (displayEl) displayEl.value = lineTotal.toFixed(2);
+                if (totalInput) totalInput.value = lineTotal.toFixed(2);
+                
+                grossTotal += grossLine;
+                discountTotal += discLine;
+                taxTotalAdd += lineTaxAdd;
+                taxTotalSub += lineTaxSub;
+            });
+            
+            document.getElementById('subtotal').innerText = grossTotal.toFixed(2);
+            document.getElementById('discountTotal').innerText = discountTotal.toFixed(2);
+            document.getElementById('taxTotal').innerText = (taxTotalAdd - taxTotalSub).toFixed(2);
+            document.getElementById('grandTotal').innerText = (grossTotal - discountTotal + taxTotalAdd - taxTotalSub).toFixed(2);
+        }
+
+        function showQuantityWarning(row, message) {
+            let warningDiv = row.querySelector('.qty-warning');
+            if (!warningDiv) {
+                warningDiv = document.createElement('div');
+                warningDiv.className = 'qty-warning text-danger small mt-1 fw-bold';
+                const qtyInput = row.querySelector('.qty-input');
+                if (qtyInput) {
+                    qtyInput.classList.add('is-invalid');
+                    qtyInput.parentNode.appendChild(warningDiv);
+                }
+            }
+            warningDiv.innerText = message;
+        }
+        
+        function removeQuantityWarning(row) {
+            const warningDiv = row.querySelector('.qty-warning');
+            if (warningDiv) {
+                warningDiv.remove();
+            }
+            const qtyInput = row.querySelector('.qty-input');
+            if (qtyInput) {
+                qtyInput.classList.remove('is-invalid');
+            }
+        }
+
+        function validateLineQuantity(row) {
+            const itemSelect = row.querySelector('.item-select');
+            const qtyInput = row.querySelector('.qty-input');
+            const unitSelect = row.querySelector('.unit-select');
+            
+            if (!itemSelect || !qtyInput || !unitSelect || !invoiceSelect.value || currentInvoiceLines.length === 0) {
+                removeQuantityWarning(row);
+                return true;
+            }
+            
+            const itemId = itemSelect.value;
+            const qty = parseFloat(qtyInput.value) || 0;
+            if (!itemId || qty <= 0) {
+                removeQuantityWarning(row);
+                return true;
+            }
+            
+            const matchedLine = currentInvoiceLines.find(l => l.item_id == itemId);
+            if (!matchedLine) {
+                removeQuantityWarning(row);
+                return true;
+            }
+            
+            const selectedOption = unitSelect.selectedOptions[0];
+            const factor = selectedOption ? (parseFloat(selectedOption.dataset.factor) || 1) : 1;
+            const enteredBaseQty = qty * factor;
+            
+            const maxBaseReturnable = parseFloat(matchedLine.max_base_returnable) || 0;
+            
+            if (enteredBaseQty > maxBaseReturnable) {
+                const maxAllowedInUnit = maxBaseReturnable / factor;
+                const unitName = selectedOption ? selectedOption.text : '';
+                showQuantityWarning(row, `تنبيه: يتجاوز الحد الأقصى للمرتجع لهذه الفاتورة وهو (${maxAllowedInUnit.toFixed(2)} ${unitName})`);
+                return false;
+            } else {
+                removeQuantityWarning(row);
+                return true;
+            }
+        }
+
+        // 2. Fetch tax rate and category when tax type is selected
+        async function fetchTaxRate(taxSelect, rateInputClass) {
+            const taxId = taxSelect.value;
+            const row = taxSelect.closest('.line-row');
+            const rateInput = row.querySelector(rateInputClass);
+            
+            if (!taxId) {
+                rateInput.value = '0.00';
+                if (taxSelect.selectedOptions[0]) taxSelect.selectedOptions[0].dataset.category = '';
+                calculateReturn();
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/taxes/${taxId}/`);
+                if (response.ok) {
+                    const data = await response.json();
+                    rateInput.value = data.rate;
+                    if (taxSelect.selectedOptions[0]) {
+                        taxSelect.selectedOptions[0].dataset.category = data.category;
+                    }
+                    calculateReturn();
+                }
+            } catch (error) {
+                console.error('Error fetching tax rate:', error);
+            }
+        }
+
+        // Initialize categories for existing rows on load
+        document.querySelectorAll('.tax-select, .tax-select2').forEach(select => {
+            if (select.value) fetchTaxRate(select, select.classList.contains('tax-select') ? '.tax-rate' : '.tax-rate2');
+        });
+
+        document.addEventListener('input', function(e) {
+            if (e.target.matches('.qty-input, .price-input, .discount-input')) {
+                calculateReturn();
+                if (e.target.matches('.qty-input')) {
+                    const row = e.target.closest('.line-row');
+                    validateLineQuantity(row);
+                }
+            }
+        });
+        
+        document.addEventListener('change', function(e) {
+            if (e.target.matches('.tax-select')) {
+                fetchTaxRate(e.target, '.tax-rate');
+            }
+            if (e.target.matches('.tax-select2')) {
+                fetchTaxRate(e.target, '.tax-rate2');
+            }
+        });
+
+        // 3. Multi-unit logic
+        async function fetchItemUnits(itemSelect) {
+            const row = itemSelect.closest('.line-row');
+            const unitSelect = row.querySelector('.unit-select');
+            const itemId = itemSelect.value;
+            
+            if (!itemId) {
+                unitSelect.innerHTML = '<option value="">---------</option>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/inventory/api/item/${itemId}/`);
+                if (response.ok) {
+                    const data = await response.json();
+                    unitSelect.innerHTML = '';
+                    data.units.forEach(u => {
+                        const option = document.createElement('option');
+                        option.value = u.id;
+                        option.text = u.name;
+                        option.dataset.factor = u.factor;
+                        unitSelect.appendChild(option);
+                    });
+                    if (data.default_unit_id) {
+                        unitSelect.value = data.default_unit_id;
+                    }
+                    calculateReturn();
+                }
+            } catch (error) {
+                print("Error fetching units:", error);
+            }
+        }
+
+        // 4. Fetch Item Price and apply discounts/defaults with Conversion Factors
+        async function fetchItemPrice(itemSelect) {
+            if (!itemSelect.value) return;
+            
+            const row = itemSelect.closest('.line-row');
+            const priceInput = row.querySelector('.price-input');
+            const discInput = row.querySelector('.discount-input');
+            const tax1Select = row.querySelector('.tax-select');
+            const tax2Select = row.querySelector('.tax-select2');
+            const unitSelect = row.querySelector('.unit-select');
+
+            // Scenario A: If an original invoice is selected, check if this item is in the original invoice
+            if (invoiceSelect.value && currentInvoiceLines.length > 0) {
+                const matchedLine = currentInvoiceLines.find(l => l.item_id == itemSelect.value);
+                if (matchedLine) {
+                    if (matchedLine.unit_id && unitSelect) {
+                        unitSelect.value = matchedLine.unit_id;
+                    }
+                    priceInput.value = matchedLine.unit_price;
+                    
+                    // Store the base price (unit price / factor)
+                    const selectedOption = unitSelect ? unitSelect.selectedOptions[0] : null;
+                    const factor = selectedOption ? (parseFloat(selectedOption.dataset.factor) || 1) : 1;
+                    priceInput.dataset.basePrice = (parseFloat(matchedLine.unit_price) / factor).toString();
+                    
+                    if (discInput) discInput.value = matchedLine.discount_percent;
+                    
+                    if (matchedLine.tax_type_id) {
+                        tax1Select.value = matchedLine.tax_type_id;
+                        fetchTaxRate(tax1Select, '.tax-rate');
+                    }
+                    if (matchedLine.tax_type2_id) {
+                        tax2Select.value = matchedLine.tax_type2_id;
+                        fetchTaxRate(tax2Select, '.tax-rate2');
+                    }
+                    calculateReturn();
+                    return;
+                }
+            }
+
+            // Scenario B: Fallback to Customer Price List / standard price
+            try {
+                let fetchedPrice = 0;
+                if (currentSupplierPriceList) {
+                    const response = await fetch(`/api/price-lists/${currentSupplierPriceList}/item_price/?item_id=${itemSelect.value}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.price) {
+                            fetchedPrice = parseFloat(data.price);
+                        }
+                    }
+                }
+                
+                if (fetchedPrice === 0) {
+                    const supplierId = supplierSelect ? supplierSelect.value : '';
+                    const url = `/inventory/api/item/${itemSelect.value}/` + (supplierId ? `?supplier_id=${supplierId}` : '');
+                    const invResponse = await fetch(url);
+                    if (invResponse.ok) {
+                        const data = await invResponse.json();
+                        if (data.standard_price) {
+                            fetchedPrice = parseFloat(data.standard_price);
+                        }
+                    }
+                }
+
+                if (fetchedPrice > 0) {
+                    priceInput.dataset.basePrice = fetchedPrice.toString();
+                    const selectedOption = unitSelect ? unitSelect.selectedOptions[0] : null;
+                    const factor = selectedOption ? (parseFloat(selectedOption.dataset.factor) || 1) : 1;
+                    priceInput.value = (fetchedPrice * factor).toFixed(2);
+                    calculateReturn();
+                }
+            } catch (error) {
+                console.error('Error fetching item price:', error);
+            }
+        }
+
+        // 5. Apply Customer Defaults
+        async function fetchCustomerDetails(supplierId) {
+            if (!supplierId) return;
+            try {
+                const response = await fetch(`/api/suppliers/${supplierId}/`);
+                if (response.ok) {
+                    const data = await response.json();
+                    currentSupplierPriceList = data.price_list;
+                    currentSupplierTax1 = data.default_tax1;
+                    currentSupplierTax2 = data.default_tax2;
+                    currentSupplierIsTaxable = data.is_taxable;
+                    currentSupplierType = data.supplier_type;
+                    checkCashCreditWarning();
+
+                    if (data.sector) {
+                        const offerResponse = await fetch(`/api/quotations/active_for_sector/?sector_id=${data.sector}`);
+                        if (offerResponse.ok) {
+                            currentSectorOffers_UNUSED = await offerResponse.json();
+                        }
+                    } else {
+                        currentSectorOffers_UNUSED = [];
+                    }
+
+                    document.querySelectorAll('.line-row').forEach(row => {
+                        applyCustomerDefaultsToRow(row);
+                    });
+                }
+            } catch (error) {
+                console.error('Error fetching supplier details:', error);
+            }
+        }
+
+        function applyCustomerDefaultsToRow(row) {
+            const tax1Select = row.querySelector('.tax-select');
+            const tax2Select = row.querySelector('.tax-select2');
+            
+            if (currentSupplierIsTaxable) {
+                if (currentSupplierTax1) {
+                    tax1Select.value = currentSupplierTax1;
+                    fetchTaxRate(tax1Select, '.tax-rate');
+                }
+                if (currentSupplierTax2) {
+                    tax2Select.value = currentSupplierTax2;
+                    fetchTaxRate(tax2Select, '.tax-rate2');
+                }
+            } else {
+                tax1Select.value = '';
+                tax2Select.value = '';
+                fetchTaxRate(tax1Select, '.tax-rate');
+                fetchTaxRate(tax2Select, '.tax-rate2');
+            }
+            
+            const itemSelect = row.querySelector('.item-select');
+            if (itemSelect && itemSelect.value) {
+                fetchItemPrice(itemSelect);
+                
+            }
+        }
+
+        function applySectorDiscount(row, itemId) {
+            const discInput = row.querySelector('.discount-input');
+            if (!discInput) return;
+
+            let totalDiscount = 0;
+            currentSectorOffers_UNUSED.forEach(offer => {
+                const line = offer.lines.find(l => l.item == itemId);
+                if (line) {
+                    totalDiscount += parseFloat(line.discount_percent || 0);
+                }
+            });
+
+            if (totalDiscount > 0) {
+                discInput.value = totalDiscount.toFixed(2);
+            }
+            calculateReturn();
+        }
+
+        // 6. Fetch original invoice lines when invoice is changed
+        function fetchInvoiceLines() {
+            const invoiceId = invoiceSelect.value;
+            if (!invoiceId) {
+                currentInvoiceLines = [];
+                return;
+            }
+
+            fetch(`/purchases/api/invoice/${invoiceId}/lines/`)
+                .then(response => response.json())
+                .then(data => {
+                    currentInvoiceLines = data.lines || [];
+                    document.querySelectorAll('.line-row').forEach(row => {
+                        const itemSelect = row.querySelector('.item-select');
+                        if (itemSelect && itemSelect.value) {
+                            fetchItemPrice(itemSelect);
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching invoice lines:', error);
+                });
+        }
+
+        if (invoiceSelect) {
+            invoiceSelect.addEventListener('change', fetchInvoiceLines);
+            if (invoiceSelect.value) {
+                fetchInvoiceLines();
+            }
+        }
+
+        // Customer change triggers
+        if (supplierSelect) {
+            supplierSelect.addEventListener('change', function () {
+                fetchCustomerDetails(supplierSelect.value);
+                updateItemSelectsState();
+            });
+            if (supplierSelect.value) {
+                fetchCustomerDetails(supplierSelect.value);
+            }
+        }
+
+        // Item-select changes (Awaited sequentially to prevent race conditions)
+        document.addEventListener('change', async function(e) {
+            if (e.target.matches('.item-select')) {
+                const row = e.target.closest('.line-row');
+                await fetchItemUnits(e.target);
+                await fetchItemPrice(e.target);
+                applySectorDiscount(row, e.target.value);
+                validateLineQuantity(row);
+            }
+        });
+
+        // Unit-select changes: Update price based on conversion factor
+        document.addEventListener('change', function(e) {
+            if (e.target.matches('.unit-select')) {
+                const row = e.target.closest('.line-row');
+                const priceInput = row.querySelector('.price-input');
+                if (priceInput && priceInput.dataset.basePrice) {
+                    const selectedOption = e.target.selectedOptions[0];
+                    const factor = selectedOption ? (parseFloat(selectedOption.dataset.factor) || 1) : 1;
+                    const basePrice = parseFloat(priceInput.dataset.basePrice) || 0;
+                    priceInput.value = (basePrice * factor).toFixed(2);
+                    calculateReturn();
+                }
+                validateLineQuantity(row);
+            }
+        });
+
+        // Manual price edits: Keep base price in sync
+        document.addEventListener('input', function(e) {
+            if (e.target.matches('.price-input')) {
+                const priceInput = e.target;
+                const row = priceInput.closest('.line-row');
+                const unitSelect = row.querySelector('.unit-select');
+                const selectedOption = unitSelect ? unitSelect.selectedOptions[0] : null;
+                const factor = selectedOption ? (parseFloat(selectedOption.dataset.factor) || 1) : 1;
+                const typedPrice = parseFloat(priceInput.value) || 0;
+                priceInput.dataset.basePrice = (typedPrice / factor).toString();
+            }
+        });
+
+        // Add row logic
+        const addRowBtn = document.getElementById('addRow');
+        if (addRowBtn) {
+            addRowBtn.addEventListener('click', function() {
+                const table = document.getElementById('line-items');
+                const lastRow = table.querySelector('.line-form:last-child');
+                
+                const totalFormsInput = document.getElementById('id_lines-TOTAL_FORMS');
+                if (!totalFormsInput || !lastRow) return;
+                
+                const currentCount = parseInt(totalFormsInput.value);
+                const newRow = lastRow.cloneNode(true);
+                
+                newRow.querySelectorAll('input, select').forEach(input => {
+                    input.name = input.name.replace(`-${currentCount-1}-`, `-${currentCount}-`);
+                    input.id = input.id.replace(`-${currentCount-1}-`, `-${currentCount}-`);
+                    
+                    if (input.name.endsWith('-return_account')) {
+                        // Keep default return account value
+                    } else if (input.type !== 'checkbox') {
+                        input.value = '';
+                    }
+                    
+                    if (input.classList.contains('line-total-display')) input.value = '0.00';
+                    if (input.classList.contains('total-input')) input.value = '0.00';
+                    if (input.classList.contains('tax-rate')) input.value = '0.00';
+                    if (input.classList.contains('tax-rate2')) input.value = '0.00';
+                });
+                
+                table.appendChild(newRow);
+                totalFormsInput.value = currentCount + 1;
+                
+                // Explicitly clear/reset units for cloned row
+                const unitSelect = newRow.querySelector('.unit-select');
+                if (unitSelect) {
+                    unitSelect.innerHTML = '<option value="">---------</option>';
+                }
+                
+                {% if False %}
+                    const warehouseSelect = newRow.querySelector('select[name$="-warehouse"]');
+                    if (warehouseSelect) {
+                        
+                        warehouseSelect.style.pointerEvents = 'none';
+                        warehouseSelect.style.backgroundColor = '#f8f9fa';
+                    }
+                {% endif %}
+                
+                applyCustomerDefaultsToRow(newRow);
+                updateItemSelectsState();
+            });
+        }
+
+        // Initial setup for existing rows: Filter/initialize units and restrict warehouses
+        document.querySelectorAll('.line-row').forEach(row => {
+            {% if False %}
+                const warehouseSelect = row.querySelector('select[name$="-warehouse"]');
+                if (warehouseSelect) {
+                    
+                    warehouseSelect.style.pointerEvents = 'none';
+                    warehouseSelect.style.backgroundColor = '#f8f9fa';
+                }
+            {% endif %}
+            
+            const itemSelect = row.querySelector('.item-select');
+            const unitSelect = row.querySelector('.unit-select');
+            if (itemSelect && unitSelect) {
+                const currentUnitId = unitSelect.value;
+                const itemId = itemSelect.value;
+                if (!itemId) {
+                    unitSelect.innerHTML = '<option value="">---------</option>';
+                } else {
+                    fetch(`/inventory/api/item/${itemId}/`)
+                        .then(response => {
+                            if (response.ok) return response.json();
+                        })
+                        .then(data => {
+                            if (data && data.units) {
+                                unitSelect.innerHTML = '';
+                                data.units.forEach(u => {
+                                    const option = document.createElement('option');
+                                    option.value = u.id;
+                                    option.text = u.name;
+                                    option.dataset.factor = u.factor;
+                                    if (u.id == currentUnitId) {
+                                        option.selected = true;
+                                    }
+                                    unitSelect.appendChild(option);
+                                });
+                            }
+                        })
+                        .catch(err => console.error('Error initializing units:', err));
+                }
+            }
+        });
+
+        // 7. Customer Dynamic Invoices Dropdown
+        const paymentTypeSelect = document.getElementById('id_payment_type');
+        const cashBoxSelect = document.getElementById('id_cash_box');
+        const cashBoxContainer = document.getElementById('cash-box-container');
+
+        function handlePaymentTypeChange() {
+            if (!paymentTypeSelect) return;
+            if (paymentTypeSelect.value === 'cash') {
+                if (cashBoxContainer) {
+                    cashBoxContainer.style.display = 'block';
+                    if (cashBoxSelect) cashBoxSelect.required = true;
+                }
+            } else {
+                if (cashBoxContainer) {
+                    cashBoxContainer.style.display = 'none';
+                    if (cashBoxSelect) cashBoxSelect.required = false;
+                }
+            }
+            checkCashCreditWarning();
+        }
+
+        function handleInvoiceChange() {
+            if (!invoiceSelect) return;
+            const selectedOpt = invoiceSelect.selectedOptions ? invoiceSelect.selectedOptions[0] : null;
+            if (selectedOpt && selectedOpt.value) {
+                const paymentType = selectedOpt.dataset.paymentType;
+                const cashBoxId = selectedOpt.dataset.cashBoxId;
+                
+                if (paymentType && paymentTypeSelect) {
+                    paymentTypeSelect.value = paymentType;
+                    paymentTypeSelect.style.pointerEvents = 'none';
+                    paymentTypeSelect.style.backgroundColor = '#f8f9fa';
+                    paymentTypeSelect.setAttribute('tabindex', '-1');
+                }
+                if (cashBoxSelect) {
+                    if (cashBoxId && [...cashBoxSelect.options].some(opt => opt.value === cashBoxId)) {
+                        cashBoxSelect.value = cashBoxId;
+                    } else {
+                        // Fallback to representative's default cash box if invoice's cash box is restricted
+                        updateDefaultCashBox();
+                    }
+                    cashBoxSelect.style.pointerEvents = 'none';
+                    cashBoxSelect.style.backgroundColor = '#f8f9fa';
+                    cashBoxSelect.setAttribute('tabindex', '-1');
+                }
+                handlePaymentTypeChange();
+            } else {
+                if (paymentTypeSelect) {
+                    paymentTypeSelect.style.pointerEvents = 'auto';
+                    paymentTypeSelect.style.backgroundColor = '';
+                    paymentTypeSelect.removeAttribute('tabindex');
+                }
+                if (cashBoxSelect) {
+                    cashBoxSelect.style.pointerEvents = 'auto';
+                    cashBoxSelect.style.backgroundColor = '';
+                    cashBoxSelect.removeAttribute('tabindex');
+                }
+            }
+        }
+
+        if (paymentTypeSelect) {
+            paymentTypeSelect.addEventListener('change', handlePaymentTypeChange);
+        }
+        if (invoiceSelect) {
+            invoiceSelect.addEventListener('change', handleInvoiceChange);
+        }
+
+        function checkCashCreditWarning() {
+            const warningEl = document.getElementById('cashCustomerCreditWarning');
+            if (!warningEl) return;
+            if (paymentTypeSelect && paymentTypeSelect.value === 'credit' && currentSupplierType === 'cash') {
+                warningEl.classList.remove('d-none');
+            } else {
+                warningEl.classList.add('d-none');
+            }
+        }
+
+        function updateInvoices() {
+            if (!supplierSelect || !invoiceSelect) return;
+            const supplierId = supplierSelect.value;
+            const currentInvoiceVal = invoiceSelect.value;
+            
+            invoiceSelect.innerHTML = '<option value="">---------</option>';
+            
+            if (!supplierId) {
+                handleInvoiceChange();
+                return;
+            }
+
+            const url = `/purchases/api/supplier/${supplierId}/invoices/`;
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.invoices && data.invoices.length > 0) {
+                        data.invoices.forEach(inv => {
+                            const option = document.createElement('option');
+                            option.value = inv.id;
+                            option.textContent = `${inv.number} (${inv.payment_type_display} — ${inv.date} — ${inv.total.toFixed(2)} ج.م)`;
+                            option.dataset.paymentType = inv.payment_type;
+                            option.dataset.cashBoxId = inv.cash_box_id || '';
+                            if (inv.id == currentInvoiceVal) {
+                                option.selected = true;
+                            }
+                            invoiceSelect.appendChild(option);
+                        });
+                    }
+                    // Always trigger synchronization/unlock
+                    handleInvoiceChange();
+                })
+                .catch(error => {
+                    console.error('Error fetching supplier invoices:', error);
+                });
+        }
+
+        if (supplierSelect) {
+            supplierSelect.addEventListener('change', updateInvoices);
+            if (supplierSelect.value) {
+                updateInvoices();
+            }
+        }
+        
+        const salesRepSelect = document.getElementById('id_sales_rep');
+        {% if False %}
+            if (salesRepSelect) {
+                salesRepSelect.style.pointerEvents = 'none';
+                salesRepSelect.style.backgroundColor = '#f8f9fa';
+                salesRepSelect.setAttribute('tabindex', '-1');
+            }
+            if (cashBoxSelect) {
+                cashBoxSelect.style.pointerEvents = 'none';
+                cashBoxSelect.style.backgroundColor = '#f8f9fa';
+                cashBoxSelect.setAttribute('tabindex', '-1');
+            }
+        {% endif %}
+
+        function updateDefaultCashBox() {
+            if (!salesRepSelect) return;
+            const repId = salesRepSelect.value;
+            if (!repId) return;
+
+            // Only update default cash box if no invoice is selected (not locked)
+            if (invoiceSelect && invoiceSelect.value) return;
+
+            const url = `/sales/api/rep/${repId}/`;
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.cash_box_id && cashBoxSelect) {
+                        cashBoxSelect.value = data.cash_box_id;
+                        handlePaymentTypeChange();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching representative details:', error);
+                });
+        }
+
+        if (salesRepSelect) {
+            salesRepSelect.addEventListener('change', updateDefaultCashBox);
+        }
+
+        const returnForm = document.getElementById('return-form') || document.querySelector('form');
+        if (returnForm) {
+            returnForm.addEventListener('submit', function(e) {
+                let isValid = true;
+                document.querySelectorAll('.line-row').forEach(row => {
+                    if (!validateLineQuantity(row)) {
+                        isValid = false;
+                    }
+                });
+                
+                if (!isValid) {
+                    e.preventDefault();
+                    alert('عفواً، لا يمكن حفظ المرتجع لأن بعض الأصناف تتجاوز الكميات المباعة في الفاتورة الأصلية. يرجى تصحيح الكميات أولاً.');
+                }
+            });
+        }
+        
+        handleInvoiceChange();
+        handlePaymentTypeChange();
+        
+        // Default cash box to representative's cash box if no invoice/cashbox is set yet
+        if (invoiceSelect && !invoiceSelect.value) {
+            if (cashBoxSelect && !cashBoxSelect.value) {
+                updateDefaultCashBox();
+            }
+        }
+        
+        updateItemSelectsState();
+        calculateReturn();
+    });
+</script>
 {% endblock %}

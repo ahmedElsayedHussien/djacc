@@ -216,8 +216,12 @@ class TreasuryService:
         if transfer.issue_entry:
             raise ValueError("هذا التحويل تم إصدار قيده بالفعل")
             
-        source_account = (transfer.from_cash_box.account if transfer.from_cash_box 
-                          else transfer.from_bank.account)
+        if transfer.from_cash_box:
+            source_account = transfer.from_cash_box.account
+        elif transfer.from_bank:
+            source_account = transfer.from_bank.account
+        else:
+            source_account = transfer.from_intermediary.account
         
         # ح/ نقدية بالطريق
         try:

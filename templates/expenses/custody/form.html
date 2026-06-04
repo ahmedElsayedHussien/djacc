@@ -10,6 +10,15 @@
             <div class="card-body">
                 <form method="post">
                     {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                     <div class="row">
                         <div class="col-md-6">{{ form.date|as_crispy_field }}</div>
                         <div class="col-md-6">{{ form.employee|as_crispy_field }}</div>
@@ -18,9 +27,7 @@
                         <div class="col-md-6">{{ form.amount|as_crispy_field }}</div>
                         <div class="col-md-6">{{ form.cash_box|as_crispy_field }}</div>
                     </div>
-                    {{ form.account|as_crispy_field }}
-                    <small class="text-muted d-block mb-3">حساب ذمة الموظف (سلفة/عهدة) الذي سيُحمَّل عليه المبلغ مالياً.</small>
-                    
+
                     {{ form.purpose|as_crispy_field }}
 
                     <div class="d-flex gap-2 mt-4">

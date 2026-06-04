@@ -50,7 +50,7 @@
                                 <div class="d-flex align-items-center justify-content-center">
                                     <div class="progress flex-grow-1 me-2" style="height: 8px;">
                                         <div class="progress-bar {% if row.achievement >= 100 %}bg-success{% elif row.achievement >= 75 %}bg-info{% else %}bg-warning{% endif %}" 
-                                             role="progressbar" style="width: {{ row.achievement|min_val:100 }}%"></div>
+                                             role="progressbar" style="width: {% if row.achievement > 100 %}100{% else %}{{ row.achievement }}{% endif %}%;"></div>
 
                                     </div>
                                     <span class="fw-bold">{{ row.achievement|floatformat:1 }}%</span>

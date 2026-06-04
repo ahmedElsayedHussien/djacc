@@ -39,20 +39,28 @@ class PurchaseDashboardView(LoginRequiredMixin, PermRequiredMixin, TemplateView)
         ctx['monthly_total'] = monthly_stats['total_amount'] or 0
         ctx['monthly_count'] = monthly_stats['count'] or 0
 
+        # Monthly Returns
+        returns_stats = PurchaseReturn.objects.filter(
+            date__gte=month_start,
+            status=PurchaseReturn.Status.POSTED
+        ).aggregate(
+            total_amount=Sum('total'),
+            count=Count('id')
+        )
+        ctx['monthly_returns_total'] = returns_stats['total_amount'] or 0
+        ctx['monthly_returns_count'] = returns_stats['count'] or 0
+
         # 2. Supplier Distribution (Current Month)
         ctx['supplier_stats'] = Supplier.objects.annotate(
             total=Sum('purchaseinvoice__total', filter=Q(purchaseinvoice__date__gte=month_start, purchaseinvoice__status=PurchaseInvoice.Status.POSTED))
         ).filter(total__gt=0).order_by('-total')[:5]
 
         # 3. Pending Tasks
-        ctx['pending_orders'] = PurchaseOrder.objects.filter(status=PurchaseOrder.Status.APPROVED).count()
         ctx['draft_invoices'] = PurchaseInvoice.objects.filter(status=PurchaseInvoice.Status.DRAFT).count()
         
-        # 4. Debts Summary (Total Unpaid)
-        unpaid = PurchaseInvoice.objects.filter(status=PurchaseInvoice.Status.POSTED).annotate(
-            balance=F('total') - F('paid_amount')
-        ).filter(balance__gt=0).aggregate(total_due=Sum('balance'))
-        ctx['total_unpaid'] = unpaid['total_due'] or 0
+        # 4. Debts Summary (Total Unpaid - True Supplier Debt including returns)
+        suppliers = Supplier.objects.select_related('account').all()
+        ctx['total_unpaid'] = sum(s.balance for s in suppliers)
 
         # 5. Recent Activity
         ctx['recent_invoices'] = PurchaseInvoice.objects.select_related('supplier').order_by('-date', '-id')[:10]
@@ -82,6 +90,11 @@ class PurchaseReturnCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView
     template_name = 'purchases/returns/form.html'
     permission_required = 'purchases.add_purchasereturn'
     success_url = reverse_lazy('purchases:return-list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
 
     def get_context_data(self, **kwargs):
         data = super().get_context_data(**kwargs)
@@ -193,6 +206,21 @@ class PurchaseReturnPostView(LoginRequiredMixin, PermRequiredMixin, View):
         return redirect('purchases:return-detail', pk=pk)
 
 
+class PurchaseReturnDeleteView(LoginRequiredMixin, PermRequiredMixin, View):
+    permission_required = 'purchases.delete_purchasereturn'
+    
+    def post(self, request, pk):
+        purchase_return = get_object_or_404(PurchaseReturn, pk=pk)
+        if purchase_return.status != 'draft':
+            messages.error(request, 'لا يمكن حذف المرتجع لأنه مرحل أو ملغي.')
+        else:
+            number = purchase_return.number
+            purchase_return.delete()
+            messages.success(request, f'تم حذف المرتجع {number} بنجاح.')
+            
+        return redirect('purchases:return-list')
+
+
 class SupplierListView(LoginRequiredMixin, PermRequiredMixin, ListView):
     model = Supplier
     template_name = 'purchases/suppliers/list.html'
@@ -300,6 +328,11 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermRequiredMixin, CreateVie
         context = self.get_context_data()
         lines = context['lines']
         with transaction.atomic():
+            from apps.core.models import CostCenter
+            cc_80 = CostCenter.objects.filter(code='80').first()
+            if cc_80:
+                form.instance.cost_center = cc_80
+                
             form.instance.subtotal = 0
             form.instance.total = 0
             form.instance.created_by = self.request.user
@@ -466,3 +499,84 @@ class SupplierPaymentDetailView(LoginRequiredMixin, PermRequiredMixin, DetailVie
 
     def get_queryset(self):
         return super().get_queryset().select_related('supplier', 'cash_box', 'bank_account')
+
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
+
+class SupplierInvoicesAPIView(LoginRequiredMixin, PermRequiredMixin, View):
+    permission_required = 'purchases.view_purchaseinvoice'
+    def get(self, request, supplier_id):
+        # Fetch posted invoices for this supplier that have a remaining balance
+        invoices = PurchaseInvoice.objects.filter(
+            supplier_id=supplier_id,
+            status=PurchaseInvoice.Status.POSTED
+        ).annotate(
+            remaining_balance=ExpressionWrapper(
+                F('total') - F('paid_amount'),
+                output_field=DecimalField()
+            )
+        ).filter(remaining_balance__gt=0).order_by('-date', '-id')
+            
+        data = [
+            {
+                'id': inv.id,
+                'number': inv.number,
+                'date': inv.date.isoformat(),
+                'payment_type': inv.payment_type,
+                'payment_type_display': inv.get_payment_type_display(),
+                'cash_box_id': inv.cash_box_id,
+                'total': float(inv.total),
+                'remaining_balance': float(inv.remaining_balance)
+            }
+            for inv in invoices
+        ]
+        return JsonResponse({'invoices': data})
+
+class PurchaseInvoiceLinesAPIView(LoginRequiredMixin, PermRequiredMixin, View):
+    permission_required = 'purchases.view_purchaseinvoice'
+    def get(self, request, invoice_id):
+        lines = PurchaseInvoiceLine.objects.filter(invoice_id=invoice_id).select_related('item', 'unit', 'warehouse')
+
+        # Single aggregate query for all returned quantities per item
+        returned_qties = PurchaseReturnLine.objects.filter(
+            purchase_return__invoice_id=invoice_id,
+        ).exclude(purchase_return__status='cancelled').values('item_id').annotate(
+            total=Coalesce(Sum('quantity'), Decimal('0')) # Purchases might not use base_quantity directly here, fallback to quantity
+        )
+        returned_map = {r['item_id']: r['total'] for r in returned_qties}
+
+        data = []
+        for line in lines:
+            returned_qty = returned_map.get(line.item_id, Decimal('0'))
+            max_returnable = max(0.0, float(line.quantity) - float(returned_qty))
+
+            data.append({
+                'item_id': line.item_id,
+                'item_name': line.item.name,
+                'unit_id': line.unit_id,
+                'unit_name': line.unit.name if line.unit else '',
+                'warehouse_id': line.warehouse_id,
+                'warehouse_name': line.warehouse.name if line.warehouse else '',
+                'quantity': float(line.quantity),
+                'returned_quantity': float(returned_qty),
+                'max_returnable': max_returnable,
+                'unit_cost': float(line.unit_price), # Note the property is unit_price on invoice line, but unit_cost on return line
+                'discount_percent': float(line.discount_percent),
+                'tax_type_id': line.tax_type_id,
+                'tax_percent': float(line.tax_percent or 0),
+                'tax_type2_id': line.tax_type2_id,
+                'tax_percent2': float(line.tax_percent2 or 0),
+            })
+        return JsonResponse({'lines': data})
+
+@login_required
+def supplier_api(request, pk):
+    try:
+        supplier = Supplier.objects.get(pk=pk)
+        return JsonResponse({
+            'id': supplier.id,
+            'payment_terms_days': supplier.payment_terms_days,
+            'payment_type': supplier.payment_type,
+        })
+    except Supplier.DoesNotExist:
+        return JsonResponse({'error': 'Supplier not found'}, status=404)

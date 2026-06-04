@@ -39,6 +39,15 @@
                         {% if not fy.is_closed and perms.core.change_fiscalyear %}
                         <form method="post" action="{% url 'core:fiscalyear-post-opening' fy.pk %}" style="display:inline;" onsubmit="return confirm('هل تريد توليد القيد الافتتاحي بناءً على أرصدة دليل الحسابات؟');">
                             {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
                             <button type="submit" class="btn btn-sm btn-outline-primary">
                                 <i class="bi bi-journal-plus"></i> توليد القيد الافتتاحي
                             </button>

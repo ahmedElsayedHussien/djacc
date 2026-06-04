@@ -433,9 +433,34 @@ class PurchaseService:
             'account': purchase_return.supplier.account,
             'debit': purchase_return.total,
             'credit': 0,
-            'description': f"Purchase Return {purchase_return.number} - {purchase_return.supplier.name}",
+            'description': f"مرتجع مشتريات رقم {purchase_return.number} - {purchase_return.supplier.name}",
             'cost_center': purchase_return.cost_center
         })
+
+        if getattr(purchase_return, 'payment_type', 'credit') == 'cash':
+            cash_account = None
+            if purchase_return.cash_box:
+                cash_account = purchase_return.cash_box.account
+            elif purchase_return.invoice and purchase_return.invoice.cash_box:
+                cash_account = purchase_return.invoice.cash_box.account
+                
+            if cash_account:
+                lines.append({
+                    'account': purchase_return.supplier.account,
+                    'debit': 0,
+                    'credit': purchase_return.total,
+                    'description': f"استرداد نقدي لمرتجع رقم {purchase_return.number}",
+                    'cost_center': purchase_return.cost_center
+                })
+                lines.append({
+                    'account': cash_account,
+                    'debit': purchase_return.total,
+                    'credit': 0,
+                    'description': f"استرداد نقدي لمرتجع رقم {purchase_return.number}",
+                    'cost_center': purchase_return.cost_center
+                })
+            else:
+                raise ValueError("لا يمكن تحديد الخزينة للاسترداد النقدي")
 
         inv_account_totals = {}
         tax_account_totals = {}
