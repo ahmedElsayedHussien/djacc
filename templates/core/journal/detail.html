@@ -24,7 +24,7 @@
 {% endif %}
 
 {% if entry.is_reversal %}
-{% with parent_entry=entry.journalentry_set.first %}
+{% with parent_entry=entry.reversed_entries.first %}
 <div class="alert alert-warning border-0 shadow-sm d-flex align-items-center gap-3 mb-4 py-3" style="border-radius: 12px; background-color: #fffaf0; border-right: 5px solid #ffc107 !important;">
     <div class="bg-warning text-dark rounded-circle d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; min-width: 44px;">
         <i class="bi bi-exclamation-triangle-fill fs-4"></i>

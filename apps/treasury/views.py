@@ -67,7 +67,20 @@ class TreasuryDashboardView(LoginRequiredMixin, PermRequiredMixin, ListView):
             
         ctx['total_wallet'] = total_wallet
         ctx['wallets_data'] = wallets_data
-        ctx['total_liquidity'] = total_cash + total_bank + total_wallet
+
+        # 2.8. Intermediary Companies Stats
+        intermediaries = IntermediaryCompany.objects.filter(is_active=True).select_related('account')
+        total_intermediary = 0
+        intermediaries_data = []
+        for i in intermediaries:
+            bal = get_account_balance(i.account, as_of_date=today)
+            total_intermediary += bal
+            intermediaries_data.append({'obj': i, 'balance': bal})
+            
+        ctx['total_intermediary'] = total_intermediary
+        ctx['intermediaries_data'] = intermediaries_data
+
+        ctx['total_liquidity'] = total_cash + total_bank + total_wallet + total_intermediary
 
         # 3. Pending Transfers
         ctx['pending_transfers_count'] = CashTransfer.objects.filter(

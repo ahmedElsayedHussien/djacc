@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% block title %}فواتير وردية #{{ session.id }} | DJACC Pro{% endblock %}
+{% block header %}فواتير وردية الكاشير #{{ session.id }}{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm border-0 mb-4" style="border-radius: 16px; overflow: hidden; font-family: 'Cairo', sans-serif;">
+    <div class="card-header bg-white border-0 py-4 px-4 d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="mb-1 fw-bold text-plum">جميع الفواتير للوردية رقم {{ session.id }}</h5>
+            <p class="text-muted small mb-0">الكاشير: {{ session.user.get_full_name|default:session.user.username }} | نقطة البيع: {{ session.station.name }}</p>
+        </div>
+        <a href="{% url 'pos:session-list' %}" class="btn btn-outline-dark rounded-pill px-4 shadow-sm">
+            <i class="bi bi-arrow-right me-1"></i> العودة لسجل الورديات
+        </a>
+    </div>
+    
+    <div class="card-body px-4 pb-4 pt-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light text-secondary" style="font-size: 0.9rem;">
+                    <tr>
+                        <th class="py-3 px-3">الإيصال</th>
+                        <th class="py-3">الوقت</th>
+                        <th class="py-3">العميل</th>
+                        <th class="py-3 text-center">الإجمالي</th>
+                        <th class="py-3 text-center">الخصم</th>
+                        <th class="py-3 text-center">الضريبة</th>
+                        <th class="py-3 text-center">الصافي</th>
+                        <th class="py-3 text-center">طريقة الدفع</th>
+                        <th class="py-3 text-center">الحالة</th>
+                        <th class="py-3 text-center">إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody style="font-size: 0.95rem;">
+                    {% for order in page_obj %}
+                    <tr class="{% if order.is_return %}table-danger{% endif %}">
+                        <td class="py-3 px-3">
+                            <a href="{% url 'pos:order-detail' order.pk %}" class="text-decoration-none">
+                                {% if order.is_return %}
+                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle fw-bold rounded px-2.5 py-1.5 font-monospace" style="transition: all 0.2s;" onmouseover="this.classList.replace('bg-danger-subtle', 'bg-danger'); this.classList.replace('text-danger', 'text-white');" onmouseout="this.classList.replace('bg-danger', 'bg-danger-subtle'); this.classList.replace('text-white', 'text-danger');">
+                                    <i class="bi bi-arrow-return-left me-1"></i>{{ order.receipt_number }}
+                                </span>
+                                {% else %}
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-bold rounded px-2.5 py-1.5 font-monospace" style="transition: all 0.2s;" onmouseover="this.classList.replace('bg-primary-subtle', 'bg-primary'); this.classList.replace('text-primary', 'text-white');" onmouseout="this.classList.replace('bg-primary', 'bg-primary-subtle'); this.classList.replace('text-white', 'text-primary');">
+                                    <i class="bi bi-link-45deg me-1"></i>{{ order.receipt_number }}
+                                </span>
+                                {% endif %}
+                            </a>
+                        </td>
+                        <td class="py-3">
+                            <div class="small">{{ order.date|date:"Y-m-d H:i" }}</div>
+                        </td>
+                        <td class="py-3">
+                            <span class="fw-medium">{{ order.customer.name|default:"عميل نقدي" }}</span>
+                        </td>
+                        <td class="py-3 text-center fw-bold text-plum">
+                            {% if order.is_return %}-{% endif %}{{ order.subtotal|floatformat:2 }}
+                        </td>
+                        <td class="py-3 text-center fw-bold text-danger">{% if order.is_return %}-{% endif %}{{ order.discount|floatformat:2 }}</td>
+                        <td class="py-3 text-center fw-bold text-info">{% if order.is_return %}-{% endif %}{{ order.tax|floatformat:2 }}</td>
+                        <td class="py-3 text-center fw-extrabold {% if order.is_return %}text-danger{% else %}text-success{% endif %}">
+                            {% if order.is_return %}-{% endif %}{{ order.grand_total|floatformat:2 }} EGP
+                        </td>
+                        <td class="py-3 text-center">
+                            {% for payment in order.payments.all %}
+                                {% if payment.method == 'cash' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1"><i class="bi bi-cash me-1"></i>كاش</span>
+                                {% elif payment.method == 'card' %}
+                                    <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1"><i class="bi bi-credit-card me-1"></i>فيزا</span>
+                                {% elif payment.method == 'wallet' %}
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-2 py-1"><i class="bi bi-phone me-1"></i>محفظة</span>
+                                {% endif %}
+                                <br><small class="text-muted">{{ payment.amount|floatformat:2 }}</small>
+                            {% empty %}
+                                <span class="text-muted small">---</span>
+                            {% endfor %}
+                        </td>
+                        <td class="py-3 text-center">
+                            {% if order.status == 'paid' %}
+                                <span class="badge bg-success rounded-pill px-3 py-1.5"><i class="bi bi-check-circle me-1"></i> مدفوعة</span>
+                            {% elif order.status == 'posted' %}
+                                <span class="badge bg-dark rounded-pill px-3 py-1.5"><i class="bi bi-journal-check me-1"></i> مرحّلة</span>
+                            {% elif order.status == 'cancelled' %}
+                                <span class="badge bg-danger rounded-pill px-3 py-1.5"><i class="bi bi-x-circle me-1"></i> ملغاة</span>
+                            {% else %}
+                                <span class="badge bg-secondary rounded-pill px-3 py-1.5">{{ order.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 text-center">
+                            {% if not order.is_return and order.status in 'paid,posted' and session.status == 'open' %}
+                                <div class="d-flex gap-1 justify-content-center flex-wrap">
+                                    {% if perms.pos.change_posorder and order.status == 'paid' %}
+                                    <form method="POST" action="{% url 'pos:order-cancel' order.pk %}" style="display:inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill mb-1" onclick="return confirm('تأكيد إلغاء الفاتورة {{ order.receipt_number }} بالكامل واسترداد المبلغ؟')">
+                                            <i class="bi bi-x-circle"></i> إلغاء
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                    <a href="{% url 'pos:order-return' order.pk %}" class="btn btn-sm btn-outline-warning rounded-pill mb-1">
+                                        <i class="bi bi-arrow-return-left"></i> رجع
+                                    </a>
+                                </div>
+                            {% else %}
+                                <span class="text-muted small">---</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-5 text-muted">
+                            <i class="bi bi-receipt fs-1 d-block mb-3 opacity-50 text-secondary"></i>
+                            <span class="fw-bold d-block mb-1">لا توجد فواتير في هذه الوردية</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include 'partials/pagination.html' %}
+    </div>
+</div>
+{% endblock %}

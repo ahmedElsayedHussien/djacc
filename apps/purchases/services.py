@@ -415,6 +415,58 @@ class PurchaseService:
 
     @staticmethod
     @transaction.atomic
+    def clear_cheque(payment: SupplierPayment, cleared_date, cleared_by):
+        """
+        Clears a supplier cheque.
+        DR  Cheques Issued (Liability)   → payment.amount
+        CR  Bank Account                 → payment.amount
+        """
+        payment = SupplierPayment.objects.select_for_update().get(pk=payment.pk)
+        if payment.payment_method != 'cheque':
+            raise ValueError("هذا السند ليس شيكاً")
+        if payment.is_cleared:
+            raise ValueError("هذا الشيك تم صرفه بالفعل")
+        if not payment.bank_account:
+            raise ValueError("لا يوجد حساب بنكي مسجل مع هذا الشيك")
+
+        # 1. Update Payment Status
+        payment.is_cleared = True
+        payment.cleared_at = cleared_date
+        payment.save(update_fields=['is_cleared', 'cleared_at'])
+
+        # 2. Create Journal Entry
+        cheques_issued_acc = Account.objects.get(code=getattr(settings, 'CHEQUES_ISSUED_ACCOUNT', '2141'))
+        bank_acc = payment.bank_account.account
+
+        lines = [
+            {
+                'account': cheques_issued_acc,
+                'debit': payment.amount,
+                'credit': 0,
+                'description': f'صرف الشيك رقم {payment.cheque_number}'
+            },
+            {
+                'account': bank_acc,
+                'debit': 0,
+                'credit': payment.amount,
+                'description': f'صرف الشيك رقم {payment.cheque_number}'
+            }
+        ]
+
+        entry = JournalService.create_entry(
+            date_val=cleared_date,
+            entry_type=JournalEntry.EntryType.BANK,
+            description=f'صرف الشيك الصادر رقم {payment.cheque_number} للمورد {payment.supplier.name}',
+            lines=lines,
+            source_document=payment,
+            created_by=cleared_by
+        )
+
+        AuditService.log(cleared_by, 'Record', payment, f'تم صرف الشيك رقم {payment.cheque_number} في البنك')
+        return entry
+
+    @staticmethod
+    @transaction.atomic
     def post_return(purchase_return, posted_by) -> JournalEntry:
         """
         Purchase Return Journal Entry:

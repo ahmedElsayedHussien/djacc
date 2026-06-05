@@ -9,9 +9,14 @@
                 {% include 'partials/_form_errors.html' %}
                 <form id="receiptForm" method="post" novalidate>
                     {% csrf_token %}
-                    {% if form.non_field_errors %}
+                    {% if form.errors %}
                         <div class="alert alert-danger">
                             <ul class="mb-0">
+                                {% for field in form %}
+                                    {% for error in field.errors %}
+                                        <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+                                    {% endfor %}
+                                {% endfor %}
                                 {% for error in form.non_field_errors %}
                                     <li>{{ error }}</li>
                                 {% endfor %}
@@ -108,7 +113,7 @@
 {% block extra_js %}
 <script>
     function toggleSource(val) {
-        document.getElementById('bank_div').style.display = (val === 'bank') ? 'block' : 'none';
+        document.getElementById('bank_div').style.display = (val === 'bank' || val === 'cheque') ? 'block' : 'none';
         document.getElementById('cash_div').style.display = (val === 'cash') ? 'block' : 'none';
         document.getElementById('intermediary_div').style.display = (val === 'intermediary') ? 'block' : 'none';
         document.getElementById('cheque_div').style.display = (val === 'cheque') ? 'block' : 'none';
@@ -187,6 +192,17 @@
             }
         });
         document.getElementById('total_allocated_th').textContent = total.toFixed(2);
+        
+        // Auto-update the main receipt amount if it's empty, 0, or less than total allocated
+        const receiptAmountInput = document.querySelector('input[name="amount"]');
+        if (receiptAmountInput) {
+            let currentReceiptAmount = parseFloat(receiptAmountInput.value) || 0;
+            if (currentReceiptAmount < total || receiptAmountInput.dataset.autoCalc === "true") {
+                receiptAmountInput.value = total > 0 ? total.toFixed(2) : '';
+                receiptAmountInput.dataset.autoCalc = "true";
+            }
+        }
+        
         return total;
     }
 

@@ -64,6 +64,14 @@ class POSSession(ConcurrencyModel):
     def clean(self):
         if self.end_time and self.start_time and self.end_time < self.start_time:
             raise ValidationError({'end_time': 'وقت الإغلاق يجب أن يكون بعد وقت الفتح'})
+            
+        # لا يمكن أن يكون للمستخدم أكثر من وردية مفتوحة واحدة في نفس الوقت
+        if self.status == self.Status.OPEN:
+            active_sessions = POSSession.objects.filter(user=self.user, status=self.Status.OPEN)
+            if self.pk:
+                active_sessions = active_sessions.exclude(pk=self.pk)
+            if active_sessions.exists():
+                raise ValidationError("هذا الكاشير لديه وردية مفتوحة بالفعل. يجب إغلاقها أولاً قبل فتح وردية جديدة.")
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -100,6 +108,11 @@ class POSOrder(ConcurrencyModel):
         null=True, blank=True, 
         on_delete=models.SET_NULL, 
         verbose_name="فاتورة المبيعات الضريبية المرتبطة"
+    )
+    is_return = models.BooleanField(default=False, verbose_name="إيصال مرتجع")
+    parent_order = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.SET_NULL, 
+        related_name='return_orders', verbose_name="الفاتورة الأصلية (للمرتجعات)"
     )
 
     class Meta:
@@ -179,8 +192,6 @@ class POSPayment(ConcurrencyModel):
     def clean(self):
         if self.order.status not in [POSOrder.Status.DRAFT, POSOrder.Status.PAID]:
             raise ValidationError("الطلب غير متاح لإضافة مدفوعات.")
-        if self.method in ('card', 'wallet') and not self.reference:
-            raise ValidationError({'reference': 'يجب إدخال رقم العملية لطرق الدفع الإلكترونية'})
         station = self.order.session.station
         if self.method == self.PaymentMethod.CARD and not station.bank_account:
             raise ValidationError({'method': 'نقطة البيع غير مرتبطة بحساب بنكي.'})

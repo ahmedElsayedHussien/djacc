@@ -21,6 +21,8 @@
                         <th>المورد</th>
                         <th>المبلغ</th>
                         <th>طريقة الدفع</th>
+                        <th>مصدر الصرف</th>
+                        <th>الحالة</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -31,6 +33,26 @@
                         <td>{{ pay.supplier.name }}</td>
                         <td><strong>{{ pay.amount }}</strong></td>
                         <td>{{ pay.get_payment_method_display }}</td>
+                        <td>
+                            {% if pay.payment_method == 'cash' %}
+                                <span class="text-muted small">خزينة:</span> {{ pay.cash_box.name|default:"—" }}
+                            {% elif pay.payment_method == 'bank' or pay.payment_method == 'cheque' %}
+                                <span class="text-muted small">بنك:</span> {{ pay.bank_account.name|default:"—" }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if pay.payment_method == 'cheque' %}
+                                {% if pay.is_cleared %}
+                                    <span class="badge bg-success">تم صرف الشيك</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">شيك غير مصروف</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="badge bg-info">مكتمل</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% empty %}
                     <tr>

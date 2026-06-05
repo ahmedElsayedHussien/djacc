@@ -97,34 +97,13 @@
                         </td>
                         <td class="py-3 text-center">
                             {% if row.session.status == 'open' %}
-                                {% for order in row.session.orders.all %}
-                                <div class="d-flex gap-1 justify-content-center flex-wrap">
-                                {% if perms.pos.change_posorder %}
-                                <form method="POST" action="{% url 'pos:order-cancel' order.pk %}" style="display:inline">
-                                    {% csrf_token %}
-                    {% if form.non_field_errors %}
-                        <div class="alert alert-danger">
-                            <ul class="mb-0">
-                                {% for error in form.non_field_errors %}
-                                    <li>{{ error }}</li>
-                                {% endfor %}
-                            </ul>
-                        </div>
-                    {% endif %}
-                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill mb-1" onclick="return confirm('تأكيد إلغاء الفاتورة {{ order.receipt_number }}؟')">
-                                        <i class="bi bi-x-circle"></i> إلغاء
-                                    </button>
-                                </form>
-                                <a href="{% url 'pos:order-return' order.pk %}" class="btn btn-sm btn-outline-warning rounded-pill mb-1">
-                                    <i class="bi bi-arrow-return-left"></i> رجع
-                                </a>
-                                {% endif %}
-                                </div>
-                                {% empty %}
-                                <span class="text-muted small">---</span>
-                                {% endfor %}
+                                <span class="badge bg-success-subtle text-success px-2 py-1 mt-1 rounded-pill small">
+                                    <i class="bi bi-circle-fill small me-1"></i> الوردية قيد التشغيل
+                                </span>
                             {% else %}
-                                <span class="text-muted small">---</span>
+                                <span class="badge bg-secondary-subtle text-secondary px-2 py-1 mt-1 rounded-pill small">
+                                    مغلقة
+                                </span>
                             {% endif %}
                             {% if row.session.difference < 0 and row.session.status != 'open' %}
                                 {% if row.session.shortage_collected_at %}
@@ -142,6 +121,9 @@
                                     {% endif %}
                                 {% endif %}
                             {% endif %}
+                            <a href="{% url 'pos:session-orders' row.session.pk %}" class="btn btn-sm btn-outline-primary rounded-pill mt-1 d-block">
+                                <i class="bi bi-receipt"></i> عرض الفواتير
+                            </a>
                         </td>
                     </tr>
                     {% empty %}

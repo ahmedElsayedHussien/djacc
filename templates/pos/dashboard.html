@@ -234,7 +234,13 @@
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg>
                         <span>لمس</span>
                     </button>
-                    <a href="{% url 'core:dashboard' %}" class="text-white/80 hover:text-white hover:bg-white/10 p-2 rounded-lg transition-colors flex items-center gap-1">
+                    {% if active_session %}
+                    <a href="{% url 'pos:session-orders' active_session.id %}" target="_blank" class="text-white/80 hover:text-white hover:bg-white/10 p-2 rounded-lg transition-colors flex items-center gap-1" title="فواتير ورديتي">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <span class="font-bold text-sm hidden sm:inline">فواتيري</span>
+                    </a>
+                    {% endif %}
+                    <a href="{% url 'core:dashboard' %}" onclick="return confirm('هل أنت متأكد من الخروج من شاشة البيع؟\n(لن يتم إغلاق الوردية، يمكنك العودة في أي وقت)')" class="text-white/80 hover:text-white hover:bg-white/10 p-2 rounded-lg transition-colors flex items-center gap-1">
                         <span class="font-bold text-sm">خروج</span>
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
                     </a>
@@ -337,10 +343,10 @@
 
         <!-- Pay Actions Bottom -->
         <div class="p-5 bg-white border-t border-gray-200 flex-shrink-0 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
-            <div class="flex gap-3 h-20">
+            <div class="flex gap-5 h-20">
                 <button class="touch-btn flex-1 bg-white text-plum border-2 border-plum rounded-xl font-bold text-xl hover:bg-gray-50 flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm" onclick="processPayment('card')">
                     <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
-                    شبكة
+                    كارت بنكي
                 </button>
                 <button class="touch-btn flex-1 bg-emerald-600 text-white rounded-xl font-bold text-xl hover:bg-emerald-700 flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md" onclick="processPayment('wallet')">
                     <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
@@ -572,10 +578,11 @@
 
         const vatToggle = document.getElementById('vat-toggle-input');
         const isTaxable = vatToggle ? vatToggle.checked : true;
-        const grandTotal = subtotal;
+        
+        const subtotalBeforeTax = subtotal;
         const taxRate = isTaxable ? 0.14 : 0;
-        const subtotalBeforeTax = grandTotal / (1 + taxRate);
-        const taxAmount = grandTotal - subtotalBeforeTax;
+        const taxAmount = subtotalBeforeTax * taxRate;
+        const grandTotal = subtotalBeforeTax + taxAmount;
 
         document.getElementById('subtotal-display').innerText = subtotalBeforeTax.toFixed(2);
         document.getElementById('tax-display').innerText = taxAmount.toFixed(2);
@@ -590,9 +597,8 @@
         if (autoPrintToggle && !autoPrintToggle.checked) return;
 
         const isTaxable = document.getElementById('vat-toggle-input') ? document.getElementById('vat-toggle-input').checked : true;
-        const taxRate = isTaxable ? 0.14 : 0;
-        const subtotal = data.grand_total / (1 + taxRate);
-        const taxAmount = data.grand_total - subtotal;
+        const subtotal = data.subtotal;
+        const taxAmount = data.tax;
 
         const iframe = document.createElement('iframe');
         iframe.style.position = 'fixed'; iframe.style.right = '0'; iframe.style.bottom = '0';
@@ -662,6 +668,18 @@
         const cart = getCart();
         if (cart.length === 0) { alert('\u0633\u0644\u0629 \u0627\u0644\u0645\u0634\u062A\u0631\u064A\u0627\u062A \u0641\u0627\u0631\u063A\u0629! \u064A\u0631\u062C\u0649 \u0625\u0636\u0627\u0641\u0629 \u0623\u0635\u0646\u0627\u0641 \u0623\u0648\u0644\u0627\u064B.'); return; }
 
+        const methodNames = {
+            'cash': 'دفع كاش',
+            'card': 'كارت بنكي',
+            'wallet': 'محفظة إلكترونية'
+        };
+        const methodName = methodNames[method] || method;
+        if (!confirm(`سيتم السداد بطريقة "${methodName}"... هل أنت متأكد؟`)) {
+            return;
+        }
+
+        let reference = '';
+
         const cleanCart = cart.map(c => ({
             id: c.id, qty: c.qty,
             price: c.unit_type === 'sales' ? (c.price * c.conversion_factor) : c.price,
@@ -672,9 +690,21 @@
         fetch('{% url "pos:checkout" %}', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-            body: JSON.stringify({ cart: cleanCart, payment_method: method, is_taxable: isTaxable })
+            body: JSON.stringify({ cart: cleanCart, payment_method: method, is_taxable: isTaxable, payment_reference: reference })
         })
-        .then(r => { if (!r.ok) return r.json().then(e => { throw new Error(e.message || '\u0641\u0634\u0644\u062A \u0639\u0645\u0644\u064A\u0629 \u0627\u0644\u062F\u0641\u0639'); }); return r.json(); })
+        .then(r => { 
+            return r.json().then(data => {
+                if (!r.ok) {
+                    if (data.session_closed) {
+                        alert('⚠️ ' + data.message);
+                        window.location.reload();
+                        throw new Error('SESSION_CLOSED');
+                    }
+                    throw new Error(data.message || '\u0641\u0634\u0644 \u0627\u0644\u062F\u0641\u0639 \u0648\u0627\u0644\u062D\u0641\u0638');
+                }
+                return data;
+            });
+        })
         .then(data => {
             printReceiptFromServer(data);
             if (data.warnings && data.warnings.length > 0) {
@@ -685,7 +715,11 @@
             const input = document.getElementById('manual-barcode-input');
             if (input) input.focus();
         })
-        .catch(error => alert(`\u274C \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062F\u0641\u0639: ${error.message}`));
+        .catch(error => {
+            if (error.message !== 'SESSION_CLOSED') {
+                alert(`\u274C \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062F\u0641\u0639: ${error.message}`);
+            }
+        });
     }
 
     // ========== SESSION OPEN/CLOSE ==========

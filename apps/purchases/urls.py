@@ -24,6 +24,7 @@ urlpatterns = [
     path('payments/', views.SupplierPaymentListView.as_view(), name='payment-list'),
     path('payments/create/', views.SupplierPaymentCreateView.as_view(), name='payment-create'),
     path('payments/<int:pk>/', views.SupplierPaymentDetailView.as_view(), name='payment-detail'),
+    path('payments/<int:pk>/clear/', views.SupplierChequeClearView.as_view(), name='clear-cheque'),
 
     # Returns
     path('returns/', views.PurchaseReturnListView.as_view(), name='return-list'),

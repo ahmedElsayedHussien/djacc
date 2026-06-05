@@ -44,11 +44,11 @@
                         <h6 class="text-muted">دُفع من:</h6>
                         <p>
                             {% if payment.payment_method == 'cash' %}
-                            الخزينة: {{ payment.cash_box.name }}
+                            <strong>خزينة:</strong> {{ payment.cash_box.name }}
                             {% elif payment.payment_method == 'cheque' %}
-                            شيك مسحوب: {{ payment.cheque_number|default:"—" }}
+                            <strong>بنك:</strong> {{ payment.bank_account.name }}
                             {% else %}
-                            البنك: {{ payment.bank_account.name }}
+                            <strong>بنك:</strong> {{ payment.bank_account.name }}
                             {% endif %}
                         </p>
                     </div>
@@ -56,27 +56,65 @@
 
                 {% if payment.payment_method == 'cheque' %}
                 <div class="p-3 bg-light rounded mb-4">
-                    <div class="row">
-                        <div class="col-sm-4">
+                    <div class="row align-items-center">
+                        <div class="col-sm-3">
                             <h6 class="text-muted small">رقم الشيك:</h6>
                             <p class="mb-0 fw-bold">{{ payment.cheque_number|default:"—" }}</p>
                         </div>
-                        <div class="col-sm-4">
+                        <div class="col-sm-3">
                             <h6 class="text-muted small">تاريخ الاستحقاق:</h6>
                             <p class="mb-0 fw-bold">{{ payment.cheque_due_date|date:'Y-m-d'|default:"—" }}</p>
                         </div>
-                        <div class="col-sm-4 text-sm-end">
+                        <div class="col-sm-3">
+                            <h6 class="text-muted small">تاريخ الصرف:</h6>
+                            <p class="mb-0 fw-bold">{{ payment.cleared_at|date:'Y-m-d'|default:"—" }}</p>
+                        </div>
+                        <div class="col-sm-3 text-sm-end">
                             <h6 class="text-muted small">حالة الصرف:</h6>
-                            <p class="mb-0 fw-bold">
+                            <p class="mb-0 fw-bold d-flex align-items-center justify-content-end gap-2">
                                 {% if payment.is_cleared %}
                                 <span class="badge bg-success">تم الصرف</span>
                                 {% else %}
                                 <span class="badge bg-warning text-dark">لم يتم الصرف بعد</span>
+                                {% if perms.purchases.change_supplierpayment %}
+                                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#clearChequeModal">
+                                    تأكيد الصرف
+                                </button>
+                                {% endif %}
                                 {% endif %}
                             </p>
                         </div>
                     </div>
                 </div>
+
+                <!-- Clear Cheque Modal -->
+                {% if not payment.is_cleared and perms.purchases.change_supplierpayment %}
+                <div class="modal fade" id="clearChequeModal" tabindex="-1" aria-labelledby="clearChequeModalLabel" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <form method="post" action="{% url 'purchases:clear-cheque' payment.pk %}">
+                                {% csrf_token %}
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="clearChequeModalLabel">تأكيد صرف الشيك</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <p>أنت على وشك تأكيد صرف الشيك رقم <strong>{{ payment.cheque_number }}</strong> من حساب بنك <strong>{{ payment.bank_account.name }}</strong>.</p>
+                                    <p>سيقوم النظام بإنشاء قيد محاسبي بخصم المبلغ من الحساب البنكي.</p>
+                                    <div class="mb-3">
+                                        <label class="form-label">تاريخ الصرف الفعلي</label>
+                                        <input type="date" name="date" class="form-control" value="{% now 'Y-m-d' %}" required>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                                    <button type="submit" class="btn btn-primary">تأكيد الصرف</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
                 {% endif %}
 
                 <div class="alert alert-info">

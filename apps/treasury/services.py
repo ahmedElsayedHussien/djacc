@@ -370,22 +370,46 @@ class TreasuryService:
         bank_acc = transaction_obj.bank_account.account
         
         # Determine accounting lines based on type
-        if transaction_obj.transaction_type == BankTransaction.TransactionType.BANK_CHARGE:
+        bank_charges_types = [
+            BankTransaction.TransactionType.ACCOUNT_FEE,
+            BankTransaction.TransactionType.TRANSFER_FEE,
+            BankTransaction.TransactionType.BOUNCE_FEE,
+            BankTransaction.TransactionType.STOP_CHEQUE_FEE,
+            BankTransaction.TransactionType.CHEQUEBOOK_FEE,
+            BankTransaction.TransactionType.CARD_FEE,
+        ]
+
+        if transaction_obj.transaction_type in bank_charges_types:
             # DR Bank Charges (Expense) | CR Bank Account (Asset)
             charge_acc = Account.objects.select_for_update().get(code=getattr(settings, 'BANK_CHARGES_ACCOUNT', '531'))
             lines.append({'account': charge_acc, 'debit': transaction_obj.amount, 'credit': 0, 'description': transaction_obj.description})
-            lines.append({'account': bank_acc, 'debit': 0, 'credit': transaction_obj.amount, 'description': f'عمولة بنكية - {transaction_obj.number}'})
+            lines.append({'account': bank_acc, 'debit': 0, 'credit': transaction_obj.amount, 'description': f'{transaction_obj.get_transaction_type_display()} - {transaction_obj.number}'})
         
-        elif transaction_obj.transaction_type == BankTransaction.TransactionType.INTEREST:
-            # DR Bank Account (Asset) | CR Interest Revenue (Revenue)
-            interest_acc = Account.objects.select_for_update().get(code=getattr(settings, 'INTEREST_REVENUE_ACCOUNT', '421'))
-            lines.append({'account': bank_acc, 'debit': transaction_obj.amount, 'credit': 0, 'description': f'فوائد بنكية - {transaction_obj.number}'})
-            lines.append({'account': interest_acc, 'debit': 0, 'credit': transaction_obj.amount, 'description': transaction_obj.description})
+        elif transaction_obj.transaction_type == BankTransaction.TransactionType.LOAN_INTEREST:
+            # DR Interest Expense | CR Bank Account
+            interest_exp_acc = Account.objects.select_for_update().get(code=getattr(settings, 'INTEREST_EXPENSE_ACCOUNT', '532'))
+            lines.append({'account': interest_exp_acc, 'debit': transaction_obj.amount, 'credit': 0, 'description': transaction_obj.description})
+            lines.append({'account': bank_acc, 'debit': 0, 'credit': transaction_obj.amount, 'description': f'{transaction_obj.get_transaction_type_display()} - {transaction_obj.number}'})
+
+        elif transaction_obj.transaction_type == BankTransaction.TransactionType.INTEREST_REV:
+            # DR Bank Account | CR Interest Revenue
+            interest_rev_acc = Account.objects.select_for_update().get(code=getattr(settings, 'INTEREST_REVENUE_ACCOUNT', '421'))
+            lines.append({'account': bank_acc, 'debit': transaction_obj.amount, 'credit': 0, 'description': f'{transaction_obj.get_transaction_type_display()} - {transaction_obj.number}'})
+            lines.append({'account': interest_rev_acc, 'debit': 0, 'credit': transaction_obj.amount, 'description': transaction_obj.description})
+
+        elif transaction_obj.transaction_type == BankTransaction.TransactionType.EXCHANGE_GAIN:
+            # DR Bank Account | CR Exchange Gain (Revenue)
+            gain_acc = Account.objects.select_for_update().get(code=getattr(settings, 'EXCHANGE_GAIN_ACCOUNT', '423'))
+            lines.append({'account': bank_acc, 'debit': transaction_obj.amount, 'credit': 0, 'description': f'{transaction_obj.get_transaction_type_display()} - {transaction_obj.number}'})
+            lines.append({'account': gain_acc, 'debit': 0, 'credit': transaction_obj.amount, 'description': transaction_obj.description})
+
+        elif transaction_obj.transaction_type == BankTransaction.TransactionType.EXCHANGE_LOSS:
+            # DR Exchange Loss (Expense) | CR Bank Account
+            loss_acc = Account.objects.select_for_update().get(code=getattr(settings, 'EXCHANGE_LOSS_ACCOUNT', '541'))
+            lines.append({'account': loss_acc, 'debit': transaction_obj.amount, 'credit': 0, 'description': transaction_obj.description})
+            lines.append({'account': bank_acc, 'debit': 0, 'credit': transaction_obj.amount, 'description': f'{transaction_obj.get_transaction_type_display()} - {transaction_obj.number}'})
         
-        elif transaction_obj.transaction_type in [BankTransaction.TransactionType.DEPOSIT, BankTransaction.TransactionType.WITHDRAWAL]:
-            # These are usually manual or part of a transfer. If manual, they need an offset account.
-            # For simplicity, we assume these are already handled or need a suspense account.
-            raise ValueError("الإيداع والسحب النقدي يجب أن يتم عبر نظام التحويلات أو المقبوضات/المدفوعات")
+        
         
         if not lines:
             raise ValueError(f"نوع الحركة البنكية '{transaction_obj.transaction_type}' غير مدعوم للترحيل")

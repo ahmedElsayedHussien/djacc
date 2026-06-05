@@ -15,13 +15,22 @@
                 <p class="text-muted small mb-0">تابع كافة الفواتير الاستثنائية والتحذيرات الصادرة من مناديب المبيعات والعمليات المالية فور حدوثها.</p>
             </div>
             <div class="d-flex align-items-center gap-2">
+                {% if notifications %}
+                <form method="post" action="{% url 'core:notification-delete-all' %}" class="d-inline" onsubmit="return confirm('هل أنت متأكد من مسح جميع الإشعارات نهائياً؟');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-3 shadow-sm transition">
+                        <i class="bi bi-trash3 me-1"></i>مسح الكل
+                    </button>
+                </form>
+                {% endif %}
+                
                 {% if unread_notifications_count > 0 %}
-                    <span class="badge bg-danger px-3 py-2 rounded-pill shadow-sm" style="font-size: 0.85rem;">
-                        {{ unread_notifications_count }} إشعار غير مقروء
-                    </span>
-                    <a href="{% url 'core:notification-mark-all-read' %}" class="btn btn-outline-primary btn-sm rounded-pill px-3 shadow-sm transition">
-                        <i class="bi bi-check-all me-1"></i>تحديد الكل كمقروء
-                    </a>
+                    <form method="post" action="{% url 'core:notification-mark-all-read' %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-primary btn-sm rounded-pill px-3 shadow-sm transition">
+                            <i class="bi bi-check-all me-1"></i>تحديد الكل كمقروء
+                        </button>
+                    </form>
                 {% else %}
                     <span class="badge bg-success-subtle text-success px-3 py-2 rounded-pill" style="font-size: 0.85rem;">
                         <i class="bi bi-check-circle-fill me-1"></i>جميع الإشعارات مقروءة
@@ -66,20 +75,28 @@
                                                 </a>
                                             {% endif %}
                                             {% if not notif.is_read %}
-                                                <a href="{% url 'core:notification-read' notif.id %}" class="text-muted small text-decoration-none hover-primary">
+                                                <a href="{% url 'core:notification-mark-read' notif.id %}" class="text-muted small text-decoration-none hover-primary">
                                                     <i class="bi bi-check2-circle me-1"></i>تعليم كمقروء
                                                 </a>
                                             {% endif %}
                                         </div>
                                     </div>
                                 </div>
-                                <div class="text-md-end">
-                                    <span class="text-muted small d-block mb-1">
-                                        <i class="bi bi-clock me-1"></i>منذ {{ notif.created_at|timesince }}
-                                    </span>
-                                    <span class="text-muted small" style="font-size: 0.75rem;">
-                                        {{ notif.created_at|date:"Y-m-d H:i" }}
-                                    </span>
+                                <div class="text-md-end d-flex flex-md-column align-items-center align-items-md-end justify-content-between h-100 gap-2 mt-3 mt-md-0 w-100 w-md-auto">
+                                    <div>
+                                        <span class="text-muted small d-block mb-1">
+                                            <i class="bi bi-clock me-1"></i>منذ {{ notif.created_at|timesince }}
+                                        </span>
+                                        <span class="text-muted small" style="font-size: 0.75rem;">
+                                            {{ notif.created_at|date:"Y-m-d H:i" }}
+                                        </span>
+                                    </div>
+                                    <form method="post" action="{% url 'core:notification-delete' notif.id %}" class="d-inline m-0 p-0" onsubmit="return confirm('هل تريد مسح هذا الإشعار؟');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-link text-danger p-0" title="مسح الإشعار">
+                                            <i class="bi bi-trash"></i> مسح
+                                        </button>
+                                    </form>
                                 </div>
                             </div>
                         </div>

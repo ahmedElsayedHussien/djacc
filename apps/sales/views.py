@@ -16,7 +16,7 @@ from django.views import View
 from django.conf import settings
 from django.http import JsonResponse, HttpResponse
 from apps.hr.models import Employee
-from apps.core.models import Account, JournalLine, SystemNotification
+from apps.core.models import Account, JournalLine, SystemNotification, JournalEntry
 from apps.core.services import DocumentService
 from apps.core.tax_utils import calculate_line_taxes
 from apps.inventory.models import Warehouse, Item
@@ -664,34 +664,11 @@ class SalesInvoiceCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
                 self.object.total = (gross_total - discount_total + tax_total_added - tax_total_deducted).quantize(q)
                 self.object.save()
                 is_valid = True
-                
-                # Dynamic notification for cash customers on credit terms
-                if self.object.customer.customer_type == 'cash' and self.object.payment_type == 'credit':
-                    title = f"فاتورة بيع استثنائية لعميل نقدي"
-                    message = f"قام المستخدم {self.request.user.username} بإنشاء فاتورة بيع بالآجل رقم {self.object.number} للعميل {self.object.customer.name} بقيمة {self.object.total:.2f} ج.م رغم أن العميل نقدي."
-                    url = reverse('sales:invoice-detail', args=[self.object.id])
-                    SystemNotification.notify_accountants(title, message, url)
-                    messages.warning(self.request, "⚠️ تنبيه: لقد قمت بعمل فاتورة (آجل) لعميل (نقدي). تم إرسال إشعار بذلك للإدارة.")
             else:
                 transaction.set_rollback(True)
                 
         if is_valid:
             messages.success(self.request, f"تم حفظ فاتورة المبيعات {self.object.number} بنجاح (مسودة)")
-            
-            # Send notification and flash warning if invoice date is not today
-            today_date = date_type.today()
-            if self.object.date != today_date:
-                title = "فاتورة بيع بتاريخ استثنائي (سابق/لاحق)"
-                message = f"قام المستخدم {self.request.user.username} بإنشاء فاتورة مبيعات رقم {self.object.number} للعميل {self.object.customer.name} بقيمة {self.object.total:.2f} ج.م بتاريخ استثنائي {self.object.date} (سابق أو لاحق لتاريخ اليوم {today_date})."
-                url = reverse('sales:invoice-detail', args=[self.object.id])
-                SystemNotification.notify_accountants(title, message, url)
-                
-                # Warning message for the representative
-                messages.warning(
-                    self.request,
-                    f"تنبيه: تم إنشاء الفاتورة بتاريخ استثنائي {self.object.date} (سابق أو لاحق لتاريخ اليوم)، وتم إخطار المحاسب والمدير بذلك تلقائياً."
-                )
-
             if hasattr(self.request.user, 'salesrepresentative'):
                 return redirect('reports:rep_dashboard')
             return redirect('sales:invoice-list')
@@ -820,33 +797,13 @@ class SalesInvoiceUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
                 self.object.save()
                 is_valid = True
                 
-                # Dynamic notification for cash customers on credit terms
-                if self.object.customer.customer_type == 'cash' and self.object.payment_type == 'credit':
-                    title = f"تعديل فاتورة بيع استثنائية لعميل نقدي"
-                    message = f"قام المستخدم {self.request.user.username} بتعديل فاتورة بيع بالآجل رقم {self.object.number} للعميل {self.object.customer.name} بقيمة {self.object.total:.2f} ج.م رغم أن العميل نقدي."
-                    url = reverse('sales:invoice-detail', args=[self.object.id])
-                    SystemNotification.notify_accountants(title, message, url)
-                    messages.warning(self.request, "⚠️ تنبيه: لقد قمت بعمل فاتورة (آجل) لعميل (نقدي). تم إرسال إشعار بذلك للإدارة.")
             else:
                 transaction.set_rollback(True)
                 
         if is_valid:
             messages.success(self.request, f"تم تحديث الفاتورة {self.object.number} بنجاح")
-            
-            # Send notification and flash warning if invoice date is not today
-            today_date = date_type.today()
-            if self.object.date != today_date:
-                title = "تعديل فاتورة بيع بتاريخ استثنائي (سابق/لاحق)"
-                message = f"قام المستخدم {self.request.user.username} بتعديل فاتورة مبيعات رقم {self.object.number} للعميل {self.object.customer.name} بقيمة {self.object.total:.2f} ج.م بتاريخ استثنائي {self.object.date} (سابق أو لاحق لتاريخ اليوم {today_date})."
-                url = reverse('sales:invoice-detail', args=[self.object.id])
-                SystemNotification.notify_accountants(title, message, url)
-                
-                # Warning message for the representative
-                messages.warning(
-                    self.request,
-                    f"تنبيه: تم تعديل الفاتورة بتاريخ استثنائي {self.object.date} (سابق أو لاحق لتاريخ اليوم)، وتم إخطار المحاسب والمدير بذلك تلقائياً."
-                )
-
+            if hasattr(self.request.user, 'salesrepresentative'):
+                return redirect('reports:rep_dashboard')
             return redirect('sales:invoice-list')
         else:
             return self.form_invalid(form)
@@ -904,9 +861,31 @@ class SalesInvoicePostView(LoginRequiredMixin, PermRequiredMixin, View):
         return False
     
     def post(self, request, pk):
+        from datetime import date as date_type
         invoice = get_object_or_404(SalesInvoice, pk=pk)
         try:
             SalesService.post_invoice(invoice, request.user)
+            
+            # Dynamic notification for cash customers on credit terms
+            if invoice.customer.customer_type == 'cash' and invoice.payment_type == 'credit':
+                title = f"فاتورة بيع استثنائية لعميل نقدي"
+                message = f"قام المستخدم {request.user.username} بترحيل فاتورة بيع بالآجل رقم {invoice.number} للعميل {invoice.customer.name} بقيمة {invoice.total:.2f} ج.م رغم أن العميل نقدي."
+                url = reverse('sales:invoice-detail', args=[invoice.id])
+                SystemNotification.notify_accountants(title, message, url)
+                messages.warning(request, "⚠️ تنبيه: لقد قمت بعمل فاتورة (آجل) لعميل (نقدي). تم إرسال إشعار بذلك للإدارة.")
+
+            # Send notification and flash warning if invoice date is not today
+            today_date = date_type.today()
+            if invoice.date != today_date:
+                title = "فاتورة بيع بتاريخ استثنائي (سابق/لاحق)"
+                message = f"قام المستخدم {request.user.username} بترحيل فاتورة مبيعات رقم {invoice.number} للعميل {invoice.customer.name} بقيمة {invoice.total:.2f} ج.م بتاريخ استثنائي {invoice.date} (سابق أو لاحق لتاريخ اليوم {today_date})."
+                url = reverse('sales:invoice-detail', args=[invoice.id])
+                SystemNotification.notify_accountants(title, message, url)
+                messages.warning(
+                    request,
+                    f"تنبيه: تم ترحيل الفاتورة بتاريخ استثنائي {invoice.date} (سابق أو لاحق لتاريخ اليوم)، وتم إخطار المحاسب والمدير بذلك تلقائياً."
+                )
+
             messages.success(request, f'تم ترحيل الفاتورة {invoice.number} بنجاح')
         except Exception as e:
             messages.error(request, f'خطأ أثناء الترحيل: {e}')
@@ -969,39 +948,44 @@ class CustomerReceiptCreateView(LoginRequiredMixin, PermRequiredMixin, CreateVie
         return form
 
     def form_valid(self, form):
-        with transaction.atomic():
-            form.instance.number = DocumentService.generate_number(CustomerReceipt, 'RCPT')
-            form.instance.created_by = self.request.user
-            self.object = form.save()
-            
-            # Process allocations from request.POST
-            for key, value in self.request.POST.items():
-                if key.startswith('allocation_') and value:
-                    try:
-                        invoice_id = int(key.split('_')[1])
-                        allocated_amount = Decimal(value)
-                        if allocated_amount > 0:
-                            # Verify invoice belongs to the customer and is posted
-                            invoice = SalesInvoice.objects.select_for_update().get(
-                                pk=invoice_id, 
-                                customer=self.object.customer,
-                                status=SalesInvoice.Status.POSTED
-                            )
-                            # Create allocation
-                            ReceiptAllocation.objects.create(
-                                receipt=self.object,
-                                invoice=invoice,
-                                amount=allocated_amount
-                            )
-                            # Update invoice paid amount
-                            invoice.paid_amount += allocated_amount
-                            invoice.save(update_fields=['paid_amount'])
-                    except (ValueError, SalesInvoice.DoesNotExist, IndexError):
-                        pass
+        try:
+            with transaction.atomic():
+                form.instance.number = DocumentService.generate_number(CustomerReceipt, 'RCPT')
+                form.instance.created_by = self.request.user
+                self.object = form.save()
+                
+                # Process allocations from request.POST
+                for key, value in self.request.POST.items():
+                    if key.startswith('allocation_') and value:
+                        try:
+                            invoice_id = int(key.split('_')[1])
+                            allocated_amount = Decimal(value)
+                            if allocated_amount > 0:
+                                # Verify invoice belongs to the customer and is posted
+                                invoice = SalesInvoice.objects.select_for_update().get(
+                                    pk=invoice_id, 
+                                    customer=self.object.customer,
+                                    status=SalesInvoice.Status.POSTED
+                                )
+                                # Create allocation
+                                ReceiptAllocation.objects.create(
+                                    receipt=self.object,
+                                    invoice=invoice,
+                                    amount=allocated_amount
+                                )
+                                # Update invoice paid amount
+                                invoice.paid_amount += allocated_amount
+                                invoice.save(update_fields=['paid_amount'])
+                        except (ValueError, SalesInvoice.DoesNotExist, IndexError):
+                            pass
 
-            SalesService.record_receipt(self.object, self.request.user)
-            messages.success(self.request, f'تم تسجيل السند {self.object.number} وترحيله بنجاح')
-        return redirect(self.get_success_url())
+                SalesService.record_receipt(self.object, self.request.user)
+                messages.success(self.request, f'تم تسجيل السند {self.object.number} وترحيله بنجاح')
+            return redirect(self.get_success_url())
+        except Exception as e:
+            logger.exception('Error creating customer receipt')
+            messages.error(self.request, f'خطأ أثناء الحفظ: {e}')
+            return self.form_invalid(form)
 
 class CustomerReceiptDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = CustomerReceipt
@@ -1012,6 +996,7 @@ class CustomerReceiptDetailView(LoginRequiredMixin, PermRequiredMixin, DetailVie
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx['banks'] = BankAccount.objects.filter(is_active=True).select_related('account')
+        ctx['cash_boxes'] = get_available_cash_boxes(self.request.user)
         return ctx
 
 class CustomerReceiptPrintView(LoginRequiredMixin, PermRequiredMixin, DetailView):
@@ -1026,22 +1011,34 @@ class ChequeCollectionView(LoginRequiredMixin, PermRequiredMixin, View):
     def post(self, request, pk):
         receipt = get_object_or_404(CustomerReceipt, pk=pk)
         bank_id = request.POST.get('bank')
+        cash_box_id = request.POST.get('cash_box')
         collection_date_str = request.POST.get('date')
         
-        if not bank_id or not collection_date_str:
-            messages.error(request, "يجب تحديد البنك وتاريخ التحصيل")
+        if not (bank_id or cash_box_id) or not collection_date_str:
+            messages.error(request, "يجب تحديد جهة التحصيل وتاريخ التحصيل")
             return redirect('sales:receipt-detail', pk=pk)
             
         try:
-            bank = BankAccount.objects.get(pk=bank_id)
             collection_date = date_type.fromisoformat(collection_date_str)
-            SalesService.collect_cheque(receipt, bank, collection_date, request.user)
-            messages.success(request, f'تم تحصيل الشيك {receipt.cheque_number} بنجاح')
+            if cash_box_id:
+                from apps.treasury.models import CashBox
+                cash_box = CashBox.objects.get(pk=cash_box_id)
+                dest_account = cash_box.account
+                entry_type = JournalEntry.EntryType.RECEIPT
+                dest_name = cash_box.name
+            else:
+                bank = BankAccount.objects.get(pk=bank_id)
+                dest_account = bank.account
+                entry_type = JournalEntry.EntryType.BANK
+                dest_name = f"{bank.bank_name} - {bank.name}"
+                
+            SalesService.collect_cheque(receipt, dest_account, collection_date, request.user, entry_type)
+            messages.success(request, f'تم تحصيل الشيك {receipt.cheque_number} بنجاح في {dest_name}')
+            return redirect('sales:receipt-list')
         except Exception as e:
             logger.exception("Error collecting cheque")
             messages.error(request, f'خطأ أثناء التحصيل: {e}')
-            
-        return redirect('sales:receipt-detail', pk=pk)
+            return redirect('sales:receipt-detail', pk=pk)
 
 class ChequeBounceView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'sales.change_customerreceipt'
@@ -1516,14 +1513,6 @@ class SalesReturnCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
                 self.object.total = (gross_total - discount_total + tax_total_added - tax_total_deducted).quantize(q)
                 self.object.save()
                 
-                # تنبيه ديناميكي محاسبي عند إرجاع آجل لعميل نقدي
-                if self.object.customer.customer_type == 'cash' and self.object.payment_type == 'credit':
-                    title = f"مرتجع مبيعات استثنائي بالآجل لعميل نقدي"
-                    message = f"قام المستخدم {self.request.user.username} بإنشاء مرتجع مبيعات بالآجل رقم {self.object.number} للعميل {self.object.customer.name} بقيمة {self.object.total:.2f} ج.م رغم أن العميل نقدي."
-                    url = reverse('sales:return-detail', args=[self.object.id])
-                    SystemNotification.notify_accountants(title, message, url)
-                    messages.warning(self.request, "⚠️ تنبيه: لقد قمت بعمل مرتجع (آجل) لعميل (نقدي). تم إرسال إشعار بذلك للإدارة.")
-                
                 messages.success(self.request, f"تم إنشاء مرتجع المبيعات {self.object.number} بنجاح (مسودة)")
             else:
                 return self.form_invalid(form)
@@ -1555,6 +1544,15 @@ class SalesReturnPostView(LoginRequiredMixin, PermRequiredMixin, View):
         sales_return = get_object_or_404(SalesReturn, pk=pk)
         try:
             SalesService.post_return(sales_return, request.user)
+            
+            # تنبيه ديناميكي محاسبي عند إرجاع آجل لعميل نقدي
+            if sales_return.customer.customer_type == 'cash' and sales_return.payment_type == 'credit':
+                title = f"مرتجع مبيعات استثنائي بالآجل لعميل نقدي"
+                message = f"قام المستخدم {request.user.username} بترحيل مرتجع مبيعات بالآجل رقم {sales_return.number} للعميل {sales_return.customer.name} بقيمة {sales_return.total:.2f} ج.م رغم أن العميل نقدي."
+                url = reverse('sales:return-detail', args=[sales_return.id])
+                SystemNotification.notify_accountants(title, message, url)
+                messages.warning(request, "⚠️ تنبيه: لقد قمت بترحيل مرتجع (آجل) لعميل (نقدي). تم إرسال إشعار بذلك للإدارة.")
+
             messages.success(request, f'تم ترحيل المرتجع {sales_return.number} بنجاح')
         except Exception as e:
             logger.exception("Error posting sales return")

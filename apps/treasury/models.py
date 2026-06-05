@@ -59,12 +59,16 @@ class BankAccount(ConcurrencyModel):
 
 class BankTransaction(ConcurrencyModel):
     class TransactionType(models.TextChoices):
-        DEPOSIT = 'deposit', 'إيداع'
-        WITHDRAWAL = 'withdrawal', 'سحب'
-        TRANSFER_IN = 'transfer_in', 'تحويل وارد'
-        TRANSFER_OUT = 'transfer_out', 'تحويل صادر'
-        BANK_CHARGE = 'charge', 'عمولة بنكية'
-        INTEREST = 'interest', 'فائدة'
+        ACCOUNT_FEE = 'account_fee', 'رسوم إدارة الحساب'
+        TRANSFER_FEE = 'transfer_fee', 'عمولات التحويل البنكي'
+        BOUNCE_FEE = 'bounce_fee', 'رسوم الشيكات المرتجعة'
+        STOP_CHEQUE_FEE = 'stop_cheque_fee', 'رسوم إيقاف الشيكات'
+        CHEQUEBOOK_FEE = 'chequebook_fee', 'مصروفات دفاتر الشيكات'
+        CARD_FEE = 'card_fee', 'عمولات بطاقات الائتمان/السحب'
+        LOAN_INTEREST = 'loan_interest', 'فوائد قروض بنكية (مدينة)'
+        INTEREST_REV = 'interest_rev', 'فوائد بنكية (دائنة)'
+        EXCHANGE_GAIN = 'exchange_gain', 'أرباح فروق عملة'
+        EXCHANGE_LOSS = 'exchange_loss', 'خسائر فروق عملة'
 
     number = models.CharField(max_length=50, unique=True, verbose_name="رقم العملية")
     date = models.DateField(verbose_name="تاريخ العملية")

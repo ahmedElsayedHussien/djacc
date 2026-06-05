@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+{% block title %}تفاصيل الفاتورة #{{ order.receipt_number }} | DJACC Pro{% endblock %}
+{% block header %}تفاصيل الفاتورة {{ order.receipt_number }}{% endblock %}
+
+{% block content %}
+<div class="row g-4 font-cairo">
+    <!-- Order Summary -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm border-0 mb-4" style="border-radius: 16px;">
+            <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+                <h5 class="mb-0 fw-bold text-plum"><i class="bi bi-info-circle me-2"></i>ملخص الفاتورة</h5>
+            </div>
+            <div class="card-body px-4 pb-4">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                        <span class="text-muted">الوردية</span>
+                        <a href="{% url 'pos:session-orders' order.session.id %}" class="fw-bold text-decoration-none">#{{ order.session.id }}</a>
+                    </li>
+                    <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                        <span class="text-muted">الكاشير</span>
+                        <span class="fw-bold">{{ order.session.user.get_full_name|default:order.session.user.username }}</span>
+                    </li>
+                    <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                        <span class="text-muted">الوقت</span>
+                        <span class="fw-bold">{{ order.date|date:"Y-m-d H:i" }}</span>
+                    </li>
+                    <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                        <span class="text-muted">العميل</span>
+                        <span class="fw-bold text-primary">{{ order.customer.name|default:"عميل نقدي طيار" }}</span>
+                    </li>
+                    <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                        <span class="text-muted">النوع</span>
+                        {% if order.is_return %}
+                            <span class="badge bg-danger rounded-pill px-3"><i class="bi bi-arrow-return-left me-1"></i> فاتورة مرتجع</span>
+                        {% else %}
+                            <span class="badge bg-primary rounded-pill px-3"><i class="bi bi-cart-check me-1"></i> فاتورة بيع</span>
+                        {% endif %}
+                    </li>
+                    <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                        <span class="text-muted">الحالة</span>
+                        {% if order.status == 'paid' %}
+                            <span class="badge bg-success rounded-pill px-3">مدفوعة</span>
+                        {% elif order.status == 'posted' %}
+                            <span class="badge bg-dark rounded-pill px-3">مرحّلة للـ ERP</span>
+                        {% elif order.status == 'cancelled' %}
+                            <span class="badge bg-danger rounded-pill px-3">ملغاة</span>
+                        {% else %}
+                            <span class="badge bg-secondary rounded-pill px-3">{{ order.get_status_display }}</span>
+                        {% endif %}
+                    </li>
+                    {% if order.is_return and order.parent_order %}
+                    <li class="list-group-item px-0 d-flex justify-content-between align-items-center bg-light mt-2 p-2 rounded border">
+                        <span class="text-muted small">فاتورة البيع الأصلية:</span>
+                        <a href="{% url 'pos:order-detail' order.parent_order.pk %}" class="fw-bold text-decoration-none small">
+                            {{ order.parent_order.receipt_number }}
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+
+        <!-- Payments -->
+        <div class="card shadow-sm border-0 mb-4" style="border-radius: 16px;">
+            <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+                <h5 class="mb-0 fw-bold text-plum"><i class="bi bi-wallet2 me-2"></i>طرق الدفع</h5>
+            </div>
+            <div class="card-body px-4 pb-4">
+                {% for payment in order.payments.all %}
+                <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded">
+                    <div>
+                        {% if payment.method == 'cash' %}
+                            <i class="bi bi-cash text-success me-2"></i> <span class="fw-bold">كاش</span>
+                        {% elif payment.method == 'card' %}
+                            <i class="bi bi-credit-card text-info me-2"></i> <span class="fw-bold">فيزا</span>
+                        {% elif payment.method == 'wallet' %}
+                            <i class="bi bi-phone text-warning me-2"></i> <span class="fw-bold">محفظة</span>
+                        {% endif %}
+                        {% if payment.reference %}
+                        <br><small class="text-muted font-monospace">Ref: {{ payment.reference }}</small>
+                        {% endif %}
+                    </div>
+                    <div class="fw-bold">{{ payment.amount|floatformat:2 }} EGP</div>
+                </div>
+                {% empty %}
+                <p class="text-muted text-center mb-0 small">لا يوجد سجل مدفوعات</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Order Lines -->
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0 mb-4" style="border-radius: 16px;">
+            <div class="card-header bg-white border-0 pt-4 pb-2 px-4 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold text-plum"><i class="bi bi-basket me-2"></i>أصناف الفاتورة</h5>
+            </div>
+            <div class="card-body px-4 pb-4 pt-2">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light text-secondary small">
+                            <tr>
+                                <th>الصنف</th>
+                                <th class="text-center">الكمية</th>
+                                <th class="text-center">السعر</th>
+                                <th class="text-center">الخصم</th>
+                                <th class="text-center">الضريبة</th>
+                                <th class="text-center">الإجمالي</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for line in order.lines.all %}
+                            <tr>
+                                <td class="fw-bold">{{ line.item.name }}</td>
+                                <td class="text-center">{{ line.qty|floatformat:2 }}</td>
+                                <td class="text-center">{{ line.price|floatformat:2 }}</td>
+                                <td class="text-center text-danger">{{ line.discount|floatformat:2 }}</td>
+                                <td class="text-center text-info">{{ line.tax_percent|floatformat:0 }}%</td>
+                                <td class="text-center fw-bold">{{ line.total|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">لا توجد أصناف</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="bg-light">
+                            <tr>
+                                <td colspan="5" class="text-start fw-bold pt-3 pb-1">الإجمالي قبل الضريبة:</td>
+                                <td class="text-center fw-bold pt-3 pb-1 {% if order.is_return %}text-danger{% endif %}">{% if order.is_return %}-{% endif %}{{ order.subtotal|floatformat:2 }}</td>
+                            </tr>
+                            {% if order.discount > 0 %}
+                            <tr>
+                                <td colspan="5" class="text-start fw-bold text-danger py-1">الخصم الإجمالي:</td>
+                                <td class="text-center fw-bold text-danger py-1">{% if order.is_return %}+{% else %}-{% endif %}{{ order.discount|floatformat:2 }}</td>
+                            </tr>
+                            {% endif %}
+                            <tr>
+                                <td colspan="5" class="text-start fw-bold text-info py-1">الضريبة:</td>
+                                <td class="text-center fw-bold text-info py-1">{% if order.is_return %}-{% endif %}{{ order.tax|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td colspan="5" class="text-start fs-5 fw-extrabold {% if order.is_return %}text-danger{% else %}text-primary{% endif %} pt-2 pb-3">الصافي:</td>
+                                <td class="text-center fs-5 fw-extrabold {% if order.is_return %}text-danger{% else %}text-primary{% endif %} pt-2 pb-3">{% if order.is_return %}-{% endif %}{{ order.grand_total|floatformat:2 }} EGP</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                
+                <div class="mt-4 text-center d-flex justify-content-center gap-3">
+                    <a href="{% url 'pos:session-orders' order.session.id %}" class="btn btn-outline-dark rounded-pill px-4">
+                        <i class="bi bi-arrow-right me-1"></i> العودة لفواتير الوردية
+                    </a>
+                    {% if not order.is_return and order.status in 'paid,posted' %}
+                    <a href="{% url 'pos:order-return' order.id %}" class="btn btn-danger rounded-pill px-4 shadow-sm">
+                        <i class="bi bi-arrow-return-left me-1"></i> استرجاع أصناف من هذه الفاتورة
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -456,7 +456,7 @@ class CustomerReceiptForm(forms.ModelForm):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         if user:
-            self.fields['cash_box'].queryset = get_available_cash_boxes(user)
+            self.fields['cash_box'].queryset = get_available_cash_boxes(user, exclude_rep_boxes=True)
             if hasattr(user, 'salesrepresentative'):
                 self.fields['payment_method'].choices = [('cash', 'نقدي')]
 

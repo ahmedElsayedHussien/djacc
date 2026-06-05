@@ -93,7 +93,7 @@ def open_session(request):
 def checkout(request):
     active_session = POSSessionService.get_active_session(request.user)
     if not active_session:
-        return JsonResponse({'success': False, 'message': 'لا توجد جلسة عمل مفتوحة حالياً.'}, status=400)
+        return JsonResponse({'success': False, 'message': 'لا توجد جلسة عمل مفتوحة حالياً. قد تم إغلاقها من الإدارة.', 'session_closed': True}, status=400)
         
     try:
         data = json.loads(request.body)
@@ -101,13 +101,15 @@ def checkout(request):
         payment_method = data.get('payment_method', 'cash')
         customer_id = data.get('customer_id')
         is_taxable = data.get('is_taxable', True)
+        payment_reference = data.get('payment_reference', '')
         
         order = POSCheckoutService.create_order(
             session=active_session,
             cart_items=cart,
             payment_method=payment_method,
             customer_id=customer_id,
-            is_taxable=is_taxable
+            is_taxable=is_taxable,
+            payment_reference=payment_reference
         )
         
         lines_data = []
@@ -126,6 +128,8 @@ def checkout(request):
             'message': 'تم حفظ ودفع الفاتورة بنجاح وصرف المخزون.',
             'receipt_number': order.receipt_number,
             'grand_total': float(order.grand_total),
+            'subtotal': float(order.subtotal),
+            'tax': float(order.tax),
             'lines': lines_data,
             'warnings': warnings,
         })
@@ -143,20 +147,21 @@ def cancel_order(request, pk):
         SystemNotification.notify_accountants(
             title="إلغاء فاتورة POS",
             message=f"قام {request.user.username} بإلغاء فاتورة النقدي رقم {order.receipt_number} بقيمة {order.grand_total:.2f} ج.م من وردية #{order.session_id}.",
-            url=reverse('pos:session-list'),
+            url=reverse('pos:session-orders', args=[order.session_id]),
         )
-        return JsonResponse({'success': True, 'message': f'تم إلغاء الفاتورة {order.receipt_number} بنجاح.'})
+        messages.success(request, f'تم إلغاء الفاتورة {order.receipt_number} بنجاح.')
     except Exception as e:
         logger.exception('Error cancelling order %s', order.receipt_number)
-        return JsonResponse({'success': False, 'message': str(e)}, status=400)
+        messages.error(request, str(e))
+    return redirect('pos:session-orders', pk=order.session_id)
 
 @login_required
 @perm_required('pos.change_posorder', raise_exception=True)
 def return_order_items(request, pk):
     order = get_object_or_404(POSOrder.objects.prefetch_related('lines__item'), pk=pk)
-    if order.status != POSOrder.Status.PAID:
-        messages.error(request, "يمكن فقط إرجاع أصناف من الفواتير المدفوعة.")
-        return redirect('pos:session-list')
+    if order.status not in [POSOrder.Status.PAID, POSOrder.Status.POSTED]:
+        messages.error(request, "يمكن فقط إرجاع أصناف من الفواتير المدفوعة أو المرحّلة.")
+        return redirect('pos:session-orders', pk=order.session_id)
 
     if request.method == 'POST':
         try:
@@ -169,18 +174,26 @@ def return_order_items(request, pk):
                         items_data.append({'line_id': line_id, 'qty': qty})
             if not items_data:
                 messages.warning(request, "لم يتم تحديد أي أصناف للإرجاع.")
-                return redirect('pos:session-list')
+                return redirect('pos:session-orders', pk=order.session_id)
             total_refund = POSCheckoutService.return_items(order, items_data, request.user)
+            # Custom notification logic for closed sessions
+            if order.session.status != 'open':
+                notif_title = "⚠️ تنبيه: مرتجع من وردية مغلقة"
+                notif_msg = f"تحذير: قام {request.user.username} بعمل مرتجع جزئي بقيمة {total_refund:.2f} ج.م للفاتورة رقم {order.receipt_number} التابعة لوردية مغلقة (#{order.session_id})."
+            else:
+                notif_title = "مرتجع POS جزئي"
+                notif_msg = f"قام {request.user.username} بعمل مرتجع جزئي من الفاتورة رقم {order.receipt_number} بقيمة {total_refund:.2f} ج.م في ورديته الحالية."
+
             SystemNotification.notify_accountants(
-                title="مرتجع POS جزئي",
-                message=f"قام {request.user.username} بعمل مرتجع جزئي من الفاتورة رقم {order.receipt_number} بقيمة {total_refund:.2f} ج.م.",
-                url=reverse('pos:session-list'),
+                title=notif_title,
+                message=notif_msg,
+                url=reverse('pos:session-orders', args=[order.session_id]),
             )
             messages.success(request, f'تم إرجاع الأصناف بنجاح. المبلغ المسترد: {total_refund} EGP')
         except Exception as e:
             logger.exception('Error returning items from order %s', order.receipt_number)
             messages.error(request, str(e))
-        return redirect('pos:session-list')
+        return redirect('pos:session-orders', pk=order.session_id)
 
     return render(request, 'pos/order_return.html', {'order': order})
 
@@ -269,7 +282,7 @@ def station_delete(request, pk):
 @login_required
 @perm_required('pos.view_possession', raise_exception=True)
 def session_list(request):
-    orders_qs = POSOrder.objects.filter(status=POSOrder.Status.PAID).prefetch_related(
+    orders_qs = POSOrder.objects.filter(status__in=[POSOrder.Status.PAID, POSOrder.Status.POSTED]).prefetch_related(
         Prefetch('payments', queryset=POSPayment.objects.all())
     )
     sessions = POSSession.objects.all().select_related('station', 'user').prefetch_related(
@@ -302,6 +315,30 @@ def session_list(request):
         'page_obj': page_obj,
         'is_paginated': page_obj.has_other_pages(),
     })
+
+
+@login_required
+@perm_required('pos.view_possession', raise_exception=True)
+def session_orders(request, pk):
+    session = get_object_or_404(POSSession, pk=pk)
+    orders = session.orders.all().select_related('customer').prefetch_related('payments').order_by('-date')
+    
+    paginator = Paginator(orders, 50)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, 'pos/session_orders.html', {
+        'session': session,
+        'page_obj': page_obj,
+        'is_paginated': page_obj.has_other_pages(),
+    })
+
+
+@login_required
+@perm_required('pos.view_posorder', raise_exception=True)
+def order_detail(request, pk):
+    order = get_object_or_404(POSOrder.objects.prefetch_related('lines__item', 'payments'), pk=pk)
+    return render(request, 'pos/order_detail.html', {'order': order})
 
 
 @login_required

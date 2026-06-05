@@ -108,20 +108,36 @@
                             </ul>
                         </div>
                     {% endif %}
-                            <div class="col-md-5">
+                            <div class="col-md-3">
+                                <label class="form-label small">جهة التحصيل</label>
+                                <select id="collectionType" class="form-select form-select-sm" onchange="toggleCollectionFields()">
+                                    <option value="bank">حساب بنكي</option>
+                                    <option value="cash_box">خزينة نقدية</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4" id="bankDiv">
                                 <label class="form-label small">البنك المستلم</label>
-                                <select name="bank" class="form-select form-select-sm" required>
+                                <select name="bank" id="bankSelect" class="form-select form-select-sm" required>
                                     <option value="">اختر البنك...</option>
                                     {% for bank in banks %}
                                     <option value="{{ bank.pk }}">{{ bank.bank_name }} - {{ bank.name }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-4 d-none" id="cashBoxDiv">
+                                <label class="form-label small">الخزنة المستلمة</label>
+                                <select name="cash_box" id="cashBoxSelect" class="form-select form-select-sm">
+                                    <option value="">اختر الخزنة...</option>
+                                    {% for box in cash_boxes %}
+                                    <option value="{{ box.pk }}">{{ box.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
                                 <label class="form-label small">تاريخ التحصيل</label>
                                 <input type="date" name="date" class="form-control form-control-sm" required value="{% now 'Y-m-d' %}">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <button type="submit" class="btn btn-success btn-sm w-100">تأكيد التحصيل</button>
                             </div>
                         </form>
@@ -129,30 +145,6 @@
                 </div>
                 {% endif %}
 
-                {% if perms.sales.change_customerreceipt %}
-                <div class="card mb-4 border-danger">
-                    <div class="card-header bg-danger text-white">
-                        <i class="bi bi-arrow-return-left me-1"></i> إرجاع الشيك (شيك مرتجع)
-                    </div>
-                    <div class="card-body">
-                        <form method="post" action="{% url 'sales:bounce-cheque' receipt.pk %}" class="row g-2 align-items-end">
-                            {% csrf_token %}
-                            <div class="col-md-5">
-                                <label class="form-label small">تاريخ الإرجاع</label>
-                                <input type="date" name="date" class="form-control form-control-sm" required value="{% now 'Y-m-d' %}">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label small">غرامة (اختياري)</label>
-                                <input type="number" name="penalty" class="form-control form-control-sm" step="any" value="0" min="0">
-                            </div>
-                            <div class="col-md-3">
-                                <button type="submit" class="btn btn-danger btn-sm w-100" onclick="return confirm('تأكيد إرجاع الشيك كشيك مرتجع؟')">تأكيد الإرجاع</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-                {% endif %}
-                {% elif receipt.cheque_status == 'collected' %}
                 {% if perms.sales.change_customerreceipt %}
                 <div class="card mb-4 border-danger">
                     <div class="card-header bg-danger text-white">
@@ -236,3 +228,30 @@
     </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleCollectionFields() {
+    const type = document.getElementById('collectionType').value;
+    const bankDiv = document.getElementById('bankDiv');
+    const cashBoxDiv = document.getElementById('cashBoxDiv');
+    const bankSelect = document.getElementById('bankSelect');
+    const cashBoxSelect = document.getElementById('cashBoxSelect');
+    
+    if (type === 'bank') {
+        bankDiv.classList.remove('d-none');
+        cashBoxDiv.classList.add('d-none');
+        bankSelect.required = true;
+        cashBoxSelect.required = false;
+        cashBoxSelect.value = '';
+    } else {
+        cashBoxDiv.classList.remove('d-none');
+        bankDiv.classList.add('d-none');
+        cashBoxSelect.required = true;
+        bankSelect.required = false;
+        bankSelect.value = '';
+    }
+}
+</script>
+{% endblock %}
+

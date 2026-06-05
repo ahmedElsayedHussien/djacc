@@ -670,10 +670,10 @@ class SalesService:
 
     @staticmethod
     @transaction.atomic
-    def collect_cheque(receipt, bank_account, collection_date, created_by) -> JournalEntry:
+    def collect_cheque(receipt, destination_account, collection_date, created_by, entry_type=JournalEntry.EntryType.BANK) -> JournalEntry:
         """
         Journal Entry for Cheque Collection:
-        DR  Bank Account                → receipt.amount
+        DR  Destination Account         → receipt.amount
         CR  Cheques Under Collection    → receipt.amount
         """
         receipt = CustomerReceipt.objects.select_for_update().get(pk=receipt.pk)
@@ -690,7 +690,7 @@ class SalesService:
 
         lines = [
             {
-                'account': bank_account.account,
+                'account': destination_account,
                 'debit': receipt.amount,
                 'credit': 0,
                 'description': f'تحصيل شيك رقم {receipt.cheque_number} من عميل {receipt.customer.name}'
@@ -705,7 +705,7 @@ class SalesService:
 
         entry = JournalService.create_entry(
             date_val=collection_date,
-            entry_type=JournalEntry.EntryType.BANK,
+            entry_type=entry_type,
             description=f'تحصيل شيك رقم {receipt.cheque_number}',
             lines=lines,
             source_document=receipt,
@@ -733,8 +733,8 @@ class SalesService:
 
         if receipt.payment_method != 'cheque':
             raise ValueError("هذا السند ليس شيكاً")
-        if receipt.cheque_status != CustomerReceipt.ChequeStatus.COLLECTED:
-            raise ValueError("هذا الشيك لم يتم تحصيله بعد أو ملغي بالفعل")
+        if receipt.cheque_status != CustomerReceipt.ChequeStatus.PENDING:
+            raise ValueError("هذا الشيك محصل بالفعل أو ملغي")
 
         collection_account = Account.objects.get(code=getattr(settings, 'CHEQUES_UNDER_COLLECTION_ACCOUNT', '1151'))
 
@@ -770,7 +770,7 @@ class SalesService:
 
         reversal_entry = JournalService.create_entry(
             date_val=bounce_date,
-            entry_type=JournalEntry.EntryType.ADJUSTMENT,
+            entry_type=JournalEntry.EntryType.RECEIPT,
             description=f'إرجاع شيك مرتجع رقم {receipt.cheque_number}',
             lines=lines,
             source_document=receipt,

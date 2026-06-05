@@ -112,7 +112,8 @@
                     <div>
                         <a href="{% url 'treasury:cashbox-list' %}" class="btn btn-sm btn-outline-success me-2">الخزن</a>
                         <a href="{% url 'treasury:bank-list' %}" class="btn btn-sm btn-outline-info me-2">البنوك</a>
-                        <a href="{% url 'treasury:wallet-list' %}" class="btn btn-sm btn-outline-warning">المحافظ</a>
+                        <a href="{% url 'treasury:wallet-list' %}" class="btn btn-sm btn-outline-warning me-2">المحافظ</a>
+                        <a href="{% url 'treasury:intermediary-list' %}" class="btn btn-sm btn-outline-secondary">شركات وسيطة</a>
                     </div>
                 </div>
                 <div class="card-body p-0">
@@ -128,7 +129,7 @@
                             </thead>
                             <tbody>
                                 {% for item in boxes_data %}
-                                <tr class="account-row" onclick="window.location='{% url 'treasury:cashbox-detail' item.obj.pk %}'">
+                                <tr class="account-row" onclick="window.location='{% url 'reports:account_statement' %}?account={{ item.obj.account.pk }}'">
                                     <td class="px-4">
                                         <div class="fw-bold text-success"><i class="bi bi-cash me-2"></i>{{ item.obj.name }}</div>
                                         <small class="text-muted">المسؤول: {{ item.obj.responsible_user.get_full_name|default:item.obj.responsible_user.username }}</small>
@@ -139,7 +140,7 @@
                                 </tr>
                                 {% endfor %}
                                 {% for item in banks_data %}
-                                <tr class="account-row" onclick="window.location='{% url 'treasury:bank-detail' item.obj.pk %}'">
+                                <tr class="account-row" onclick="window.location='{% url 'reports:account_statement' %}?account={{ item.obj.account.pk }}'">
                                     <td class="px-4">
                                         <div class="fw-bold text-info"><i class="bi bi-bank2 me-2"></i>{{ item.obj.bank_name }} - {{ item.obj.name }}</div>
                                         <small class="text-muted">{{ item.obj.account_number }}</small>
@@ -150,13 +151,24 @@
                                 </tr>
                                 {% endfor %}
                                 {% for item in wallets_data %}
-                                <tr class="account-row" onclick="window.location='{% url 'treasury:wallet-detail' item.obj.pk %}'">
+                                <tr class="account-row" onclick="window.location='{% url 'reports:account_statement' %}?account={{ item.obj.account.pk }}'">
                                     <td class="px-4">
                                         <div class="fw-bold text-warning"><i class="bi bi-phone-vibrate me-2"></i>{{ item.obj.get_provider_display }} - {{ item.obj.name }}</div>
                                         <small class="text-muted">{{ item.obj.mobile_number }}</small>
                                     </td>
                                     <td>محفظة إلكترونية</td>
                                     <td>{{ item.obj.currency }}</td>
+                                    <td class="text-end px-4 fw-bold">{{ item.balance|floatformat:2|intcomma }}</td>
+                                </tr>
+                                {% endfor %}
+                                {% for item in intermediaries_data %}
+                                <tr class="account-row" onclick="window.location='{% url 'reports:account_statement' %}?account={{ item.obj.account.pk }}'">
+                                    <td class="px-4">
+                                        <div class="fw-bold text-secondary"><i class="bi bi-shop me-2"></i>{{ item.obj.name }}</div>
+                                        <small class="text-muted">عمولة: {{ item.obj.commission_percent }}%</small>
+                                    </td>
+                                    <td>شركة وسيطة</td>
+                                    <td>EGP</td>
                                     <td class="text-end px-4 fw-bold">{{ item.balance|floatformat:2|intcomma }}</td>
                                 </tr>
                                 {% endfor %}

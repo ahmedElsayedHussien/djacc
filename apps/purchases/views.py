@@ -460,36 +460,41 @@ class SupplierPaymentCreateView(LoginRequiredMixin, PermRequiredMixin, CreateVie
         return kwargs
 
     def form_valid(self, form):
-        with transaction.atomic():
-            form.instance.created_by = self.request.user
-            self.object = form.save()
+        try:
+            with transaction.atomic():
+                form.instance.created_by = self.request.user
+                self.object = form.save()
 
-            selected_invoices = form.cleaned_data.get('invoices', [])
-            if selected_invoices:
-                total_allocated = Decimal('0')
-                # Re-fetch with row lock to prevent race conditions
-                locked_invoices = PurchaseInvoice.objects.filter(
-                    pk__in=[inv.pk for inv in selected_invoices]
-                ).select_for_update()
-                for inv in locked_invoices:
-                    if total_allocated >= self.object.amount:
-                        break
-                    remaining = inv.total - inv.paid_amount
-                    alloc_amount = min(remaining, self.object.amount - total_allocated)
-                    if alloc_amount > 0:
-                        PaymentAllocation.objects.create(
-                            payment=self.object,
-                            invoice=inv,
-                            amount=alloc_amount,
-                        )
-                        inv.paid_amount += alloc_amount
-                        inv.save(update_fields=['paid_amount'])
-                        total_allocated += alloc_amount
+                selected_invoices = form.cleaned_data.get('invoices', [])
+                if selected_invoices:
+                    total_allocated = Decimal('0')
+                    # Re-fetch with row lock to prevent race conditions
+                    locked_invoices = PurchaseInvoice.objects.filter(
+                        pk__in=[inv.pk for inv in selected_invoices]
+                    ).select_for_update()
+                    for inv in locked_invoices:
+                        if total_allocated >= self.object.amount:
+                            break
+                        remaining = inv.total - inv.paid_amount
+                        alloc_amount = min(remaining, self.object.amount - total_allocated)
+                        if alloc_amount > 0:
+                            PaymentAllocation.objects.create(
+                                payment=self.object,
+                                invoice=inv,
+                                amount=alloc_amount,
+                            )
+                            inv.paid_amount += alloc_amount
+                            inv.save(update_fields=['paid_amount'])
+                            total_allocated += alloc_amount
 
-            PurchaseService.record_payment(self.object, self.request.user)
-            messages.success(self.request, f'تم تسجيل سند الصرف {self.object.number} وترحيله')
+                PurchaseService.record_payment(self.object, self.request.user)
+                messages.success(self.request, f'تم تسجيل سند الصرف {self.object.number} وترحيله')
 
-        return redirect(self.success_url)
+            return redirect(self.success_url)
+        except Exception as e:
+            logger.exception('Error creating supplier payment')
+            messages.error(self.request, f'خطأ أثناء الحفظ: {e}')
+            return self.form_invalid(form)
 
 class SupplierPaymentDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
     model = SupplierPayment
@@ -499,6 +504,28 @@ class SupplierPaymentDetailView(LoginRequiredMixin, PermRequiredMixin, DetailVie
 
     def get_queryset(self):
         return super().get_queryset().select_related('supplier', 'cash_box', 'bank_account')
+
+class SupplierChequeClearView(LoginRequiredMixin, PermRequiredMixin, View):
+    permission_required = 'purchases.change_supplierpayment'
+
+    def post(self, request, pk):
+        payment = get_object_or_404(SupplierPayment, pk=pk)
+        cleared_date_str = request.POST.get('date')
+        
+        if not cleared_date_str:
+            messages.error(request, "يجب تحديد تاريخ الصرف")
+            return redirect('purchases:payment-detail', pk=pk)
+            
+        try:
+            cleared_date = date.fromisoformat(cleared_date_str)
+            PurchaseService.clear_cheque(payment, cleared_date, request.user)
+            messages.success(request, f'تم تسجيل صرف الشيك {payment.cheque_number} بنجاح من {payment.bank_account.name}')
+            return redirect('purchases:payment-list')
+        except Exception as e:
+            logger.exception("Error clearing supplier cheque")
+            messages.error(request, f'خطأ أثناء تسجيل الصرف: {e}')
+            
+        return redirect('purchases:payment-detail', pk=pk)
 
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required

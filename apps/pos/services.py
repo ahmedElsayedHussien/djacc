@@ -63,20 +63,20 @@ class POSCheckoutService:
             qty = Decimal(str(c.get('qty', 0)))
             if qty <= 0:
                 raise ValueError("الكمية يجب أن تكون أكبر من الصفر")
-            price_inclusive = Decimal(str(c.get('price', 0)))
+            price_exclusive = Decimal(str(c.get('price', 0)))
             unit_type = c.get('unit_type', 'base')
             
             item = items_map.get(item_id)
             if not item:
                 raise ValueError(f"الصنف بكود {item_id} غير موجود.")
             
-            line_total = qty * price_inclusive
+            line_subtotal = qty * price_exclusive
             if tax_rate > 0:
-                line_subtotal = line_total / (Decimal('1') + tax_rate)
-                line_tax = line_total - line_subtotal
+                line_tax = line_subtotal * tax_rate
             else:
-                line_subtotal = line_total
                 line_tax = Decimal('0')
+                
+            line_total_with_tax = line_subtotal + line_tax
                 
             unit_net_price = line_subtotal / qty if qty > 0 else Decimal('0')
             avg_cost_base = InventoryService.get_item_cost(item, session.station.warehouse)
@@ -101,15 +101,15 @@ class POSCheckoutService:
             
             subtotal += line_subtotal
             tax_amount += line_tax
-            grand_total += line_total
+            grand_total += line_total_with_tax
             
             lines_data.append({
                 'item': item,
                 'qty': qty,
                 'base_qty': base_qty,
-                'price': price_inclusive,
+                'price': price_exclusive,
                 'tax_percent': tax_rate * Decimal('100'),
-                'total': line_total
+                'total': line_total_with_tax
             })
 
         now = timezone.now()
@@ -128,7 +128,7 @@ class POSCheckoutService:
             subtotal=subtotal,
             tax=tax_amount,
             grand_total=grand_total,
-            status=POSOrder.Status.PAID
+            status=POSOrder.Status.DRAFT
         )
 
         for line in lines_data:
@@ -156,11 +156,14 @@ class POSCheckoutService:
                 reference=f'POS Order {receipt_number}'
             )
 
+        order.status = POSOrder.Status.PAID
+        order.save(update_fields=['status'])
+
         POSPayment.objects.create(
             order=order,
             method=payment_method,
             amount=grand_total,
-            reference=''
+            reference=payment_reference
         )
 
         if payment_method == 'cash':
@@ -214,20 +217,24 @@ class POSCheckoutService:
     @transaction.atomic
     def return_items(order, items_data, returned_by):
         """
-        Partial return of items from a paid POS order.
+        Partial return of items from a paid POS order. Creates a Return Order in current session.
         items_data = [{'line_id': 1, 'qty': 2}, ...]
-        qty is in the same unit as the original line.
         """
-        order = POSOrder.objects.select_for_update().get(pk=order.pk)
-        if order.status != POSOrder.Status.PAID:
-            raise ValueError("يمكن فقط إرجاع أصناف من الفواتير المدفوعة.")
+        order = POSOrder.objects.get(pk=order.pk)
+        if order.status not in [POSOrder.Status.PAID, POSOrder.Status.POSTED]:
+            raise ValueError("يمكن فقط إرجاع أصناف من الفواتير المدفوعة أو المرحّلة.")
 
-        session = POSSession.objects.select_for_update().get(pk=order.session.pk)
-        if session.status != POSSession.Status.OPEN:
-            raise ValueError("لا يمكن إرجاع أصناف من وردية مغلقة. استخدم مرتجع مبيعات.")
+        current_session = POSSessionService.get_active_session(returned_by)
+        if not current_session:
+            raise ValueError("يجب أن يكون لديك وردية مفتوحة لتتمكن من إرجاع فواتير.")
 
         pos_ct = ContentType.objects.get_for_model(POSOrder)
-        total_refund = Decimal('0')
+        total_refund_subtotal = Decimal('0')
+        total_refund_tax = Decimal('0')
+        total_refund_grand = Decimal('0')
+
+        lines_to_create = []
+        stock_moves_to_create = []
 
         for item_data in items_data:
             line_id = item_data.get('line_id')
@@ -243,7 +250,6 @@ class POSCheckoutService:
             if return_qty > line.qty:
                 raise ValueError(f"كمية الإرجاع ({return_qty}) أكبر من الكمية الأصلية ({line.qty}) للصنف '{line.item.name}'.")
 
-            # Find the stock movement for this item in this order to calculate base qty ratio
             movement = StockMovement.objects.filter(
                 content_type=pos_ct, object_id=order.id,
                 item=line.item, movement_type=StockMovement.MovementType.SALES_ISSUE
@@ -251,38 +257,97 @@ class POSCheckoutService:
             if not movement:
                 raise ValueError(f"لا توجد حركة مخزنية للصنف '{line.item.name}' في هذه الفاتورة.")
 
-            # Calculate ratio: for each unit in line.qty, how many base units were deducted
             base_ratio = abs(movement.quantity) / line.qty if line.qty > 0 else Decimal('1')
             return_base_qty = (return_qty * base_ratio).quantize(Decimal('0.0001'))
 
-            # Reverse stock
-            InventoryService.record_movement(
-                date_val=timezone.now().date(),
-                item=line.item,
-                warehouse=session.station.warehouse,
-                movement_type=StockMovement.MovementType.SALE_RETURN,
-                quantity=return_base_qty,
-                unit_cost=movement.unit_cost,
-                source=order,
-                reference=f'Return {order.receipt_number}'
-            )
-
             line_unit_price = line.total / line.qty if line.qty > 0 else line.price
             refund_amount = (line_unit_price * return_qty).quantize(Decimal('0.01'))
-            total_refund += refund_amount
+            
+            line_subtotal_ratio = (line.price * line.qty) / line.total if line.total > 0 else Decimal('1')
+            line_tax_ratio = (line.tax_percent / Decimal('100'))
+            
+            # Approximate breakdown for the return order line
+            refund_tax = (refund_amount - (refund_amount / (1 + line_tax_ratio))).quantize(Decimal('0.01')) if line.tax_percent > 0 else Decimal('0')
+            refund_subtotal = refund_amount - refund_tax
 
-        if total_refund > 0:
-            POSPayment.objects.create(
-                order=order,
-                method='cash',
-                amount=-total_refund,
-                reference=f'Refund for {order.receipt_number}'
-            )
-            POSSession.objects.filter(pk=session.pk).update(
-                expected_cash=models.F('expected_cash') - total_refund
+            total_refund_subtotal += refund_subtotal
+            total_refund_tax += refund_tax
+            total_refund_grand += refund_amount
+
+            lines_to_create.append({
+                'item': line.item,
+                'qty': return_qty,
+                'price': line.price,
+                'discount': Decimal('0'),
+                'tax_percent': line.tax_percent,
+                'total': refund_amount
+            })
+
+            stock_moves_to_create.append({
+                'item': line.item,
+                'quantity': return_base_qty,
+                'unit_cost': movement.unit_cost
+            })
+
+        if total_refund_grand <= 0:
+            return Decimal('0')
+
+        # Create Return Order
+        now = timezone.now()
+        timestamp = int(now.timestamp())
+        counter = POSOrder.objects.filter(session=current_session).count() + 1
+        receipt_number = f"RET-{current_session.id}-{timestamp}-{counter}"
+
+        return_order = POSOrder.objects.create(
+            receipt_number=receipt_number,
+            session=current_session,
+            customer=order.customer,
+            subtotal=total_refund_subtotal,
+            tax=total_refund_tax,
+            grand_total=total_refund_grand,
+            status=POSOrder.Status.DRAFT,
+            is_return=True,
+            parent_order=order
+        )
+
+        for ld in lines_to_create:
+            POSOrderLine.objects.create(
+                order=return_order,
+                item=ld['item'],
+                qty=ld['qty'],
+                price=ld['price'],
+                discount=ld['discount'],
+                tax_percent=ld['tax_percent'],
+                total=ld['total']
             )
 
-        return total_refund
+        return_order.status = POSOrder.Status.PAID
+        return_order.save(update_fields=['status'])
+
+        for sm in stock_moves_to_create:
+            InventoryService.record_movement(
+                date_val=timezone.now().date(),
+                item=sm['item'],
+                warehouse=current_session.station.warehouse,
+                movement_type=StockMovement.MovementType.SALE_RETURN,
+                quantity=sm['quantity'],
+                unit_cost=sm['unit_cost'],
+                source=return_order,
+                reference=f'Return for {order.receipt_number}'
+            )
+
+        POSPayment.objects.create(
+            order=return_order,
+            method='cash',
+            amount=total_refund_grand,
+            reference=f'Refund for {order.receipt_number}'
+        )
+
+        POSSession.objects.filter(pk=current_session.pk).update(
+            expected_cash=models.F('expected_cash') - total_refund_grand
+        )
+
+        return total_refund_grand
 
 class POSSessionService:
     @staticmethod
@@ -463,25 +528,28 @@ class POSSessionService:
             elif p.method == 'wallet':
                 total_wallet += p.amount
 
-        # Separate refund payments from regular payments
         total_refund_cash = Decimal('0')
-        total_cash = Decimal('0')
-        total_card = Decimal('0')
-        total_wallet = Decimal('0')
+        total_refund_card = Decimal('0')
+        total_refund_wallet = Decimal('0')
 
         payments = POSPayment.objects.filter(order__in=orders)
         for p in payments:
-            if p.method == 'cash':
-                if p.amount < 0:
-                    total_refund_cash += abs(p.amount)
-                else:
+            if p.order.is_return:
+                if p.method == 'cash':
+                    total_refund_cash += p.amount
+                elif p.method == 'card':
+                    total_refund_card += p.amount
+                elif p.method == 'wallet':
+                    total_refund_wallet += p.amount
+            else:
+                if p.method == 'cash':
                     total_cash += p.amount
-            elif p.method == 'card':
-                total_card += p.amount
-            elif p.method == 'wallet':
-                total_wallet += p.amount
+                elif p.method == 'card':
+                    total_card += p.amount
+                elif p.method == 'wallet':
+                    total_wallet += p.amount
 
-        total_tax = orders.aggregate(total=models.Sum('tax'))['total'] or Decimal('0')
+        total_tax = sum((o.tax if not o.is_return else -o.tax) for o in orders)
 
         cogs_by_account = {}
         inventory_by_account = {}
@@ -532,9 +600,6 @@ class POSSessionService:
             order__in=orders
         ).select_related('item__sales_account', 'order')
 
-        total_grand = sum(o.grand_total for o in orders)
-        total_subtotal = sum(o.subtotal for o in orders)
-
         for line in lines_with_items:
             item = line.item
             order = line.order
@@ -542,6 +607,9 @@ class POSSessionService:
                 line_net = (line.total / order.grand_total) * order.subtotal
             else:
                 line_net = Decimal('0')
+                
+            if order.is_return:
+                line_net = -line_net
 
             sales_acc = item.sales_account
             if not sales_acc:
@@ -550,16 +618,6 @@ class POSSessionService:
             if sales_acc:
                 revenue_by_account[sales_acc.id] = revenue_by_account.get(sales_acc.id, (sales_acc, Decimal('0')))
                 revenue_by_account[sales_acc.id] = (sales_acc, revenue_by_account[sales_acc.id][1] + line_net)
-
-        # Reduce revenue and VAT proportionally for refunds
-        if total_refund_cash > 0 and total_grand > 0:
-            refund_ratio = total_refund_cash / total_grand
-            refund_tax = (total_tax * refund_ratio).quantize(Decimal('0.01'))
-            total_tax -= refund_tax
-            for acc_id in revenue_by_account:
-                acc, amount = revenue_by_account[acc_id]
-                refund_revenue = (amount * refund_ratio).quantize(Decimal('0.01'))
-                revenue_by_account[acc_id] = (acc, amount - refund_revenue)
 
         # Get VAT Output Account
         vat_tax = TaxType.objects.filter(category=TaxType.Category.VAT).first()
@@ -577,7 +635,7 @@ class POSSessionService:
         elif session.station.cash_box and session.station.cash_box.account:
             cashbox_account = session.station.cash_box.account
 
-        # 1. Debit Cash Box (Net Cash Received after refunds)
+        # 1. Debit/Credit Cash Box
         net_cash = total_cash - total_refund_cash
         if net_cash > 0 and cashbox_account:
             journal_lines.append({
@@ -585,6 +643,13 @@ class POSSessionService:
                 'debit': net_cash,
                 'credit': Decimal('0'),
                 'description': f"إجمالي المقبوضات النقدية للوردية رقم {session.id}"
+            })
+        elif net_cash < 0 and cashbox_account:
+            journal_lines.append({
+                'account': cashbox_account,
+                'debit': Decimal('0'),
+                'credit': abs(net_cash),
+                'description': f"إجمالي مدفوعات نقدية لمرتجعات للوردية رقم {session.id}"
             })
 
         # 2. Debit Bank Account (Total Card Received)
@@ -650,7 +715,7 @@ class POSSessionService:
                     'description': f"تسوية زيادة خزينة وردية POS رقم {session.id}"
                 })
 
-        # 3. Debit COGS Accounts
+        # 3. Debit/Credit COGS Accounts
         for acc_id, (acc, amount) in cogs_by_account.items():
             if amount > 0:
                 journal_lines.append({
@@ -659,8 +724,15 @@ class POSSessionService:
                     'credit': Decimal('0'),
                     'description': f"تكلفة المبيعات المجمعة للوردية رقم {session.id}"
                 })
+            elif amount < 0:
+                journal_lines.append({
+                    'account': acc,
+                    'debit': Decimal('0'),
+                    'credit': abs(amount),
+                    'description': f"تخفيض تكلفة المبيعات للمرتجعات للوردية رقم {session.id}"
+                })
 
-        # 4. Credit Sales Revenue Accounts
+        # 4. Credit/Debit Sales Revenue Accounts
         for acc_id, (acc, amount) in revenue_by_account.items():
             if amount > 0:
                 journal_lines.append({
@@ -669,8 +741,15 @@ class POSSessionService:
                     'credit': amount,
                     'description': f"إيراد المبيعات المجمع للوردية رقم {session.id}"
                 })
+            elif amount < 0:
+                journal_lines.append({
+                    'account': acc,
+                    'debit': abs(amount),
+                    'credit': Decimal('0'),
+                    'description': f"تخفيض إيراد المبيعات للمرتجعات للوردية رقم {session.id}"
+                })
 
-        # 5. Credit Inventory Accounts
+        # 5. Credit/Debit Inventory Accounts
         for acc_id, (acc, amount) in inventory_by_account.items():
             if amount > 0:
                 journal_lines.append({
@@ -679,14 +758,28 @@ class POSSessionService:
                     'credit': amount,
                     'description': f"صرف مخزون مجمع للوردية رقم {session.id}"
                 })
+            elif amount < 0:
+                journal_lines.append({
+                    'account': acc,
+                    'debit': abs(amount),
+                    'credit': Decimal('0'),
+                    'description': f"إضافة مخزون مرتجعات للوردية رقم {session.id}"
+                })
 
-        # 6. Credit Output VAT
+        # 6. Credit/Debit Output VAT
         if total_tax > 0 and vat_account:
             journal_lines.append({
                 'account': vat_account,
                 'debit': Decimal('0'),
                 'credit': total_tax,
                 'description': f"ضريبة القيمة المضافة المخرجة لوردية POS رقم {session.id}"
+            })
+        elif total_tax < 0 and vat_account:
+            journal_lines.append({
+                'account': vat_account,
+                'debit': abs(total_tax),
+                'credit': Decimal('0'),
+                'description': f"تخفيض ضريبة القيمة المضافة لمرتجعات POS رقم {session.id}"
             })
 
         fy = FiscalYear.objects.select_for_update(skip_locked=True).filter(is_closed=False).first()

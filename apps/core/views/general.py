@@ -1,4 +1,5 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from apps.core.mixins import perm_required
@@ -182,6 +183,14 @@ def notification_read(request, pk):
     return redirect('core:dashboard')
 
 
+@login_required
+def notification_mark_read(request, pk):
+    notification = get_object_or_404(SystemNotification, pk=pk, recipient=request.user)
+    notification.is_read = True
+    notification.save(update_fields=['is_read'])
+    return redirect('core:notification-list')
+
+
 class NotificationListView(LoginRequiredMixin, ListView):
     model = SystemNotification
     template_name = 'core/notifications/list.html'
@@ -197,4 +206,22 @@ class NotificationListView(LoginRequiredMixin, ListView):
 def mark_all_notifications_read(request):
     SystemNotification.objects.filter(recipient=request.user, is_read=False).update(is_read=True)
     messages.success(request, "تم تحديد جميع الإشعارات كمقروءة بنجاح.")
+    return redirect('core:notification-list')
+
+@login_required
+@require_POST
+def delete_all_notifications(request):
+    count, _ = SystemNotification.objects.filter(recipient=request.user).delete()
+    if count > 0:
+        messages.success(request, f"تم مسح {count} إشعار بنجاح.")
+    else:
+        messages.info(request, "لا توجد إشعارات لمسحها.")
+    return redirect('core:notification-list')
+
+@login_required
+@require_POST
+def delete_notification(request, pk):
+    notification = get_object_or_404(SystemNotification, pk=pk, recipient=request.user)
+    notification.delete()
+    messages.success(request, "تم مسح الإشعار بنجاح.")
     return redirect('core:notification-list')
