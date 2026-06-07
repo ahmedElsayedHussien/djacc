@@ -1,15 +1,15 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from django.db.models import Sum, Q, F, Func, Value, Count, Case, When, IntegerField, Max, Min, Avg
 from django.db.models.functions import TruncMonth, Coalesce
 from django.utils import timezone
 from apps.core.models import Account, JournalLine, JournalEntry, FiscalYear, AccountType, CostCenter
 from apps.sales.models import Customer, SalesInvoice, SalesInvoiceLine, SalesReturn, SalesReturnLine, CustomerReceipt, SalesRepresentative, RepDailySettlement, IntermediaryCompany, Quotation, SalesTarget
-from apps.purchases.models import Supplier, PurchaseInvoice, PurchaseInvoiceLine, PurchaseReturn, PurchaseReturnLine, SupplierPayment
-from apps.hr.models import Employee, PayrollPeriod, Payslip, LeaveRequest, Loan
+from apps.purchases.models import Supplier, PurchaseInvoice, PurchaseInvoiceLine, PurchaseReturn, PurchaseReturnLine, SupplierPayment, PurchaseOrder
+from apps.hr.models import Employee, PayrollPeriod, Payslip, LeaveRequest, Loan, Department, AttendanceRecord, EmployeeAsset, EmployeeDocument, EndOfService, LeaveBalance
 from apps.inventory.models import Item, ItemLedger, Warehouse, StockVoucher, StockMovement
-from apps.expenses.models import Expense, Custody
-from apps.treasury.models import CashBox, BankAccount
+from apps.expenses.models import Expense, Custody, CustodySettlement
+from apps.treasury.models import CashBox, BankAccount, CashTransfer, BankTransaction, BankReconciliation
 
 
 class ReportService:
@@ -844,9 +844,9 @@ class ReportService:
         ).values('customer__sector__name').annotate(
             invoice_count=Count('id'),
             total_sales=Sum('total'),
-            paid_amount=Sum('paid_amount'),
+            total_paid=Sum('paid_amount'),
         ).annotate(
-            balance=Sum('total') - Sum('paid_amount')
+            balance=F('total_sales') - F('total_paid')
         ).order_by('-total_sales')
         
         return sectors
@@ -1346,10 +1346,17 @@ class ReportService:
         
         report = BankTransaction.objects.filter(
             date__range=[from_date, to_date],
-            transaction_type__in=[BankTransaction.TransactionType.BANK_CHARGE, BankTransaction.TransactionType.INTEREST]
-        ).values('transaction_type', 'bank_account__name').annotate(
-            total_amount=Sum('amount')
-        ).order_by('transaction_type')
+            transaction_type__in=[
+                BankTransaction.TransactionType.ACCOUNT_FEE,
+                BankTransaction.TransactionType.TRANSFER_FEE,
+                BankTransaction.TransactionType.BOUNCE_FEE,
+                BankTransaction.TransactionType.STOP_CHEQUE_FEE,
+                BankTransaction.TransactionType.CHEQUEBOOK_FEE,
+                BankTransaction.TransactionType.CARD_FEE,
+                BankTransaction.TransactionType.LOAN_INTEREST,
+                BankTransaction.TransactionType.INTEREST_REV,
+            ]
+        ).select_related('bank_account').order_by('-date', '-id')
         
         return report
 

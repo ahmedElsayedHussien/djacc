@@ -219,8 +219,8 @@ ACCOUNT_EMAIL_VERIFICATION = 'none'
 # 1. إنهاء الجلسة فور إغلاق المستخدم للمتصفح بالكامل
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
-# 2. مدة صلاحية الجلسة في حالة الخمول التام: 60 دقيقة (3600 ثانية)
-SESSION_COOKIE_AGE = 3600
+# 2. مدة صلاحية الجلسة في حالة الخمول التام: 24 ساعة (86400 ثانية)
+SESSION_COOKIE_AGE = 86400
 
 # 3. تجديد الـ 60 دقيقة مع كل نقرة أو تفاعل للمستخدم لكي لا يخرج أثناء العمل
 SESSION_SAVE_EVERY_REQUEST = True

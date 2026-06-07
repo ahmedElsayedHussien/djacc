@@ -25,10 +25,24 @@
                 <td colspan="4" class="text-center text-muted">لا توجد فواتير نقدية غير مسواة لهذا المندوب في هذا التاريخ.</td>
             </tr>
             {% endfor %}
+            
+            {% if returns %}
+            <tr class="table-warning">
+                <td colspan="4" class="fw-bold">المرتجعات النقدية للمندوب (تُخصم من الإجمالي)</td>
+            </tr>
+            {% for ret in returns %}
+            <tr class="table-warning">
+                <td></td>
+                <td>{{ ret.number }}</td>
+                <td>{{ ret.customer.name }}</td>
+                <td class="text-danger">-{{ ret.total }}</td>
+            </tr>
+            {% endfor %}
+            {% endif %}
         </tbody>
         <tfoot class="table-light fw-bold">
             <tr>
-                <td colspan="3" class="text-end">الإجمالي المحدد:</td>
+                <td colspan="3" class="text-end">الإجمالي المحدد (بعد خصم المرتجعات):</td>
                 <td id="selectedTotal">{{ total }}</td>
             </tr>
         </tfoot>
@@ -36,6 +50,9 @@
 </div>
 
 <script>
+// We need to pass the returns total to JS so we can subtract it from the selected invoices
+const returnsTotal = parseFloat("{{ returns_total|default:'0' }}") || 0;
+
 function toggleAllInvoices(source) {
     const checkboxes = document.querySelectorAll('.invoice-check');
     checkboxes.forEach(cb => cb.checked = source.checked);
@@ -44,14 +61,17 @@ function toggleAllInvoices(source) {
 
 function calculateSelectedTotal() {
     const checkboxes = document.querySelectorAll('.invoice-check');
-    let total = 0;
+    let invoicesTotal = 0;
     checkboxes.forEach(cb => {
         if (cb.checked) {
             const row = cb.closest('tr');
             const amtStr = row.querySelector('.invoice-total').innerText;
-            total += parseFloat(amtStr) || 0;
+            invoicesTotal += parseFloat(amtStr) || 0;
         }
     });
-    document.getElementById('selectedTotal').innerText = total.toFixed(2);
+    
+    // Total is selected invoices minus ALL cash returns for the day
+    let netTotal = invoicesTotal - returnsTotal;
+    document.getElementById('selectedTotal').innerText = netTotal.toFixed(2);
 }
 </script>

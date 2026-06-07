@@ -50,30 +50,40 @@
         <div class="card shadow-sm border-0 mb-4 text-white bg-plum" style="border-radius: 16px; overflow: hidden; background: linear-gradient(135deg, #3A1530 0%, #20071A 100%);">
             <div class="card-body p-4 relative">
                 <h6 class="text-white-50 small text-uppercase mb-3"><i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>رصيد ذمة المندوب (العجوزات المتراكمة)</h6>
-                <h2 class="mb-3 fw-extrabold">{{ receivable_balance|floatformat:2 }} <small class="fs-6 fw-normal text-white-50">EGP</small></h2>
-                <p class="small text-white-50 mb-4">يمثل هذا الرصيد إجمالي مبالغ العجز في تسويات الورديات السابقة التي لم يقم الكاشير بسدادها بعد للشركة.</p>
-                
                 {% if receivable_balance > 0 %}
+                <h2 class="mb-3 fw-extrabold text-warning">{{ receivable_balance|floatformat:2 }} <small class="fs-6 fw-normal text-white-50">EGP</small></h2>
+                <p class="small text-white-50 mb-4">يمثل هذا الرصيد إجمالي مبالغ العجز في تسويات الورديات السابقة التي لم يقم الكاشير بسدادها بعد للشركة.</p>
                 {% if perms.sales.change_salesrepresentative %}
-                <a href="{% url 'sales:rep-collect' rep.pk %}" class="btn btn-warning text-dark w-full py-3 rounded-2xl font-bold hover:bg-[#ffdf4d] transition-all active:scale-[0.98]">
+                <a href="{% url 'sales:rep-collect' rep.pk %}" class="btn btn-warning text-dark w-100 py-3 rounded-2xl font-bold hover:bg-[#ffdf4d] transition-all active:scale-[0.98]">
                     <i class="bi bi-cash-coin me-1"></i> تحصيل مبالغ العجز وسداد الذمة
                 </a>
                 {% endif %}
+                {% elif receivable_balance < 0 %}
+                <h2 class="mb-3 fw-extrabold text-success">{{ receivable_balance_abs|floatformat:2 }} <small class="fs-6 fw-normal text-white-50">EGP</small></h2>
+                <p class="small text-white-50 mb-4">يوجد فائض (مبالغ زائدة) لصالح المندوب من التسويات السابقة.</p>
+                <button disabled class="btn btn-outline-light text-white w-100 py-3 rounded-2xl font-bold opacity-75 cursor-not-allowed">
+                    <i class="bi bi-check-all me-1"></i> يوجد فائض لصالح المندوب
+                </button>
                 {% else %}
-                <button disabled class="btn btn-outline-light/30 text-white w-full py-3 rounded-2xl font-bold opacity-50 cursor-not-allowed">
+                <h2 class="mb-3 fw-extrabold">{{ receivable_balance|floatformat:2 }} <small class="fs-6 fw-normal text-white-50">EGP</small></h2>
+                <p class="small text-white-50 mb-4">يمثل هذا الرصيد إجمالي مبالغ العجز في تسويات الورديات السابقة التي لم يقم الكاشير بسدادها بعد للشركة.</p>
+                <button disabled class="btn btn-outline-light text-white w-100 py-3 rounded-2xl font-bold opacity-50 cursor-not-allowed">
                     <i class="bi bi-check-all me-1"></i> الذمة مسواة بالكامل (رصيد صفر)
                 </button>
                 {% endif %}
             </div>
         </div>
 
-        <!-- Cash in Drawer Card (رصيد درج الكاشير الفعلي) -->
+        <!-- Net Balance Card (الرصيد الصافي للمندوب - يطابق كشف الحساب) -->
         <div class="card shadow-sm border-0 mb-4" style="border-radius: 16px; overflow: hidden; border: 1px solid #EBF1FA;">
-            <div class="card-body p-4">
-                <h6 class="text-muted small text-uppercase mb-2"><i class="bi bi-safe2 text-success me-2"></i>النقدية المتوفرة بدرج الكاشير حالياً</h6>
-                <h2 class="mb-0 fw-extrabold text-success">{{ cash_box_balance|floatformat:2 }} <small class="fs-6 fw-normal text-muted">EGP</small></h2>
+            <div class="card-body p-4 bg-light">
+                <h6 class="text-muted small text-uppercase mb-2"><i class="bi bi-wallet2 text-primary me-2"></i>الرصيد الإجمالي الصافي (مطابق لكشف الحساب)</h6>
+                <h2 class="mb-0 fw-extrabold text-primary">{{ net_balance|floatformat:2 }} <small class="fs-6 fw-normal text-muted">EGP</small></h2>
+                <p class="small text-muted mt-2 mb-0">عبارة عن: رصيد الدرج ({{ cash_box_balance|floatformat:2 }}) + رصيد الذمة ({{ receivable_balance|floatformat:2 }})</p>
             </div>
         </div>
+
+
     </div>
 
     <!-- Left Main Content: Linked Assets & Transactions -->

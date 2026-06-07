@@ -15,6 +15,7 @@ from django.core.exceptions import PermissionDenied
 
 from .services import ReportService
 from apps.core.models import FiscalYear, CostCenter, Account
+from apps.core.utils import get_account_balance
 from apps.sales.models import Customer, SalesRepresentative, SalesInvoice, SalesTarget, CustomerReceipt, RepDailySettlement, SalesReturn
 from apps.purchases.models import Supplier
 from apps.inventory.models import Item, Warehouse, ItemLedger, StockVoucher
@@ -899,6 +900,13 @@ class SalesRepDashboardView(LoginRequiredMixin, PermissionRequiredMixin, Templat
 
             safe_balance = rep.cash_box.current_balance if rep.cash_box else Decimal('0')
             context['safe_balance'] = safe_balance
+            
+            if rep.account:
+                receivable_balance = get_account_balance(rep.account, as_of_date=selected_date)
+            else:
+                receivable_balance = Decimal('0')
+            context['receivable_balance'] = receivable_balance
+            context['net_balance'] = safe_balance + receivable_balance
 
             van_items = ItemLedger.objects.filter(warehouse=rep.warehouse).select_related('item', 'item__category').order_by('item__name')
             van_inventory_value = van_items.aggregate(total=Sum('total_value'))['total'] or Decimal('0')

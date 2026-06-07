@@ -267,20 +267,22 @@
 
     <!-- 3. KPI Cards Grid -->
     <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-5 g-4 mb-4">
-        <!-- Safe balance -->
+        <!-- Net Balance -->
         <div class="col">
-            <div class="card glass-card h-100 shadow-sm border-0 border-top border-info border-3">
+            <div class="card glass-card h-100 shadow-sm border-0 border-top border-primary border-3" style="background-color: #f8fafc;">
                 <div class="card-body d-flex align-items-center gap-3">
-                    <div class="icon-box bg-info bg-opacity-10 text-info">
+                    <div class="icon-box bg-primary bg-opacity-10 text-primary">
                         <i class="bi bi-wallet2"></i>
                     </div>
                     <div>
-                        <span class="text-muted d-block small mb-1">رصيد الخزنة (العهدة النقدية)</span>
-                        <h4 class="fw-bold text-dark mb-0">{{ safe_balance|floatformat:2 }} <span class="small fs-6">ج.م</span></h4>
+                        <span class="text-muted d-block small mb-1">الرصيد الإجمالي الصافي</span>
+                        <h4 class="fw-bold text-dark mb-0" title="مطابق لكشف الحساب">{{ net_balance|floatformat:2 }} <span class="small fs-6">ج.م</span></h4>
                     </div>
                 </div>
             </div>
         </div>
+
+
 
         <!-- Van inventory value -->
         {% if not is_representative %}

@@ -43,7 +43,7 @@
                             <td class="ps-4 fw-bold text-dark">{{ row.customer__sector__name|default:"غير مصنف" }}</td>
                             <td class="text-center">{{ row.invoice_count }}</td>
                             <td class="text-end fw-bold text-primary">{{ row.total_sales|floatformat:2|intcomma }}</td>
-                            <td class="text-end text-success">{{ row.paid_amount|floatformat:2|intcomma }}</td>
+                            <td class="text-end text-success">{{ row.total_paid|floatformat:2|intcomma }}</td>
                             <td class="text-end pe-4 fw-bold text-danger">{{ row.balance|floatformat:2|intcomma }}</td>
                         </tr>
                         {% empty %}

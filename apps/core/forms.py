@@ -321,6 +321,27 @@ class BaseJournalLineFormSet(forms.BaseInlineFormSet):
             raise forms.ValidationError(f'القيد غير متزن. إجمالي المدين: {total_debit}، إجمالي الدائن: {total_credit}')
         if total_debit == 0:
             raise forms.ValidationError('القيد صفري ولا يحتوي على مبالغ')
+            
+        # Prevent same account and cost center from appearing on both debit and credit sides
+        debit_keys = set()
+        credit_keys = set()
+        for f in self.forms:
+            if not self._should_delete_form(f) and f.cleaned_data:
+                acc = f.cleaned_data.get('account')
+                cc = f.cleaned_data.get('cost_center')
+                debit_val = f.cleaned_data.get('debit') or 0
+                credit_val = f.cleaned_data.get('credit') or 0
+                
+                if acc:
+                    key = (acc.pk, cc.pk if cc else None)
+                    if debit_val > 0:
+                        debit_keys.add(key)
+                    if credit_val > 0:
+                        credit_keys.add(key)
+                        
+        overlap = debit_keys.intersection(credit_keys)
+        if overlap:
+            raise forms.ValidationError('ثغرة مرفوضة: لا يمكن استخدام نفس الحساب ونفس مركز التكلفة كمدين ودائن معاً في نفس القيد.')
 
 JournalLineFormSet = forms.inlineformset_factory(
     JournalEntry, JournalLine, form=JournalLineForm,

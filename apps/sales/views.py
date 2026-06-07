@@ -21,7 +21,7 @@ from apps.core.services import DocumentService
 from apps.core.tax_utils import calculate_line_taxes
 from apps.inventory.models import Warehouse, Item
 from apps.inventory.services import InventoryService
-from apps.treasury.models import CashBox, BankAccount
+from apps.treasury.models import CashBox, BankAccount, MobileWallet
 from apps.treasury.utils import get_available_cash_boxes
 from apps.core.utils import get_account_balance
 from apps.reports.services import ReportService
@@ -481,6 +481,9 @@ class SalesRepresentativeDetailView(LoginRequiredMixin, PermRequiredMixin, Detai
         else:
             context['receivable_balance'] = 0.0
             
+        context['receivable_balance_abs'] = abs(context['receivable_balance'])
+        context['net_balance'] = context['cash_box_balance'] + context['receivable_balance']
+        
         return context
 
 class SalesRepresentativeCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
@@ -1153,7 +1156,8 @@ class RepDailySettlementCreateView(LoginRequiredMixin, PermRequiredMixin, View):
 
     def get(self, request):
         reps = SalesRepresentative.objects.filter(is_active=True)
-        cash_boxes = get_available_cash_boxes(request.user)
+        rep_cashbox_ids = SalesRepresentative.objects.exclude(cash_box__isnull=True).values_list('cash_box_id', flat=True)
+        cash_boxes = get_available_cash_boxes(request.user).exclude(id__in=rep_cashbox_ids)
         banks = BankAccount.objects.filter(is_active=True)
         wallets = MobileWallet.objects.filter(is_active=True)
         return render(request, self.template_name, {
@@ -1258,10 +1262,24 @@ class RepUnsettledInvoicesView(LoginRequiredMixin, PermRequiredMixin, View):
         rep  = get_object_or_404(SalesRepresentative, pk=rep_id)
         date = date_type.fromisoformat(date_val)
         invoices = RepSettlementService.get_unsettled_invoices(rep, date)
-        total    = sum(inv.total for inv in invoices)
+        
+        returns = SalesReturn.objects.filter(
+            sales_rep=rep,
+            date=date,
+            payment_type='cash',
+            status=SalesReturn.Status.POSTED
+        )
+        
+        invoices_total = sum(inv.total for inv in invoices)
+        returns_total = returns.aggregate(t=Sum('total'))['t'] or Decimal('0')
+        net_total = invoices_total - returns_total
+
         return render(request, 'sales/settlements/_invoice_table.html', {
             'invoices': invoices,
-            'total': total,
+            'returns': returns,
+            'returns_total': returns_total,
+            'invoices_total': invoices_total,
+            'total': net_total,
             'rep': rep,
         })
 
@@ -1272,7 +1290,8 @@ class RepReceivableCollectView(LoginRequiredMixin, PermRequiredMixin, View):
 
     def get(self, request, rep_pk):
         rep = get_object_or_404(SalesRepresentative, pk=rep_pk)
-        cash_boxes = get_available_cash_boxes(request.user)
+        rep_cashbox_ids = SalesRepresentative.objects.exclude(cash_box__isnull=True).values_list('cash_box_id', flat=True)
+        cash_boxes = get_available_cash_boxes(request.user).exclude(id__in=rep_cashbox_ids)
         banks = BankAccount.objects.filter(is_active=True)
         return render(request, self.template_name, {
             'rep': rep,
