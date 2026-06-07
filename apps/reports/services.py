@@ -538,10 +538,10 @@ class ReportService:
             base_filter['cost_center_id'] = cost_center_id
         
         # 1. Output VAT (المبيعات - ضريبة القيمة المضافة)
-        # ضريبة القيمة المضافة على المبيعات = VAT Account (2121) Credit - Debit
+        # ضريبة المبيعات = credit - debit (في حسابات ضريبة القيمة المضافة للعمليات البيعية)
         output_vat = JournalLine.objects.filter(
             account__code__startswith='2121',
-            account__account_type=AccountType.LIABILITY,
+            entry__entry_type__in=['sale', 'receipt'],
             **base_filter
         ).aggregate(
             credit=Sum('credit'),
@@ -550,45 +550,41 @@ class ReportService:
         output_vat_amount = (output_vat['credit'] or 0) - (output_vat['debit'] or 0)
         
         # 2. Input VAT (المشتريات - ضريبة القيمة المضافة)
-        # ضريبة القيمة المضافة على المشتريات = VAT Account Debit
+        # ضريبة المشتريات = debit - credit (في عمليات الشراء والمصروفات)
         input_vat = JournalLine.objects.filter(
             account__code__startswith='2121',
-            account__account_type=AccountType.LIABILITY,
+            entry__entry_type__in=['purchase', 'payment', 'expense'],
             **base_filter
-        ).aggregate(debit=Sum('debit'))
-        # Input VAT هو المبلغ المدفوع في المشتريات
-        input_vat_amount = input_vat['debit'] or 0
+        ).aggregate(
+            debit=Sum('debit'),
+            credit=Sum('credit')
+        )
+        input_vat_amount = (input_vat['debit'] or 0) - (input_vat['credit'] or 0)
         
-        # 3. VAT على المبيعات (Output) - تفاصيل
+        # 3. VAT على المبيعات (Output) - تفاصيل (أعداد الفواتير)
         sales_vat = JournalLine.objects.filter(
             account__code__startswith='2121',
             entry__entry_type__in=['sale', 'receipt'],
             **base_filter
-        ).aggregate(
-            total=Sum('credit'),
-            count=Sum('debit')
-        )
+        ).values('entry_id').distinct().count()
         
-        # 4. VAT على المشتريات (Input) - تفاصيل
+        # 4. VAT على المشتريات (Input) - تفاصيل (أعداد الفواتير)
         purchases_vat = JournalLine.objects.filter(
             account__code__startswith='2121',
-            entry__entry_type__in=['purchase', 'payment'],
+            entry__entry_type__in=['purchase', 'payment', 'expense'],
             **base_filter
-        ).aggregate(
-            total=Sum('debit'),
-            count=Sum('credit')
-        )
+        ).values('entry_id').distinct().count()
         
-        # 5. صافي الضريبة المستحقة
+        # 5. صافي الضريبة المستحقة (مخرجات - مدخلات)
         net_vat = output_vat_amount - input_vat_amount
         
         return {
             'from_date': from_date,
             'to_date': to_date,
             'output_vat': output_vat_amount,  # ضريبة المبيعات
-            'output_vat_count': sales_vat['count'] or 0,
+            'output_vat_count': sales_vat,
             'input_vat': input_vat_amount,     # ضريبة المشتريات
-            'input_vat_count': purchases_vat['count'] or 0,
+            'input_vat_count': purchases_vat,
             'net_vat': net_vat,                 # الصافي
             'is_payable': net_vat > 0,         # مستحق للضرائب
         }

@@ -5,16 +5,19 @@ from datetime import date, datetime
 from decimal import Decimal
 from openpyxl.styles import Font
 
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, View
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.http import HttpResponse
 from django.utils import timezone
 from django.core.paginator import Paginator
 from django.db.models import Sum, Q, F
 from django.core.exceptions import PermissionDenied
+from django.shortcuts import redirect
+from django.contrib import messages
+from django.urls import reverse
 
 from .services import ReportService
-from apps.core.models import FiscalYear, CostCenter, Account
+from apps.core.models import FiscalYear, CostCenter, Account, JournalEntry, JournalLine
 from apps.core.utils import get_account_balance
 from apps.sales.models import Customer, SalesRepresentative, SalesInvoice, SalesTarget, CustomerReceipt, RepDailySettlement, SalesReturn
 from apps.purchases.models import Supplier
@@ -552,6 +555,130 @@ class VATReportView(ExcelExportMixin, LoginRequiredMixin, PermissionRequiredMixi
             ('صافي ضريبة القيمة المضافة', float(r['net_vat'])),
             ('الحالة', 'مستحق للضرائب' if r['is_payable'] else 'مدين للشركة'),
         ]
+
+
+class VATSettlementView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'core.add_journalentry'
+
+    def post(self, request):
+        from_date_str = request.POST.get('from')
+        to_date_str = request.POST.get('to')
+        cost_center_id = safe_int(request.POST.get('cost_center'))
+
+        from_date = parse_date(from_date_str, date.today().replace(day=1))
+        to_date = parse_date(to_date_str, date.today())
+
+        # 2. Get necessary accounts
+        try:
+            output_acc = Account.objects.get(code='21211')
+            input_acc = Account.objects.get(code='21212')
+            settlement_acc = Account.objects.get(code='21213')
+        except Account.DoesNotExist:
+            messages.error(request, 'حسابات القيمة المضافة غير مكتملة في شجرة الحسابات (يجب توفر 21211, 21212, 21213).')
+            return redirect(f"{reverse('reports:vat_report')}?from={from_date_str}&to={to_date_str}")
+
+        # Helper to get exact account balance up to to_date
+        def get_balance(acc):
+            movements = JournalLine.objects.filter(
+                account=acc, entry__is_posted=True, entry__date__lte=to_date
+            ).aggregate(d=Sum('debit'), c=Sum('credit'))
+            
+            d = movements['d'] or Decimal('0')
+            c = movements['c'] or Decimal('0')
+            
+            has_opening = JournalLine.objects.filter(
+                account=acc, entry__entry_type=JournalEntry.EntryType.OPENING, entry__is_posted=True
+            ).exists()
+            if not has_opening:
+                if acc.initial_balance_type == 'debit': d += acc.initial_balance
+                else: c += acc.initial_balance
+            return d, c
+
+        out_d, out_c = get_balance(output_acc)
+        # Output VAT is liability, normal balance is Credit
+        output_vat_balance = out_c - out_d
+
+        in_d, in_c = get_balance(input_acc)
+        # Input VAT is liability (contra), normal balance is Debit
+        input_vat_balance = in_d - in_c
+
+        if output_vat_balance == 0 and input_vat_balance == 0:
+            messages.warning(request, 'أرصدة حسابات القيمة المضافة مصفّرة بالفعل حتى هذا التاريخ، لا يوجد رصيد لعمل تسوية.')
+            return redirect(f"{reverse('reports:vat_report')}?from={from_date_str}&to={to_date_str}")
+
+        net_vat = output_vat_balance - input_vat_balance
+
+        cost_center = CostCenter.objects.get(id=cost_center_id) if cost_center_id else None
+
+        # Get the fiscal year for the entry date
+        fiscal_year = FiscalYear.objects.filter(start_date__lte=to_date, end_date__gte=to_date).first()
+        if not fiscal_year:
+            messages.error(request, 'لا توجد سنة مالية مفتوحة تتوافق مع تاريخ نهاية التقرير.')
+            return redirect(f"{reverse('reports:vat_report')}?from={from_date_str}&to={to_date_str}")
+
+        from apps.core.services import DocumentService
+
+        # 3. Create Draft Journal Entry
+        entry = JournalEntry.objects.create(
+            number=DocumentService.generate_number(JournalEntry, 'JE'),
+            date=to_date,
+            fiscal_year=fiscal_year,
+            entry_type=JournalEntry.EntryType.MANUAL,
+            description=f'قيد تسوية ضريبة القيمة المضافة عن الفترة من {from_date} إلى {to_date}',
+            created_by=request.user,
+            is_posted=False  # DRAFT
+        )
+
+        lines_to_create = []
+
+        # Debit Output VAT to clear it
+        if output_vat_balance > 0:
+            lines_to_create.append(JournalLine(
+                entry=entry, account=output_acc, cost_center=cost_center,
+                description='إقفال ضريبة المخرجات',
+                debit=output_vat_balance, credit=Decimal('0')
+            ))
+        elif output_vat_balance < 0:
+            lines_to_create.append(JournalLine(
+                entry=entry, account=output_acc, cost_center=cost_center,
+                description='إقفال ضريبة المخرجات (رصيد مدين)',
+                debit=Decimal('0'), credit=abs(output_vat_balance)
+            ))
+
+        # Credit Input VAT to clear it
+        if input_vat_balance > 0:
+            lines_to_create.append(JournalLine(
+                entry=entry, account=input_acc, cost_center=cost_center,
+                description='إقفال ضريبة المدخلات',
+                debit=Decimal('0'), credit=input_vat_balance
+            ))
+        elif input_vat_balance < 0:
+            lines_to_create.append(JournalLine(
+                entry=entry, account=input_acc, cost_center=cost_center,
+                description='إقفال ضريبة المدخلات (رصيد دائن)',
+                debit=abs(input_vat_balance), credit=Decimal('0')
+            ))
+
+        # Balance to Settlement Account
+        if net_vat > 0:
+            # Payable: Credit Settlement
+            lines_to_create.append(JournalLine(
+                entry=entry, account=settlement_acc, cost_center=cost_center,
+                description='صافي الضريبة المستحقة للدفع',
+                debit=Decimal('0'), credit=net_vat
+            ))
+        elif net_vat < 0:
+            # Receivable/Refundable: Debit Settlement
+            lines_to_create.append(JournalLine(
+                entry=entry, account=settlement_acc, cost_center=cost_center,
+                description='صافي الضريبة المستحقة للاسترداد',
+                debit=abs(net_vat), credit=Decimal('0')
+            ))
+
+        JournalLine.objects.bulk_create(lines_to_create)
+
+        messages.success(request, 'تم إنشاء قيد التسوية المبدئي (مسودة) بنجاح. الرجاء مراجعته ثم ترحيله.')
+        return redirect('core:journal-detail', pk=entry.pk)
 
 
 class WHTReportView(ExcelExportMixin, LoginRequiredMixin, PermissionRequiredMixin, TemplateView):

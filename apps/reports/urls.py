@@ -19,6 +19,7 @@ urlpatterns = [
     path('rep-dashboard/', views.SalesRepDashboardView.as_view(), name='rep_dashboard'),
     # Tax Reports
     path('vat-report/', views.VATReportView.as_view(), name='vat_report'),
+    path('vat-settlement/', views.VATSettlementView.as_view(), name='vat_settlement'),
     path('wht-report/', views.WHTReportView.as_view(), name='wht_report'),
 
     # Inventory Reports

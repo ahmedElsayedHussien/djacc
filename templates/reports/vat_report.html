@@ -40,6 +40,21 @@
         </form>
 
         {% if report %}
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h5 class="mb-0 text-muted">نتائج التقرير</h5>
+            <form method="post" action="{% url 'reports:vat_settlement' %}">
+                {% csrf_token %}
+                <input type="hidden" name="from" value="{{ from_date|date:'Y-m-d' }}">
+                <input type="hidden" name="to" value="{{ to_date|date:'Y-m-d' }}">
+                {% if selected_cc %}
+                <input type="hidden" name="cost_center" value="{{ selected_cc }}">
+                {% endif %}
+                <button type="submit" class="btn btn-warning shadow-sm fw-bold">
+                    <i class="bi bi-journal-check me-1"></i> إنشاء قيد إقفال وتصفية
+                </button>
+            </form>
+        </div>
+        
         <!-- Summary Cards -->
         <div class="row mb-4">
             <div class="col-md-4">
