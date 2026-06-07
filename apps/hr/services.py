@@ -544,7 +544,7 @@ class PayrollService:
                 basic_salary=basic,
                 total_allowances=total_allowances,
                 other_additions=other_additions,
-                total_deductions=actual_loan_deduction,
+                total_deductions=loan_deduction,
                 other_deductions=other_deductions,
                 social_insurance=insurance,
                 income_tax=tax,

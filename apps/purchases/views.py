@@ -398,7 +398,24 @@ class PurchaseInvoicePostView(LoginRequiredMixin, PermRequiredMixin, View):
         invoice = get_object_or_404(PurchaseInvoice, pk=pk)
         try:
             PurchaseService.post_invoice(invoice, request.user)
-            messages.success(request, f'تم ترحيل فاتورة المشتريات {invoice.number}')
+            
+            from apps.core.utils import get_account_balance, clear_balance_cache
+            clear_balance_cache()
+            
+            acc = None
+            if invoice.payment_type == 'cash' and invoice.cash_box:
+                acc = invoice.cash_box.account
+            elif invoice.payment_type == 'bank' and invoice.bank_account:
+                acc = invoice.bank_account.account
+                
+            if acc:
+                new_balance = get_account_balance(acc)
+                if new_balance < 0:
+                    messages.warning(request, f'تم ترحيل فاتورة المشتريات {invoice.number}، لكن تنبيه: رصيد {acc.name} أصبح بالسالب ({new_balance}).')
+                else:
+                    messages.success(request, f'تم ترحيل فاتورة المشتريات {invoice.number}')
+            else:
+                messages.success(request, f'تم ترحيل فاتورة المشتريات {invoice.number}')
         except Exception as e:
             logger.exception('Error posting purchase invoice %s', invoice.number)
             messages.error(request, f'خطأ: {e}')
@@ -488,7 +505,24 @@ class SupplierPaymentCreateView(LoginRequiredMixin, PermRequiredMixin, CreateVie
                             total_allocated += alloc_amount
 
                 PurchaseService.record_payment(self.object, self.request.user)
-                messages.success(self.request, f'تم تسجيل سند الصرف {self.object.number} وترحيله')
+                
+                from apps.core.utils import get_account_balance, clear_balance_cache
+                clear_balance_cache()
+                
+                acc = None
+                if self.object.cash_box:
+                    acc = self.object.cash_box.account
+                elif self.object.bank_account:
+                    acc = self.object.bank_account.account
+                    
+                if acc:
+                    new_balance = get_account_balance(acc)
+                    if new_balance < 0:
+                        messages.warning(self.request, f'تم تسجيل سند الصرف {self.object.number} وترحيله، لكن تنبيه: رصيد {acc.name} أصبح بالسالب ({new_balance}).')
+                    else:
+                        messages.success(self.request, f'تم تسجيل سند الصرف {self.object.number} وترحيله')
+                else:
+                    messages.success(self.request, f'تم تسجيل سند الصرف {self.object.number} وترحيله')
 
             return redirect(self.success_url)
         except Exception as e:

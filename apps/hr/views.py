@@ -302,7 +302,15 @@ class PostPaymentView(LoginRequiredMixin, PermRequiredMixin, View):
                 acc = get_object_or_404(CashBox, pk=source_id).account
                 
             PayrollService.post_payment_entry(period, acc, request.user)
-            messages.success(request, 'تم إثبات صرف الرواتب بنجاح.')
+            
+            from apps.core.utils import get_account_balance, clear_balance_cache
+            clear_balance_cache()
+            new_balance = get_account_balance(acc)
+            
+            if new_balance < 0:
+                messages.warning(request, f'تم إثبات صرف الرواتب، لكن تنبيه: رصيد {acc.name} أصبح بالسالب ({new_balance}).')
+            else:
+                messages.success(request, 'تم إثبات صرف الرواتب بنجاح.')
         except Exception as e:
             messages.error(request, f'فشل إثبات الصرف: {e}')
         return redirect('hr:payroll-detail', pk=pk)
@@ -340,7 +348,15 @@ class PostGovPaymentView(LoginRequiredMixin, PermRequiredMixin, View):
                 acc = get_object_or_404(CashBox, pk=source_id).account
                 
             PayrollService.post_government_payment(period, acc, ins_amount, tax_amount, request.user)
-            messages.success(request, 'تم إثبات توريد الاستقطاعات بنجاح.')
+            
+            from apps.core.utils import get_account_balance, clear_balance_cache
+            clear_balance_cache()
+            new_balance = get_account_balance(acc)
+            
+            if new_balance < 0:
+                messages.warning(request, f'تم توريد الاستقطاعات، لكن تنبيه: رصيد {acc.name} أصبح بالسالب ({new_balance}).')
+            else:
+                messages.success(request, 'تم إثبات توريد الاستقطاعات بنجاح.')
         except Exception as e:
             messages.error(request, f'فشل توريد الاستقطاعات: {e}')
         return redirect('hr:payroll-detail', pk=pk)

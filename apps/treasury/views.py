@@ -276,7 +276,23 @@ class CashTransferCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
             
             # تلقائياً نقوم بإصدار القيد الأول (الخروج من المصدر)
             TreasuryService.process_issue(self.object, self.request.user)
-            messages.success(self.request, f'تم إنشاء التحويل {self.object.number} وصرفه من المصدر (قيد الانتظار)')
+            
+            from apps.core.utils import get_account_balance, clear_balance_cache
+            clear_balance_cache()
+            acc = None
+            if self.object.from_cash_box:
+                acc = self.object.from_cash_box.account
+            elif self.object.from_bank:
+                acc = self.object.from_bank.account
+                
+            if acc:
+                new_balance = get_account_balance(acc)
+                if new_balance < 0:
+                    messages.warning(self.request, f'تم إنشاء التحويل {self.object.number} وصرفه من المصدر، لكن تنبيه: رصيد {acc.name} أصبح بالسالب ({new_balance}).')
+                else:
+                    messages.success(self.request, f'تم إنشاء التحويل {self.object.number} وصرفه من المصدر (قيد الانتظار)')
+            else:
+                messages.success(self.request, f'تم إنشاء التحويل {self.object.number} وصرفه من المصدر (قيد الانتظار)')
             
         return redirect('treasury:transfer-detail', pk=self.object.pk)
 
@@ -534,7 +550,14 @@ class BankTransactionPostView(LoginRequiredMixin, PermRequiredMixin, View):
             with transaction.atomic():
                 trans = get_object_or_404(BankTransaction.objects.select_for_update(), pk=pk)
                 TreasuryService.process_bank_transaction(trans, request.user)
-            messages.success(request, f'تم ترحيل الحركة البنكية {trans.number} بنجاح')
+                
+            from apps.core.utils import get_account_balance, clear_balance_cache
+            clear_balance_cache()
+            new_balance = get_account_balance(trans.bank_account.account)
+            if new_balance < 0:
+                messages.warning(request, f'تم ترحيل الحركة البنكية {trans.number}، لكن تنبيه: رصيد {trans.bank_account.name} أصبح بالسالب ({new_balance}).')
+            else:
+                messages.success(request, f'تم ترحيل الحركة البنكية {trans.number} بنجاح')
         except Exception as e:
             messages.error(request, f'خطأ أثناء الترحيل: {e}')
         return redirect('treasury:banktransaction-detail', pk=pk)

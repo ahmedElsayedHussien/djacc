@@ -143,7 +143,24 @@ class ExpensePostView(LoginRequiredMixin, PermRequiredMixin, View):
             
         try:
             ExpenseService.post_expense(expense, request.user)
-            messages.success(request, f'تم ترحيل المصروف {expense.number}')
+            
+            from apps.core.utils import get_account_balance, clear_balance_cache
+            clear_balance_cache()
+            
+            acc = None
+            if expense.cash_box:
+                acc = expense.cash_box.account
+            elif expense.bank_account:
+                acc = expense.bank_account.account
+                
+            if acc:
+                new_balance = get_account_balance(acc)
+                if new_balance < 0:
+                    messages.warning(request, f'تم ترحيل المصروف {expense.number}، لكن تنبيه: رصيد {acc.name} أصبح بالسالب ({new_balance}).')
+                else:
+                    messages.success(request, f'تم ترحيل المصروف {expense.number}')
+            else:
+                messages.success(request, f'تم ترحيل المصروف {expense.number}')
         except Exception as e:
             logger.exception("خطأ في ترحيل المصروف %s", pk)
             messages.error(request, f'خطأ في الترحيل: {e}')
@@ -241,6 +258,15 @@ class CustodyCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
             
             response = super().form_valid(form)
             CustodyService.issue_custody(self.object, self.request.user)
+            
+            from apps.core.utils import get_account_balance, clear_balance_cache
+            clear_balance_cache()
+            if self.object.cash_box:
+                new_balance = get_account_balance(self.object.cash_box.account)
+                if new_balance < 0:
+                    messages.warning(self.request, f'تم صرف العهدة رقم {self.object.number} وإنشاء القيد، لكن تنبيه: رصيد {self.object.cash_box.name} أصبح بالسالب ({new_balance}).')
+                    return response
+                    
             messages.success(self.request, f'تم صرف العهدة رقم {self.object.number} وإنشاء القيد المحاسبي بنجاح.')
             return response
 
@@ -305,5 +331,13 @@ class CustodySettlementCreateView(LoginRequiredMixin, PermRequiredMixin, CreateV
             self.object = form.save()
             CustodyService.settle_custody(self.object, self.request.user)
             
+            from apps.core.utils import get_account_balance, clear_balance_cache
+            clear_balance_cache()
+            if self.object.cash_box:
+                new_balance = get_account_balance(self.object.cash_box.account)
+                if new_balance < 0:
+                    messages.warning(self.request, f'تمت تسوية العهدة بنجاح، لكن تنبيه: رصيد {self.object.cash_box.name} أصبح بالسالب ({new_balance}).')
+                    return redirect('expenses:custody-detail', pk=custody.pk)
+                    
             messages.success(self.request, 'تمت تسوية العهدة بنجاح')
             return redirect('expenses:custody-detail', pk=custody.pk)

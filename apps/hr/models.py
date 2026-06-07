@@ -71,11 +71,6 @@ class JobTitle(models.Model):
 
     def clean(self):
         super().clean()
-        parent = self.parent
-        while parent:
-            if parent == self:
-                raise ValidationError({'parent': 'لا يمكن أن يكون القسم أباً لنفسه (دورة غير منتهية).'})
-            parent = parent.parent
 
     def __str__(self):
         return self.name
@@ -300,11 +295,6 @@ class LeaveType(models.Model):
 
     def clean(self):
         super().clean()
-        parent = self.parent
-        while parent:
-            if parent == self:
-                raise ValidationError({'parent': 'لا يمكن أن يكون القسم أباً لنفسه (دورة غير منتهية).'})
-            parent = parent.parent
 
     def __str__(self):
         return self.name
@@ -385,10 +375,12 @@ class PayrollPeriod(models.Model):
     def clean(self):
         if self.start_date and self.end_date and self.end_date < self.start_date:
             raise ValidationError('تاريخ نهاية الفترة يجب أن يكون بعد تاريخ البداية')
-        # التحقق من عدم تداخل الفترات
+        # التحقق من عدم تداخل الفترات (مع تجاهل الفترات التي تم عكس قيدها المحاسبي)
         overlapping = PayrollPeriod.objects.filter(
             start_date__lte=self.end_date,
             end_date__gte=self.start_date
+        ).exclude(
+            journal_entry__is_reversed=True
         )
         if self.pk:
             overlapping = overlapping.exclude(pk=self.pk)
@@ -401,13 +393,9 @@ class PayrollPeriod(models.Model):
         verbose_name = "فترة رواتب"
         verbose_name_plural = "فترات الرواتب"
 
-    def clean(self):
-        super().clean()
-        parent = self.parent
-        while parent:
-            if parent == self:
-                raise ValidationError({'parent': 'لا يمكن أن يكون القسم أباً لنفسه (دورة غير منتهية).'})
-            parent = parent.parent
+    def get_absolute_url(self):
+        from django.urls import reverse
+        return reverse('hr:payroll-detail', args=[str(self.id)])
 
     def __str__(self):
         return self.name

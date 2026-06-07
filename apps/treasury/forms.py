@@ -99,21 +99,39 @@ class CashTransferForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
+        from apps.core.utils import get_account_balance
+        
         if user:
-            qs = get_available_cash_boxes(user)
+            qs = get_available_cash_boxes(user).select_related('account')
+            cash_choices = [('', '---------')] + [
+                (cb.pk, f"{cb} (متاح: {get_account_balance(cb.account):,.2f})") for cb in qs
+            ]
             if 'from_cash_box' in self.fields:
                 self.fields['from_cash_box'].queryset = qs
+                self.fields['from_cash_box'].choices = cash_choices
             if 'to_cash_box' in self.fields:
                 self.fields['to_cash_box'].queryset = qs
+                self.fields['to_cash_box'].choices = cash_choices
                 
-        active_banks = BankAccount.objects.filter(is_active=True)
-        active_intermediaries = IntermediaryCompany.objects.filter(is_active=True)
+        active_banks = BankAccount.objects.filter(is_active=True).select_related('account')
+        bank_choices = [('', '---------')] + [
+            (b.pk, f"{b} (متاح: {get_account_balance(b.account):,.2f})") for b in active_banks
+        ]
+        
+        active_intermediaries = IntermediaryCompany.objects.filter(is_active=True).select_related('account')
+        inter_choices = [('', '---------')] + [
+            (i.pk, f"{i} (متاح: {get_account_balance(i.account):,.2f})") for i in active_intermediaries
+        ]
+
         if 'from_bank' in self.fields:
             self.fields['from_bank'].queryset = active_banks
+            self.fields['from_bank'].choices = bank_choices
         if 'to_bank' in self.fields:
             self.fields['to_bank'].queryset = active_banks
+            self.fields['to_bank'].choices = bank_choices
         if 'from_intermediary' in self.fields:
             self.fields['from_intermediary'].queryset = active_intermediaries
+            self.fields['from_intermediary'].choices = inter_choices
 
     def clean_date(self):
         d = self.cleaned_data.get('date')
