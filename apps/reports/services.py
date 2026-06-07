@@ -257,7 +257,8 @@ class ReportService:
         has_opening = JournalLine.objects.filter(
             account=account,
             entry__entry_type=JournalEntry.EntryType.OPENING,
-            entry__is_posted=True
+            entry__is_posted=True,
+            entry__is_reversed=False
         ).exists()
 
         init_debit = Decimal(0)
@@ -270,6 +271,7 @@ class ReportService:
         pre_movements = JournalLine.objects.filter(
             account=account, 
             entry__is_posted=True, 
+            entry__is_reversed=False,
             entry__date__lt=from_date
         ).aggregate(d=Sum('debit'), c=Sum('credit'))
         
@@ -279,6 +281,7 @@ class ReportService:
         movements = JournalLine.objects.filter(
             account=account,
             entry__is_posted=True,
+            entry__is_reversed=False,
             entry__date__range=[from_date, to_date]
         ).select_related('entry').order_by('entry__date', 'id')
         
@@ -331,7 +334,8 @@ class ReportService:
             has_opening = JournalLine.objects.filter(
                 account=acc,
                 entry__entry_type=JournalEntry.EntryType.OPENING,
-                entry__is_posted=True
+                entry__is_posted=True,
+                entry__is_reversed=False
             ).exists()
 
             if not has_opening:
@@ -342,6 +346,7 @@ class ReportService:
         pre_movements = JournalLine.objects.filter(
             account__in=accounts, 
             entry__is_posted=True, 
+            entry__is_reversed=False,
             entry__date__lt=from_date
         ).aggregate(d=Sum('debit'), c=Sum('credit'))
         
@@ -351,6 +356,7 @@ class ReportService:
         movements = JournalLine.objects.filter(
             account__in=accounts,
             entry__is_posted=True,
+            entry__is_reversed=False,
             entry__date__range=[from_date, to_date]
         ).select_related('entry').order_by('entry__date', 'id')
         
@@ -426,6 +432,7 @@ class ReportService:
         movements = JournalLine.objects.filter(
             cost_center=cost_center,
             entry__is_posted=True,
+            entry__is_reversed=False,
             entry__date__range=[from_date, to_date]
         ).select_related('entry', 'account').order_by('entry__date', 'id')
         
@@ -464,7 +471,8 @@ class ReportService:
         has_opening_entry = JournalLine.objects.filter(
             account=account,
             entry__entry_type=JournalEntry.EntryType.OPENING,
-            entry__is_posted=True
+            entry__is_posted=True,
+            entry__is_reversed=False
         ).exists()
 
         init_debit = Decimal('0')
@@ -477,6 +485,7 @@ class ReportService:
         pre_movements = JournalLine.objects.filter(
             account=account, 
             entry__is_posted=True, 
+            entry__is_reversed=False,
             entry__date__lt=from_date
         ).aggregate(d=Sum('debit'), c=Sum('credit'))
         
@@ -488,6 +497,7 @@ class ReportService:
         movements = JournalLine.objects.filter(
             account=account,
             entry__is_posted=True,
+            entry__is_reversed=False,
             entry__date__range=[from_date, to_date]
         ).select_related('entry').order_by('entry__date', 'id')
         
