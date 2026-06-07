@@ -86,6 +86,7 @@ class ReportService:
         """
         base_filter = {
             'entry__is_posted': True,
+            'entry__is_reversed': False,
             'entry__date__range': [from_date, to_date]
         }
         if cost_center_id:
@@ -185,7 +186,7 @@ class ReportService:
         المركز المالي (Balance Sheet) - Optimized
         Assets = Liabilities + Equity
         """
-        base_filter = {'entry__is_posted': True, 'entry__date__lte': as_of_date}
+        base_filter = {'entry__is_posted': True, 'entry__is_reversed': False, 'entry__date__lte': as_of_date}
         if cost_center_id:
             base_filter['cost_center_id'] = cost_center_id
 
@@ -196,7 +197,8 @@ class ReportService:
         # 2. Get accounts with OPENING entries
         opening_entry_accounts = set(JournalLine.objects.filter(
             entry__entry_type=JournalEntry.EntryType.OPENING,
-            entry__is_posted=True
+            entry__is_posted=True,
+            entry__is_reversed=False
         ).values_list('account_id', flat=True))
 
         # Helper to process a group of accounts
@@ -1524,3 +1526,156 @@ class ReportService:
     def hr_eos_settlements_report():
         report = EndOfService.objects.select_related('employee').order_by('-termination_date')
         return report
+
+    @staticmethod
+    def cash_flow_statement_report(from_date: date, to_date: date) -> dict:
+        """
+        قائمة التدفقات النقدية (الطريقة المباشرة)
+        """
+        from django.conf import settings
+        
+        # 1. Get all cash/bank related accounts based on chart of accounts parent codes
+        cash_parent_code = getattr(settings, 'CASH_PARENT_ACCOUNT', '1111')
+        bank_parent_code = getattr(settings, 'BANK_PARENT_ACCOUNT', '1112')
+        
+        all_cash_account_ids = set(Account.objects.filter(
+            Q(code__startswith=cash_parent_code) | Q(code__startswith=bank_parent_code),
+            is_leaf=True
+        ).values_list('id', flat=True))
+        
+        # 2. Opening Balance (Before from_date)
+        pre_movements = JournalLine.objects.filter(
+            account_id__in=all_cash_account_ids,
+            entry__is_posted=True,
+            entry__is_reversed=False,
+            entry__date__lt=from_date
+        ).aggregate(d=Sum('debit'), c=Sum('credit'))
+        
+        init_balance = Decimal('0')
+        accounts_obj = Account.objects.filter(id__in=all_cash_account_ids)
+        for acc in accounts_obj:
+            has_opening = JournalLine.objects.filter(
+                account=acc,
+                entry__entry_type=JournalEntry.EntryType.OPENING,
+                entry__is_posted=True,
+                entry__is_reversed=False
+            ).exists()
+            if not has_opening:
+                if acc.initial_balance_type == 'debit':
+                    init_balance += acc.initial_balance
+                else:
+                    init_balance -= acc.initial_balance
+                    
+        opening_balance = init_balance + (pre_movements['d'] or Decimal('0')) - (pre_movements['c'] or Decimal('0'))
+
+        # 3. Process Period Movements
+        cash_lines = JournalLine.objects.filter(
+            account_id__in=all_cash_account_ids,
+            entry__is_posted=True,
+            entry__is_reversed=False,
+            entry__date__range=[from_date, to_date],
+        ).exclude(
+            entry__entry_type=JournalEntry.EntryType.OPENING
+        ).select_related('entry')
+
+        # Categories
+        operating_inflow = Decimal('0')
+        operating_outflow = Decimal('0')
+        investing_inflow = Decimal('0')
+        investing_outflow = Decimal('0')
+        financing_inflow = Decimal('0')
+        financing_outflow = Decimal('0')
+        
+        details = {
+            'operating': [],
+            'investing': [],
+            'financing': []
+        }
+
+        # Analyze each cash line based on the other lines in the same entry
+        for line in cash_lines:
+            entry = line.entry
+            is_inflow = line.debit > 0
+            amount = line.debit if is_inflow else line.credit
+            
+            # Find the opposite lines in this entry to classify
+            opposite_lines = entry.lines.exclude(account_id__in=all_cash_account_ids)
+            if not opposite_lines.exists():
+                # Internal transfer between cash accounts -> ignore for cash flow
+                continue
+                
+            # Take the primary opposite account to classify
+            main_opp_line = opposite_lines.order_by('-debit', '-credit').first()
+            opp_acc_type = main_opp_line.account.account_type
+            opp_code = main_opp_line.account.code
+            
+            # Classification Logic
+            category = 'operating'
+            label = "عمليات أخرى"
+            
+            # Operating
+            if opp_acc_type in [AccountType.REVENUE, AccountType.EXPENSE]:
+                category = 'operating'
+                label = "مبيعات وإيرادات نقدية" if is_inflow else "مصروفات نقدية"
+            elif opp_code.startswith('112') or opp_code.startswith('212'):  # العملاء والموردين والضرائب
+                category = 'operating'
+                label = "مقبوضات من العملاء" if is_inflow else "مدفوعات للموردين / ضرائب"
+                
+            # Investing (الأصول الثابتة)
+            elif opp_code.startswith('12'):
+                category = 'investing'
+                label = "بيع أصول ثابتة" if is_inflow else "شراء أصول ثابتة"
+                
+            # Financing (القروض ورأس المال)
+            elif opp_acc_type == AccountType.EQUITY or opp_code.startswith('22'): # الخصوم طويلة الأجل أو حقوق الملكية
+                category = 'financing'
+                label = "زيادة رأس المال / قروض" if is_inflow else "توزيعات أرباح / سداد قروض"
+            
+            # Record
+            if category == 'operating':
+                if is_inflow: operating_inflow += amount
+                else: operating_outflow += amount
+            elif category == 'investing':
+                if is_inflow: investing_inflow += amount
+                else: investing_outflow += amount
+            elif category == 'financing':
+                if is_inflow: financing_inflow += amount
+                else: financing_outflow += amount
+                
+            # Add to details
+            details[category].append({
+                'date': entry.date,
+                'number': entry.number,
+                'description': entry.description or line.description,
+                'amount': amount,
+                'is_inflow': is_inflow,
+                'label': label
+            })
+
+        net_operating = operating_inflow - operating_outflow
+        net_investing = investing_inflow - investing_outflow
+        net_financing = financing_inflow - financing_outflow
+        net_change = net_operating + net_investing + net_financing
+        closing_balance = opening_balance + net_change
+
+        return {
+            'opening_balance': opening_balance,
+            
+            'operating_inflow': operating_inflow,
+            'operating_outflow': operating_outflow,
+            'net_operating': net_operating,
+            
+            'investing_inflow': investing_inflow,
+            'investing_outflow': investing_outflow,
+            'net_investing': net_investing,
+            
+            'financing_inflow': financing_inflow,
+            'financing_outflow': financing_outflow,
+            'net_financing': net_financing,
+            
+            'net_change': net_change,
+            'closing_balance': closing_balance,
+            
+            'details': details
+        }
+

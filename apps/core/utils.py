@@ -15,7 +15,10 @@ def compute_account_balances(as_of_date=None):
         'id', 'parent_id', 'account_type', 'initial_balance', 'initial_balance_type', 'is_leaf'
     )
 
-    movements = JournalLine.objects.filter(entry__is_posted=True)
+    movements = JournalLine.objects.filter(
+        entry__is_posted=True,
+        entry__is_reversed=False
+    )
     if as_of_date:
         movements = movements.filter(entry__date__lte=as_of_date)
     movements = movements.values('account_id').annotate(
@@ -25,7 +28,8 @@ def compute_account_balances(as_of_date=None):
 
     opening_acc_ids = set(JournalLine.objects.filter(
         entry__entry_type=JournalEntry.EntryType.OPENING,
-        entry__is_posted=True
+        entry__is_posted=True,
+        entry__is_reversed=False
     ).values_list('account_id', flat=True))
 
     leaf_bals = {}

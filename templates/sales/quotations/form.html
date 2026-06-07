@@ -24,15 +24,20 @@
                 </div>
                 {% endif %}
                 <div class="row g-3">
-                    <div class="col-md-8">
+                    <div class="col-md-12">
                         <label class="form-label">اسم العرض (الترويج)</label>
                         {{ form.name }}
                         {{ form.name.errors }}
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <label class="form-label">القطاع المستهدف</label>
                         {{ form.sector }}
                         {{ form.sector.errors }}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">أو العميل المحدد</label>
+                        {{ form.customer }}
+                        {{ form.customer.errors }}
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">تاريخ البدء</label>

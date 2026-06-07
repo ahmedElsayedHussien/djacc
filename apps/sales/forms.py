@@ -19,7 +19,7 @@ class CustomerForm(forms.ModelForm):
         fields = [
             'code', 'name', 'tax_number',
             'credit_limit', 'payment_terms_days',
-            'address', 'phone', 'email', 'customer_type', 'price_list',
+            'address', 'phone', 'email', 'customer_type', 'sector', 'price_list',
             'is_taxable', 'default_tax1', 'default_tax2'
         ]
         labels = {
@@ -32,6 +32,7 @@ class CustomerForm(forms.ModelForm):
             'phone': 'الهاتف',
             'email': 'البريد الإلكتروني',
             'customer_type': 'نوع العميل',
+            'sector': 'القطاع (لربط الخصومات)',
             'price_list': 'قائمة الأسعار',
             'is_taxable': 'خاضع للضريبة',
             'default_tax1': 'الضريبة الافتراضية 1',
@@ -47,6 +48,7 @@ class CustomerForm(forms.ModelForm):
             'phone': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'customer_type': forms.Select(attrs={'class': 'form-select'}),
+            'sector': forms.Select(attrs={'class': 'form-select'}),
             'price_list': forms.Select(attrs={'class': 'form-select'}),
             'is_taxable': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'default_tax1': forms.Select(attrs={'class': 'form-select'}),
@@ -319,10 +321,10 @@ class SalesInvoiceLineForm(forms.ModelForm):
             'unit': forms.Select(attrs={'class': 'form-select unit-select'}),
             'quantity': forms.NumberInput(attrs={'class': 'form-control qty-input', 'step': 'any'}),
             'unit_price': forms.NumberInput(attrs={'class': 'form-control price-input', 'step': 'any'}),
-            'discount_percent': forms.NumberInput(attrs={'class': 'form-control discount-input', 'step': 'any'}),
-            'tax_type': forms.Select(attrs={'class': 'form-select tax-select'}),
+            'discount_percent': forms.NumberInput(attrs={'class': 'form-control discount-input bg-light', 'step': 'any', 'readonly': 'readonly'}),
+            'tax_type': forms.Select(attrs={'class': 'form-select tax-select', 'style': 'pointer-events: none; background-color: #e9ecef;', 'tabindex': '-1'}),
             'tax_percent': forms.HiddenInput(attrs={'class': 'tax-rate'}),
-            'tax_type2': forms.Select(attrs={'class': 'form-select tax-select2'}),
+            'tax_type2': forms.Select(attrs={'class': 'form-select tax-select2', 'style': 'pointer-events: none; background-color: #e9ecef;', 'tabindex': '-1'}),
             'tax_percent2': forms.HiddenInput(attrs={'class': 'tax-rate2'}),
             'total': forms.HiddenInput(attrs={'class': 'total-input'}),
         }
@@ -502,12 +504,11 @@ class CustomerReceiptForm(forms.ModelForm):
 class QuotationForm(forms.ModelForm):
     class Meta:
         model = Quotation
-        fields = ['name', 'customer', 'sector', 'sales_rep', 'start_date', 'end_date', 'status', 'is_active', 'notes']
+        fields = ['name', 'customer', 'sector', 'start_date', 'end_date', 'status', 'is_active', 'notes']
         labels = {
             'name': 'اسم العرض',
             'customer': 'العميل',
             'sector': 'القطاع',
-            'sales_rep': 'المندوب',
             'start_date': 'تاريخ البداية',
             'end_date': 'تاريخ الانتهاء',
             'status': 'الحالة',
@@ -518,7 +519,6 @@ class QuotationForm(forms.ModelForm):
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'customer': forms.Select(attrs={'class': 'form-select'}),
             'sector': forms.Select(attrs={'class': 'form-select'}),
-            'sales_rep': forms.Select(attrs={'class': 'form-select'}),
             'start_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'end_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'status': forms.Select(attrs={'class': 'form-select'}),
@@ -528,31 +528,51 @@ class QuotationForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+        customer = cleaned_data.get('customer')
         sector = cleaned_data.get('sector')
         start_date = cleaned_data.get('start_date')
         end_date = cleaned_data.get('end_date')
         status = cleaned_data.get('status')
         is_active = cleaned_data.get('is_active')
 
-        if sector and start_date and end_date:
+        if not customer and not sector:
+            raise forms.ValidationError("يجب تحديد إما 'القطاع المستهدف' أو 'العميل المحدد' لإنشاء العرض.")
+            
+        if customer and sector:
+            raise forms.ValidationError("لا يمكن اختيار قطاع وعميل معاً. يرجى اختيار إما قطاع كامل أو عميل محدد لتطبيق الخصم.")
+
+        if start_date and end_date:
             if start_date > end_date:
                 self.add_error('end_date', "تاريخ الانتهاء يجب أن يكون بعد أو يساوي تاريخ البدء.")
             
             if status not in ['expired', 'cancelled'] and is_active:
-                # Check for overlapping active quotations for the same sector
-                overlapping_qs = Quotation.objects.filter(
-                    sector=sector,
-                    status__in=['draft', 'active', 'invoiced'],
-                    is_active=True,
-                    start_date__lte=end_date,
-                    end_date__gte=start_date
-                )
-                
-                if self.instance and self.instance.pk:
-                    overlapping_qs = overlapping_qs.exclude(pk=self.instance.pk)
-                    
-                if overlapping_qs.exists():
-                    raise forms.ValidationError("لا يمكن إنشاء عرض لنفس القطاع في نفس الفترة الزمنية لوجود عرض آخر ساري ومفعل لهذا القطاع.")
+                if sector:
+                    # Check for overlapping active quotations for the same sector
+                    overlapping_qs = Quotation.objects.filter(
+                        sector=sector,
+                        status__in=['draft', 'active', 'invoiced'],
+                        is_active=True,
+                        start_date__lte=end_date,
+                        end_date__gte=start_date
+                    )
+                    if self.instance and self.instance.pk:
+                        overlapping_qs = overlapping_qs.exclude(pk=self.instance.pk)
+                    if overlapping_qs.exists():
+                        raise forms.ValidationError("لا يمكن إنشاء عرض لنفس القطاع في نفس الفترة الزمنية لوجود عرض آخر ساري ومفعل لهذا القطاع.")
+                        
+                elif customer:
+                    # Check for overlapping active quotations for the same customer
+                    overlapping_qs = Quotation.objects.filter(
+                        customer=customer,
+                        status__in=['draft', 'active', 'invoiced'],
+                        is_active=True,
+                        start_date__lte=end_date,
+                        end_date__gte=start_date
+                    )
+                    if self.instance and self.instance.pk:
+                        overlapping_qs = overlapping_qs.exclude(pk=self.instance.pk)
+                    if overlapping_qs.exists():
+                        raise forms.ValidationError("لا يمكن إنشاء عرض لنفس العميل في نفس الفترة الزمنية لوجود عرض آخر ساري ومفعل له.")
                     
         return cleaned_data
 
@@ -664,10 +684,10 @@ class SalesReturnLineForm(forms.ModelForm):
             'unit': forms.Select(attrs={'class': 'form-select unit-select'}),
             'quantity': forms.NumberInput(attrs={'class': 'form-control qty-input', 'step': 'any'}),
             'unit_price': forms.NumberInput(attrs={'class': 'form-control price-input', 'step': 'any'}),
-            'discount_percent': forms.NumberInput(attrs={'class': 'form-control discount-input', 'step': 'any'}),
-            'tax_type': forms.Select(attrs={'class': 'form-select tax-select'}),
+            'discount_percent': forms.NumberInput(attrs={'class': 'form-control discount-input bg-light', 'step': 'any', 'readonly': 'readonly'}),
+            'tax_type': forms.Select(attrs={'class': 'form-select tax-select', 'style': 'pointer-events: none; background-color: #e9ecef;', 'tabindex': '-1'}),
             'tax_percent': forms.HiddenInput(attrs={'class': 'tax-rate'}),
-            'tax_type2': forms.Select(attrs={'class': 'form-select tax-select2'}),
+            'tax_type2': forms.Select(attrs={'class': 'form-select tax-select2', 'style': 'pointer-events: none; background-color: #e9ecef;', 'tabindex': '-1'}),
             'tax_percent2': forms.HiddenInput(attrs={'class': 'tax-rate2'}),
             'total': forms.HiddenInput(attrs={'class': 'total-input'}),
             'return_account': forms.Select(attrs={'class': 'form-select return-account-select', 'style': 'pointer-events: none; background-color: #e9ecef;', 'tabindex': '-1'}),

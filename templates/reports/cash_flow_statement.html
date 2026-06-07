@@ -1,0 +1,280 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load l10n %}
+
+{% block title %}قائمة التدفقات النقدية{% endblock %}
+{% block header %}قائمة التدفقات النقدية{% endblock %}
+
+{% block content %}
+<div class="row mb-4 no-print">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <form method="get" class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label for="from" class="form-label">من تاريخ</label>
+                        <input type="date" class="form-control" id="from" name="from" value="{{ from_date|date:'Y-m-d' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="to" class="form-label">إلى تاريخ</label>
+                        <input type="date" class="form-control" id="to" name="to" value="{{ to_date|date:'Y-m-d' }}">
+                    </div>
+                    <div class="col-md-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-search me-1"></i> عرض التقرير
+                        </button>
+                        <a href="?from={{ from_date|date:'Y-m-d' }}&to={{ to_date|date:'Y-m-d' }}&export=xlsx" class="btn btn-success" title="تصدير إلى Excel">
+                            <i class="bi bi-file-earmark-excel"></i>
+                        </a>
+                        <button type="button" class="btn btn-secondary" onclick="window.print()" title="طباعة">
+                            <i class="bi bi-printer"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm" id="print-area">
+    <div class="card-header bg-white border-bottom-0 pt-4 pb-0 text-center">
+        <h4 class="mb-1">قائمة التدفقات النقدية (الطريقة المباشرة)</h4>
+        <p class="text-muted mb-0">عن الفترة من {{ from_date|date:"Y/m/d" }} إلى {{ to_date|date:"Y/m/d" }}</p>
+    </div>
+    
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover table-bordered border-light" style="font-size: 1.05rem;">
+                <thead class="table-light text-center">
+                    <tr>
+                        <th style="width: 50%;">البيان</th>
+                        <th style="width: 25%;">القيمة</th>
+                        <th style="width: 25%;">الإجمالي</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Opening Balance -->
+                    <tr class="table-secondary fw-bold">
+                        <td>رصيد النقدية أول المدة</td>
+                        <td></td>
+                        <td class="text-center" dir="ltr">{{ report.opening_balance|floatformat:2 }}</td>
+                    </tr>
+                    
+                    <!-- Operating Activities -->
+                    <tr class="bg-light">
+                        <td colspan="3" class="fw-bold text-primary">
+                            <i class="bi bi-briefcase me-2"></i>التدفقات النقدية من أنشطة التشغيل (Operating Activities)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="ps-4">المقبوضات النقدية من أنشطة التشغيل</td>
+                        <td class="text-center" dir="ltr">{{ report.operating_inflow|floatformat:2 }}</td>
+                        <td></td>
+                    </tr>
+                    <tr>
+                        <td class="ps-4">المدفوعات النقدية لأنشطة التشغيل</td>
+                        <td class="text-center text-danger" dir="ltr">({{ report.operating_outflow|floatformat:2 }})</td>
+                        <td></td>
+                    </tr>
+                    <tr class="fw-bold">
+                        <td class="text-end">صافي التدفقات النقدية من أنشطة التشغيل</td>
+                        <td></td>
+                        <td class="text-center {% if report.net_operating > 0 %}text-success{% elif report.net_operating < 0 %}text-danger{% endif %}" dir="ltr">
+                            {{ report.net_operating|floatformat:2 }}
+                        </td>
+                    </tr>
+
+                    <!-- Investing Activities -->
+                    <tr class="bg-light">
+                        <td colspan="3" class="fw-bold text-primary mt-3 border-top">
+                            <i class="bi bi-building me-2"></i>التدفقات النقدية من أنشطة الاستثمار (Investing Activities)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="ps-4">المقبوضات النقدية من أنشطة الاستثمار</td>
+                        <td class="text-center" dir="ltr">{{ report.investing_inflow|floatformat:2 }}</td>
+                        <td></td>
+                    </tr>
+                    <tr>
+                        <td class="ps-4">المدفوعات النقدية لأنشطة الاستثمار</td>
+                        <td class="text-center text-danger" dir="ltr">({{ report.investing_outflow|floatformat:2 }})</td>
+                        <td></td>
+                    </tr>
+                    <tr class="fw-bold">
+                        <td class="text-end">صافي التدفقات النقدية من أنشطة الاستثمار</td>
+                        <td></td>
+                        <td class="text-center {% if report.net_investing > 0 %}text-success{% elif report.net_investing < 0 %}text-danger{% endif %}" dir="ltr">
+                            {{ report.net_investing|floatformat:2 }}
+                        </td>
+                    </tr>
+
+                    <!-- Financing Activities -->
+                    <tr class="bg-light">
+                        <td colspan="3" class="fw-bold text-primary mt-3 border-top">
+                            <i class="bi bi-bank me-2"></i>التدفقات النقدية من أنشطة التمويل (Financing Activities)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="ps-4">المقبوضات النقدية من أنشطة التمويل</td>
+                        <td class="text-center" dir="ltr">{{ report.financing_inflow|floatformat:2 }}</td>
+                        <td></td>
+                    </tr>
+                    <tr>
+                        <td class="ps-4">المدفوعات النقدية لأنشطة التمويل</td>
+                        <td class="text-center text-danger" dir="ltr">({{ report.financing_outflow|floatformat:2 }})</td>
+                        <td></td>
+                    </tr>
+                    <tr class="fw-bold">
+                        <td class="text-end">صافي التدفقات النقدية من أنشطة التمويل</td>
+                        <td></td>
+                        <td class="text-center {% if report.net_financing > 0 %}text-success{% elif report.net_financing < 0 %}text-danger{% endif %}" dir="ltr">
+                            {{ report.net_financing|floatformat:2 }}
+                        </td>
+                    </tr>
+
+                    <!-- Net Change -->
+                    <tr class="table-active fw-bold mt-4 border-top border-dark">
+                        <td>صافي الزيادة (أو النقص) في النقدية خلال الفترة</td>
+                        <td></td>
+                        <td class="text-center {% if report.net_change > 0 %}text-success{% elif report.net_change < 0 %}text-danger{% endif %}" dir="ltr">
+                            {{ report.net_change|floatformat:2 }}
+                        </td>
+                    </tr>
+                    
+                    <!-- Closing Balance -->
+                    <tr class="table-dark fw-bold" style="font-size: 1.2rem;">
+                        <td>رصيد النقدية آخر المدة (بما يعادل أرصدة الخزائن والبنوك)</td>
+                        <td></td>
+                        <td class="text-center" dir="ltr">{{ report.closing_balance|floatformat:2 }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-5">
+            <h5 class="mb-3 border-bottom pb-2 text-muted">التفاصيل التحليلية للتدفقات النقدية</h5>
+            <div class="accordion" id="detailsAccordion">
+                
+                <!-- Operating Details -->
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingOp">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-toggle="collapse" data-bs-target="#collapseOp">
+                            تفاصيل العمليات التشغيلية
+                        </button>
+                    </h2>
+                    <div id="collapseOp" class="accordion-collapse collapse" data-bs-parent="#detailsAccordion">
+                        <div class="accordion-body p-0">
+                            <table class="table table-sm table-striped m-0">
+                                <thead>
+                                    <tr>
+                                        <th>التاريخ</th>
+                                        <th>رقم القيد</th>
+                                        <th>التصنيف</th>
+                                        <th>البيان</th>
+                                        <th>مقبوضات</th>
+                                        <th>مدفوعات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in report.details.operating %}
+                                    <tr>
+                                        <td>{{ item.date|date:'Y/m/d' }}</td>
+                                        <td>{{ item.number }}</td>
+                                        <td>{{ item.label }}</td>
+                                        <td>{{ item.description }}</td>
+                                        <td dir="ltr" class="text-success">{% if item.is_inflow %}{{ item.amount|floatformat:2 }}{% endif %}</td>
+                                        <td dir="ltr" class="text-danger">{% if not item.is_inflow %}{{ item.amount|floatformat:2 }}{% endif %}</td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr><td colspan="6" class="text-center text-muted">لا يوجد حركات تشغيلية</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Investing Details -->
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingInv">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseInv">
+                            تفاصيل العمليات الاستثمارية
+                        </button>
+                    </h2>
+                    <div id="collapseInv" class="accordion-collapse collapse" data-bs-parent="#detailsAccordion">
+                        <div class="accordion-body p-0">
+                            <table class="table table-sm table-striped m-0">
+                                <thead>
+                                    <tr>
+                                        <th>التاريخ</th>
+                                        <th>رقم القيد</th>
+                                        <th>التصنيف</th>
+                                        <th>البيان</th>
+                                        <th>مقبوضات</th>
+                                        <th>مدفوعات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in report.details.investing %}
+                                    <tr>
+                                        <td>{{ item.date|date:'Y/m/d' }}</td>
+                                        <td>{{ item.number }}</td>
+                                        <td>{{ item.label }}</td>
+                                        <td>{{ item.description }}</td>
+                                        <td dir="ltr" class="text-success">{% if item.is_inflow %}{{ item.amount|floatformat:2 }}{% endif %}</td>
+                                        <td dir="ltr" class="text-danger">{% if not item.is_inflow %}{{ item.amount|floatformat:2 }}{% endif %}</td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr><td colspan="6" class="text-center text-muted">لا يوجد حركات استثمارية</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Financing Details -->
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingFin">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFin">
+                            تفاصيل العمليات التمويلية
+                        </button>
+                    </h2>
+                    <div id="collapseFin" class="accordion-collapse collapse" data-bs-parent="#detailsAccordion">
+                        <div class="accordion-body p-0">
+                            <table class="table table-sm table-striped m-0">
+                                <thead>
+                                    <tr>
+                                        <th>التاريخ</th>
+                                        <th>رقم القيد</th>
+                                        <th>التصنيف</th>
+                                        <th>البيان</th>
+                                        <th>مقبوضات</th>
+                                        <th>مدفوعات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in report.details.financing %}
+                                    <tr>
+                                        <td>{{ item.date|date:'Y/m/d' }}</td>
+                                        <td>{{ item.number }}</td>
+                                        <td>{{ item.label }}</td>
+                                        <td>{{ item.description }}</td>
+                                        <td dir="ltr" class="text-success">{% if item.is_inflow %}{{ item.amount|floatformat:2 }}{% endif %}</td>
+                                        <td dir="ltr" class="text-danger">{% if not item.is_inflow %}{{ item.amount|floatformat:2 }}{% endif %}</td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr><td colspan="6" class="text-center text-muted">لا يوجد حركات تمويلية</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

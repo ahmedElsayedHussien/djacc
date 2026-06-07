@@ -505,10 +505,10 @@ class SalesService:
                 'cost_center': cost_center
             })
             
-            # Inventory reversal entry (✅ Fix #2: استخدام الكمية الأساسية من السطر)
             cost = line.cost # Use stored cost
-            if cost <= 0:
-                raise ValueError(f"تكلفة المرتجع للصنف {line.item.name} تساوي صفراً، لا يمكن إنشاء قيد المرتجع بدون قيمة التكلفة.")
+            # Allow zero cost for returns (e.g. reversing a zero-cost invoice or gifts)
+            if cost < 0:
+                cost = Decimal('0')
                 
             base_qty = line.base_quantity or line.quantity
 

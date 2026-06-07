@@ -222,7 +222,23 @@ class ItemLedger(models.Model):
     @property
     def average_cost(self):
         if self.quantity_on_hand <= 0:
-            return Decimal('0')
+            # Fallback 1: Last known cost in this warehouse
+            last_mov = StockMovement.objects.filter(
+                item=self.item, warehouse=self.warehouse, unit_cost__gt=0
+            ).order_by('-date', '-id').first()
+            if last_mov:
+                return last_mov.unit_cost
+                
+            # Fallback 2: Last known cost globally in any warehouse
+            last_global = StockMovement.objects.filter(
+                item=self.item, unit_cost__gt=0
+            ).order_by('-date', '-id').first()
+            if last_global:
+                return last_global.unit_cost
+                
+            # Fallback 3: Standard Price
+            return self.item.standard_price or Decimal('0')
+            
         cost = self.total_value / self.quantity_on_hand
         return cost.quantize(Decimal('0.00'))
 

@@ -296,6 +296,17 @@
 
         <!-- Totals Top Box -->
         <div class="p-6 bg-white border-b border-gray-100 shadow-[0_5px_15px_rgba(0,0,0,0.02)] flex-shrink-0 z-10">
+            <!-- Customer Select -->
+            <div class="mb-4 pb-3 border-b border-gray-100">
+                <label class="block text-gray-700 font-bold mb-2 text-sm">العميل (اختياري):</label>
+                <select id="customer-select" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-brand text-sm font-semibold" onchange="handleCustomerChange(this.value)">
+                    <option value="">عميل نقدي (افتراضي)</option>
+                    {% for customer in customers %}
+                        <option value="{{ customer.id }}">{{ customer.name }} {% if customer.phone %}({{ customer.phone }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
             <!-- VAT Toggle Switch -->
             <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-100">
                 <span class="text-gray-700 font-bold text-lg flex items-center gap-2">
@@ -468,25 +479,52 @@
     }
 
     // ========== CART LOGIC ==========
-    function addToCart(item) {
+    async function addToCart(item) {
         const cart = getCart();
         const existingIndex = cart.findIndex(c => c.id === item.id && c.unit_type === 'base');
         const inv = getInvoice();
         if (existingIndex > -1) {
             cart[existingIndex].qty += 1;
             inv.selectedItemIndex = existingIndex;
+            saveInvoices();
+            updateCartUI();
         } else {
-            cart.push({
+            const newItem = {
                 id: item.id, name: item.name, price: parseFloat(item.price) || 0,
                 qty: 1, unit_type: 'base',
                 base_unit_name: item.base_unit_name || '\u062D\u0628\u0629',
                 sales_unit_name: item.sales_unit_name || '',
                 conversion_factor: parseFloat(item.conversion_factor) || 1.0,
-            });
+            };
+            cart.push(newItem);
             inv.selectedItemIndex = cart.length - 1;
+            saveInvoices();
+            updateCartUI();
+            
+            // Fetch custom price if customer selected
+            const customerSelect = document.getElementById('customer-select');
+            if (customerSelect && customerSelect.value) {
+                try {
+                    const priceRes = await fetch(`/sales/api/item/${item.id}/customer/${customerSelect.value}/price/`);
+                    if (priceRes.ok) {
+                        const priceData = await priceRes.json();
+                        let newPrice = parseFloat(priceData.unit_price) || 0;
+                        let discount = parseFloat(priceData.discount_percent) || 0;
+                        if (discount > 0) {
+                            newPrice = newPrice - (newPrice * (discount / 100));
+                        }
+                        const targetItem = cart.find(c => c.id === item.id && c.unit_type === 'base');
+                        if (targetItem && newPrice !== targetItem.price) {
+                            targetItem.price = newPrice;
+                            saveInvoices();
+                            updateCartUI();
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error fetching custom price", e);
+                }
+            }
         }
-        saveInvoices();
-        updateCartUI();
     }
 
     function selectCartItem(index) { getInvoice().selectedItemIndex = index; updateCartUI(); }
@@ -598,7 +636,11 @@
 
         const isTaxable = document.getElementById('vat-toggle-input') ? document.getElementById('vat-toggle-input').checked : true;
         const subtotal = data.subtotal;
-        const taxAmount = data.tax;
+        const tax = data.tax;
+        const total = data.grand_total;
+        const receiptNo = data.receipt_number;
+        const customerSelect = document.getElementById('customer-select');
+        const customerName = customerSelect && customerSelect.value ? customerSelect.options[customerSelect.selectedIndex].text : 'عميل نقدي';
 
         const iframe = document.createElement('iframe');
         iframe.style.position = 'fixed'; iframe.style.right = '0'; iframe.style.bottom = '0';
@@ -634,8 +676,9 @@
             </div>
             <div class="divider"></div>
             <div style="font-size:12px;line-height:1.6">
-                <div><b>\u0631\u0642\u0645 \u0627\u0644\u0625\u064A\u0635\u0627\u0644:</b> ${data.receipt_number}</div>
+                <div><b>\u0631\u0642\u0645 \u0627\u0644\u0625\u064A\u0635\u0627\u0644:</b> ${receiptNo}</div>
                 <div><b>\u0627\u0644\u062A\u0627\u0631\u064A\u062E:</b> ${dateStr}</div>
+                <p style="margin: 0; font-weight: bold;">العميل: ${customerName}</p>
             </div>
             <div class="divider"></div>
             <table><thead><tr style="border-bottom:2px solid #000">
@@ -648,15 +691,14 @@
                 <tr><td>\u0627\u0644\u0625\u062C\u0645\u0627\u0644\u064A \u0627\u0644\u062E\u0627\u0636\u0639 \u0644\u0644\u0636\u0631\u064A\u0628\u0629:</td>
                     <td style="text-align:left" class="bold">${subtotal.toFixed(2)} EGP</td></tr>
                 ${isTaxable ? `<tr><td>\u0636\u0631\u064A\u0628\u0629 \u0627\u0644\u0642\u064A\u0645\u0629 \u0627\u0644\u0645\u0636\u0627\u0641\u0629 (14%):</td>
-                    <td style="text-align:left" class="bold">${taxAmount.toFixed(2)} EGP</td></tr>` : ''}
+                    <td style="text-align:left" class="bold">${tax.toFixed(2)} EGP</td></tr>` : ''}
                 <tr style="font-size:16px" class="bold">
                     <td>\u0627\u0644\u0635\u0627\u0641\u064A \u0627\u0644\u0645\u0637\u0644\u0648\u0628:</td>
-                    <td style="text-align:left">${data.grand_total.toFixed(2)} EGP</td></tr>
+                    <td style="text-align:left">${total.toFixed(2)} EGP</td></tr>
             </table>
             <div class="double-divider"></div>
             <div class="text-center" style="font-size:11px;margin-top:10px">
                 <p style="margin:2px 0;font-weight:bold">\u0634\u0643\u0631\u0627\u064B \u0644\u062A\u0633\u0648\u0642\u0643\u0645 \u0645\u0639\u0646\u0627!</p>
-                <p style="margin:2px 0">\u064A\u0631\u062C\u0649 \u0627\u0644\u0627\u062D\u062A\u0641\u0627\u0638 \u0628\u0627\u0644\u0625\u064A\u0635\u0627\u0644 \u0644\u0644\u0627\u0633\u062A\u0628\u062F\u0627\u0644 \u0648\u0627\u0644\u0627\u0633\u062A\u0631\u062C\u0627\u0639</p>
             </div>
         </body></html>`);
         doc.close();
@@ -668,29 +710,29 @@
         const cart = getCart();
         if (cart.length === 0) { alert('\u0633\u0644\u0629 \u0627\u0644\u0645\u0634\u062A\u0631\u064A\u0627\u062A \u0641\u0627\u0631\u063A\u0629! \u064A\u0631\u062C\u0649 \u0625\u0636\u0627\u0641\u0629 \u0623\u0635\u0646\u0627\u0641 \u0623\u0648\u0644\u0627\u064B.'); return; }
 
-        const methodNames = {
-            'cash': 'دفع كاش',
-            'card': 'كارت بنكي',
-            'wallet': 'محفظة إلكترونية'
-        };
-        const methodName = methodNames[method] || method;
-        if (!confirm(`سيتم السداد بطريقة "${methodName}"... هل أنت متأكد؟`)) {
-            return;
-        }
+        if (!confirm(`سيتم السداد بطريقة "${method}"... هل أنت متأكد؟`)) return;
 
-        let reference = '';
-
+        const vatToggle = document.getElementById('vat-toggle-input');
+        const customerSelect = document.getElementById('customer-select');
+        
         const cleanCart = cart.map(c => ({
             id: c.id, qty: c.qty,
             price: c.unit_type === 'sales' ? (c.price * c.conversion_factor) : c.price,
             unit_type: c.unit_type
         }));
-        const isTaxable = document.getElementById('vat-toggle-input') ? document.getElementById('vat-toggle-input').checked : true;
+
+        const payload = {
+            cart: cleanCart,
+            payment_method: method,
+            customer_id: customerSelect && customerSelect.value ? parseInt(customerSelect.value) : null,
+            is_taxable: vatToggle ? vatToggle.checked : true,
+            payment_reference: ''
+        };
 
         fetch('{% url "pos:checkout" %}', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-            body: JSON.stringify({ cart: cleanCart, payment_method: method, is_taxable: isTaxable, payment_reference: reference })
+            body: JSON.stringify(payload)
         })
         .then(r => { 
             return r.json().then(data => {

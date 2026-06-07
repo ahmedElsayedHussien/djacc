@@ -1035,3 +1035,37 @@ class SalesRepDashboardView(LoginRequiredMixin, PermissionRequiredMixin, Templat
             context['active_tab'] = self.request.GET.get('tab', 'stock')
 
         return context
+
+
+class CashFlowStatementView(ExcelExportMixin, LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    permission_required = 'core.view_account'
+    template_name = 'reports/cash_flow_statement.html'
+    excel_filename = 'cash_flow_statement.xlsx'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from_date = parse_date(self.request.GET.get('from'), date.today().replace(day=1))
+        to_date = parse_date(self.request.GET.get('to'), date.today())
+
+        context['report'] = ReportService.cash_flow_statement_report(from_date, to_date)
+        context['from_date'] = from_date
+        context['to_date'] = to_date
+        return context
+
+    def get_excel_columns(self):
+        return [
+            ('التاريخ', lambda r: str(r['date'])),
+            ('رقم القيد', lambda r: r['number']),
+            ('البيان', lambda r: r['description']),
+            ('التصنيف', lambda r: r['label']),
+            ('مقبوضات', lambda r: r['amount'] if r['is_inflow'] else 0),
+            ('مدفوعات', lambda r: r['amount'] if not r['is_inflow'] else 0),
+        ]
+
+    def get_excel_rows(self, context):
+        r = context['report']
+        rows = []
+        for cat in ['operating', 'investing', 'financing']:
+            for item in r['details'][cat]:
+                rows.append(item)
+        return rows

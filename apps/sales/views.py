@@ -116,10 +116,10 @@ class QuotationCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
             subtotal += line_subtotal
             discount_amount += line_discount
             tax_amount += tax_result.get('tax_total_added', Decimal('0')) - tax_result.get('tax_total_deducted', Decimal('0'))
-        quotation.subtotal = subtotal
-        quotation.discount_amount = discount_amount
-        quotation.tax_amount = tax_amount
-        quotation.total = (subtotal - discount_amount + tax_amount).quantize(Decimal('0.01'))
+        quotation.subtotal = subtotal.quantize(Decimal('0.01'))
+        quotation.discount_amount = discount_amount.quantize(Decimal('0.01'))
+        quotation.tax_amount = tax_amount.quantize(Decimal('0.01'))
+        quotation.total = (quotation.subtotal - quotation.discount_amount + quotation.tax_amount).quantize(Decimal('0.01'))
         quotation.save(update_fields=['subtotal', 'discount_amount', 'tax_amount', 'total'])
 
 class QuotationUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
@@ -1561,6 +1561,182 @@ class SalesReturnPostView(LoginRequiredMixin, PermRequiredMixin, View):
             return redirect('reports:rep_dashboard')
         return redirect('sales:return-detail', pk=pk)
 
+class SalesReturnUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
+    model = SalesReturn
+    fields = ['date', 'invoice', 'customer', 'payment_type', 'cash_box', 'sales_rep', 'notes']
+    template_name = 'sales/returns/form.html'
+    success_url = reverse_lazy('sales:return-list')
+    permission_required = 'sales.change_salesreturn'
+
+    def has_permission(self):
+        if super().has_permission():
+            return True
+        if hasattr(self.request.user, 'salesrepresentative'):
+            sales_return = get_object_or_404(SalesReturn, pk=self.kwargs.get('pk'))
+            if sales_return.sales_rep == self.request.user.salesrepresentative and sales_return.status == 'draft':
+                return True
+        return False
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        for field_name, field in form.fields.items():
+            if not isinstance(field.widget, (forms.CheckboxInput, forms.RadioSelect)):
+                if isinstance(field.widget, forms.Select):
+                    field.widget.attrs.update({'class': 'form-select'})
+                else:
+                    field.widget.attrs.update({'class': 'form-control'})
+                    
+        if hasattr(self.request.user, 'salesrepresentative'):
+            rep = self.request.user.salesrepresentative
+            if 'sales_rep' in form.fields:
+                form.fields['sales_rep'].queryset = SalesRepresentative.objects.filter(id=rep.id)
+                form.fields['sales_rep'].initial = rep
+                form.fields['sales_rep'].empty_label = None
+            if 'cash_box' in form.fields:
+                form.fields['cash_box'].queryset = get_available_cash_boxes(self.request.user)
+                form.fields['cash_box'].initial = rep.cash_box
+                form.fields['cash_box'].empty_label = None
+                
+        if 'date' in form.fields:
+            form.fields['date'].widget = forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
+                
+        if 'invoice' in form.fields:
+            form.fields['invoice'].label_from_instance = lambda obj: f"{obj.number} ({obj.get_payment_type_display()} - {obj.date} - {obj.total:.2f} ج.م)"
+            customer_id = form.data.get('customer') or form.initial.get('customer') or (self.object.customer_id if self.object else None)
+            if customer_id:
+                qs = SalesInvoice.objects.filter(customer_id=customer_id, status=SalesInvoice.Status.POSTED)
+                form.fields['invoice'].queryset = qs
+            else:
+                form.fields['invoice'].queryset = SalesInvoice.objects.none()
+                
+        return form
+
+    def get_queryset(self):
+        return super().get_queryset().filter(status='draft')
+
+    def get_context_data(self, **kwargs):
+        data = super().get_context_data(**kwargs)
+        if self.request.POST:
+            lines = SalesReturnLineFormSet(self.request.POST, instance=self.object)
+        else:
+            lines = SalesReturnLineFormSet(instance=self.object)
+            
+        if hasattr(self.request.user, 'salesrepresentative'):
+            rep = self.request.user.salesrepresentative
+            warehouse_qs = Warehouse.objects.filter(id=rep.warehouse_id)
+            for form in lines.forms:
+                if 'warehouse' in form.fields:
+                    form.fields['warehouse'].queryset = warehouse_qs
+                    form.fields['warehouse'].empty_label = None
+                    
+        data['lines'] = lines
+        return data
+
+    def form_valid(self, form):
+        if self.object.status != 'draft':
+            messages.error(self.request, "لا يمكن تعديل مرتجع غير مسودة.")
+            return redirect('sales:return-detail', pk=self.object.pk)
+
+        context = self.get_context_data()
+        lines = context['lines']
+        
+        with transaction.atomic():
+            if lines.is_valid():
+                has_error = False
+                if form.instance.invoice_id:
+                    for line_form in lines.forms:
+                        if line_form.cleaned_data and not line_form.cleaned_data.get('DELETE', False):
+                            item = line_form.cleaned_data.get('item')
+                            qty = line_form.cleaned_data.get('quantity')
+                            unit = line_form.cleaned_data.get('unit')
+                            if not item or qty is None:
+                                continue
+                            try:
+                                entered_base_qty = item.convert_to_base(qty, unit)
+                            except ValueError as e:
+                                line_form.add_error('unit', str(e))
+                                has_error = True
+                                continue
+                
+                if has_error:
+                    return self.form_invalid(form)
+
+                self.object = form.save()
+                lines.instance = self.object
+                instances = lines.save(commit=False)
+                
+                try:
+                    default_ret_acc = Account.objects.get(code=getattr(settings, 'DEFAULT_SALES_RETURN_ACCOUNT', '413'))
+                except Account.DoesNotExist:
+                    default_ret_acc = None
+
+                try:
+                    default_cogs_acc = Account.objects.get(code=getattr(settings, 'DEFAULT_COGS_ACCOUNT', '511'))
+                except Account.DoesNotExist:
+                    default_cogs_acc = None
+
+                for instance in instances:
+                    if not instance.pk:
+                        if not hasattr(instance, 'return_account') or not instance.return_account_id:
+                            instance.return_account = instance.item.sales_return_account or default_ret_acc
+                        if not hasattr(instance, 'cogs_account') or not instance.cogs_account_id:
+                            instance.cogs_account = instance.item.cogs_account or default_cogs_acc
+                        if not hasattr(instance, 'cost') or not instance.cost:
+                            instance.cost = InventoryService.get_item_cost(instance.item, instance.warehouse)
+                            
+                    if instance.unit:
+                        instance.base_quantity = instance.item.convert_to_base(instance.quantity, instance.unit)
+                    else:
+                        instance.base_quantity = instance.quantity
+                        
+                    instance.save()
+                    
+                for obj in lines.deleted_objects:
+                    obj.delete()
+                
+                gross_total = Decimal('0')
+                discount_total = Decimal('0')
+                tax_total_added = Decimal('0')
+                tax_total_deducted = Decimal('0')
+                
+                for line in self.object.lines.all():
+                    gross_line = Decimal(str(line.quantity * line.unit_price))
+                    disc_line = gross_line * (Decimal(str(line.discount_percent)) / Decimal('100'))
+                    net_line = gross_line - disc_line
+                    
+                    res = calculate_line_taxes(
+                        net_line,
+                        line.tax_type,
+                        line.tax_percent,
+                        line.tax_type2,
+                        line.tax_percent2,
+                        is_purchase_or_expense=False
+                    )
+                    
+                    raw_total = net_line + res['tax1_signed'] + res['tax2_signed']
+                    line.total = raw_total.quantize(Decimal('0.01'))
+                    line.save()
+                    
+                    gross_total += gross_line
+                    discount_total += disc_line
+                    tax_total_added += res['tax_total_added']
+                    tax_total_deducted += res['tax_total_deducted']
+
+                q = Decimal('0.01')
+                self.object.subtotal = gross_total.quantize(q)
+                self.object.discount_amount = discount_total.quantize(q)
+                self.object.tax_amount = (tax_total_added - tax_total_deducted).quantize(q)
+                self.object.total = (gross_total - discount_total + tax_total_added - tax_total_deducted).quantize(q)
+                self.object.save()
+                
+                messages.success(self.request, f"تم تعديل المرتجع {self.object.number} بنجاح")
+                if hasattr(self.request.user, 'salesrepresentative'):
+                    return redirect('reports:rep_dashboard')
+                return redirect('sales:return-list')
+            else:
+                transaction.set_rollback(True)
+                return self.form_invalid(form)
+
 class SalesReturnDeleteView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'sales.delete_salesreturn'
     
@@ -1624,6 +1800,70 @@ class CustomerInvoicesAPIView(LoginRequiredMixin, PermRequiredMixin, View):
             for inv in invoices
         ]
         return JsonResponse({'invoices': data})
+
+class CustomerDetailsAPIView(LoginRequiredMixin, PermRequiredMixin, View):
+    permission_required = 'sales.view_customer'
+    def get(self, request, customer_id):
+        customer = get_object_or_404(Customer, pk=customer_id)
+        return JsonResponse({
+            'is_taxable': customer.is_taxable,
+            'price_list_id': customer.price_list_id,
+            'sector_id': customer.sector_id,
+            'default_tax1': customer.default_tax1_id,
+            'default_tax2': customer.default_tax2_id,
+            'customer_type': customer.customer_type,
+            'payment_terms_days': customer.payment_terms_days
+        })
+
+class ItemPriceAndDiscountAPIView(LoginRequiredMixin, PermRequiredMixin, View):
+    permission_required = 'sales.view_salesinvoice'
+    def get(self, request, item_id, customer_id):
+        item = get_object_or_404(Item, pk=item_id)
+        customer = get_object_or_404(Customer, pk=customer_id)
+        
+        today = date.today()
+        discount_percent = Decimal('0')
+        unit_price = item.standard_price
+        
+        # 1. Check Quotations (Promotions) first
+        quotation = None
+        # Prioritize Customer specific
+        customer_quotations = Quotation.objects.filter(
+            status=Quotation.Status.ACTIVE,
+            is_active=True,
+            start_date__lte=today,
+            end_date__gte=today,
+            customer=customer
+        ).order_by('-id')
+        
+        if customer_quotations.exists():
+            quotation = customer_quotations.first()
+        elif customer.sector:
+            sector_quotations = Quotation.objects.filter(
+                status=Quotation.Status.ACTIVE,
+                is_active=True,
+                start_date__lte=today,
+                end_date__gte=today,
+                sector=customer.sector
+            ).order_by('-id')
+            if sector_quotations.exists():
+                quotation = sector_quotations.first()
+        
+        if quotation:
+            q_line = quotation.lines.filter(item=item).first()
+            if q_line:
+                discount_percent = q_line.discount_percent
+
+        # 2. Check Price List
+        if customer.price_list and customer.price_list.is_active:
+            pl_item = customer.price_list.items.filter(item=item).first()
+            if pl_item:
+                unit_price = pl_item.unit_price
+
+        return JsonResponse({
+            'unit_price': float(unit_price),
+            'discount_percent': float(discount_percent)
+        })
 
 class SalesInvoiceLinesAPIView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'sales.view_salesinvoice'

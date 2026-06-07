@@ -1,6 +1,34 @@
 {% extends 'base.html' %}
 {% block title %}فاتورة مبيعات جديدة{% endblock %}
 {% block header %}فاتورة مبيعات جديدة{% endblock %}
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    .select2-container .select2-selection--single {
+        height: calc(3.5rem + 2px);
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        font-weight: 400;
+        line-height: 1.5;
+        color: #212529;
+        background-color: #fff;
+        border: 1px solid #ced4da;
+        border-radius: 0.375rem;
+    }
+    .select2-container--default[dir="rtl"] .select2-selection--single .select2-selection__arrow {
+        top: 50%;
+        transform: translateY(-50%);
+        left: 10px;
+        right: auto;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        color: #212529;
+        line-height: 1.5;
+        padding-right: 0;
+        padding-left: 20px;
+    }
+</style>
+{% endblock %}
 {% block content %}
 {% include 'partials/_form_errors.html' %}
 <form method="post" id="invoiceForm">
@@ -78,7 +106,7 @@
                     <tbody>
                         {% for line_form in lines %}
                         <tr class="line-row">
-                            <td data-label="الصنف">{{ line_form.item }}</td>
+                            <td data-label="الصنف">{{ line_form.id }}{{ line_form.item }}</td>
                             <td data-label="المتاح">
                                 <input type="text" class="form-control form-control-sm available-qty-display bg-light text-center px-1" readonly value="0" style="min-width: 60px;">
                             </td>
@@ -155,7 +183,25 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
+    $(document).ready(function() {
+        $('#id_customer').select2({
+            placeholder: "ابحث باسم العميل أو الكود...",
+            allowClear: true,
+            dir: "rtl"
+        });
+        
+        // Ensure Select2 triggers the native change event for the existing JS logic
+        $('#id_customer').on('select2:select', function (e) {
+            this.dispatchEvent(new Event('change'));
+        });
+        $('#id_customer').on('select2:unselect', function (e) {
+            this.dispatchEvent(new Event('change'));
+        });
+    });
+
     document.addEventListener('DOMContentLoaded', function () {
         const customerSelect = document.getElementById('id_customer');
         
@@ -400,23 +446,26 @@
             const row = itemSelect.closest('.line-row');
             const priceInput = row.querySelector('.price-input');
             const discInput = row.querySelector('.discount-input');
-            const tax1Select = row.querySelector('.tax-select');
-            const tax2Select = row.querySelector('.tax-select2');
             const unitSelect = row.querySelector('.unit-select');
+            const warehouseSelect = row.querySelector('.warehouse-select');
 
             try {
                 let fetchedPrice = 0;
-                if (currentCustomerPriceList) {
-                    const response = await fetch(`/api/price-lists/${currentCustomerPriceList}/item_price/?item_id=${itemSelect.value}`);
+                let discountPercent = 0;
+                const customerId = customerSelect ? customerSelect.value : null;
+                
+                if (customerId) {
+                    const response = await fetch(`/sales/api/item/${itemSelect.value}/customer/${customerId}/price/`);
                     if (response.ok) {
                         const data = await response.json();
-                        if (data.price) {
-                            fetchedPrice = parseFloat(data.price);
+                        if (data.unit_price) {
+                            fetchedPrice = parseFloat(data.unit_price);
+                        }
+                        if (data.discount_percent) {
+                            discountPercent = parseFloat(data.discount_percent);
                         }
                     }
-                }
-                
-                if (fetchedPrice === 0) {
+                } else {
                     let url = `/inventory/api/item/${itemSelect.value}/`;
                     if (warehouseSelect && warehouseSelect.value) {
                         url += `?warehouse_id=${warehouseSelect.value}`;
@@ -427,9 +476,19 @@
                         if (data.standard_price) {
                             fetchedPrice = parseFloat(data.standard_price);
                         }
-                        const availQtyDisplay = row.querySelector('.available-qty-display');
-                        if (availQtyDisplay) availQtyDisplay.value = data.available_qty;
                     }
+                }
+
+                // Always fetch available qty from inventory API
+                let invUrl = `/inventory/api/item/${itemSelect.value}/`;
+                if (warehouseSelect && warehouseSelect.value) {
+                    invUrl += `?warehouse_id=${warehouseSelect.value}`;
+                }
+                const invResp = await fetch(invUrl);
+                if (invResp.ok) {
+                    const invData = await invResp.json();
+                    const availQtyDisplay = row.querySelector('.available-qty-display');
+                    if (availQtyDisplay) availQtyDisplay.value = invData.available_qty;
                 }
 
                 if (fetchedPrice > 0) {
@@ -437,6 +496,10 @@
                     const selectedOption = unitSelect ? unitSelect.selectedOptions[0] : null;
                     const factor = selectedOption ? (parseFloat(selectedOption.dataset.factor) || 1) : 1;
                     priceInput.value = (fetchedPrice * factor).toFixed(2);
+                    
+                    if (discInput) {
+                        discInput.value = discountPercent.toFixed(2);
+                    }
                     calculateInvoice();
                 }
             } catch (error) {
@@ -479,30 +542,37 @@
         }
 
         // 5. Apply Customer Defaults
+        function toggleTaxVisibility(isTaxable) {
+            const taxHeaders = document.querySelectorAll('#linesTable th:nth-child(8), #linesTable th:nth-child(9)');
+            const taxCells = document.querySelectorAll('#linesTable td[data-label="ضريبة 1"], #linesTable td[data-label="ضريبة 2"]');
+            
+            if (isTaxable) {
+                taxHeaders.forEach(th => th.classList.remove('d-none'));
+                taxCells.forEach(td => td.classList.remove('d-none'));
+            } else {
+                taxHeaders.forEach(th => th.classList.add('d-none'));
+                taxCells.forEach(td => td.classList.add('d-none'));
+            }
+            
+            // Re-calculate the invoice since taxes might be zeroed
+            calculateInvoice();
+        }
+
         async function fetchCustomerDetails(customerId) {
             if (!customerId) return;
             try {
-                const response = await fetch(`/api/customers/${customerId}/`);
+                const response = await fetch(`/sales/api/customer/${customerId}/details/`);
                 if (response.ok) {
                     const data = await response.json();
-                    currentCustomerPriceList = data.price_list;
+                    currentCustomerPriceList = data.price_list_id;
                     currentCustomerTax1 = data.default_tax1;
                     currentCustomerTax2 = data.default_tax2;
                     currentCustomerIsTaxable = data.is_taxable;
                     currentCustomerType = data.customer_type;
                     currentCustomerPaymentTermsDays = data.payment_terms_days;
 
-                    // Trigger due date calculation based on customer defaults
+                    toggleTaxVisibility(currentCustomerIsTaxable);
                     calculateDueDate();
-
-                    if (data.sector) {
-                        const offerResponse = await fetch(`/api/quotations/active_for_sector/?sector_id=${data.sector}`);
-                        if (offerResponse.ok) {
-                            currentSectorOffers = await offerResponse.json();
-                        }
-                    } else {
-                        currentSectorOffers = [];
-                    }
 
                     document.querySelectorAll('.line-row').forEach(row => {
                         applyCustomerDefaultsToRow(row);
@@ -518,44 +588,29 @@
             const tax2Select = row.querySelector('.tax-select2');
             
             if (currentCustomerIsTaxable) {
-                if (currentCustomerTax1) {
+                if (currentCustomerTax1 && tax1Select) {
                     tax1Select.value = currentCustomerTax1;
                     fetchTaxRate(tax1Select, '.tax-rate');
                 }
-                if (currentCustomerTax2) {
+                if (currentCustomerTax2 && tax2Select) {
                     tax2Select.value = currentCustomerTax2;
                     fetchTaxRate(tax2Select, '.tax-rate2');
                 }
             } else {
-                tax1Select.value = '';
-                tax2Select.value = '';
-                fetchTaxRate(tax1Select, '.tax-rate');
-                fetchTaxRate(tax2Select, '.tax-rate2');
+                if (tax1Select) {
+                    tax1Select.value = '';
+                    fetchTaxRate(tax1Select, '.tax-rate');
+                }
+                if (tax2Select) {
+                    tax2Select.value = '';
+                    fetchTaxRate(tax2Select, '.tax-rate2');
+                }
             }
             
             const itemSelect = row.querySelector('.item-select');
             if (itemSelect && itemSelect.value) {
                 fetchItemPrice(itemSelect);
-                applySectorDiscount(row, itemSelect.value);
             }
-        }
-
-        function applySectorDiscount(row, itemId) {
-            const discInput = row.querySelector('.discount-input');
-            if (!discInput) return;
-
-            let totalDiscount = 0;
-            currentSectorOffers.forEach(offer => {
-                const line = offer.lines.find(l => l.item == itemId);
-                if (line) {
-                    totalDiscount += parseFloat(line.discount_percent || 0);
-                }
-            });
-
-            if (totalDiscount > 0) {
-                discInput.value = totalDiscount.toFixed(2);
-            }
-            calculateInvoice();
         }
 
         // Customer change triggers
@@ -575,7 +630,6 @@
                 const row = e.target.closest('.line-row');
                 await fetchItemUnits(e.target);
                 await fetchItemPrice(e.target);
-                applySectorDiscount(row, e.target.value);
             }
             if (e.target.matches('.warehouse-select')) {
                 const row = e.target.closest('.line-row');
@@ -685,7 +739,7 @@
                 
                 {% if request.user.salesrepresentative %}
                     const warehouseSelect = newRow.querySelector('select[name$="-warehouse"]');
-                    if (warehouseSelect && data.warehouse_id) {
+                    if (warehouseSelect) {
                         warehouseSelect.value = "{{ request.user.salesrepresentative.warehouse_id }}";
                         warehouseSelect.style.pointerEvents = 'none';
                         warehouseSelect.style.backgroundColor = '#f8f9fa';
@@ -797,9 +851,41 @@
                 }
             }
         });
-
         updateItemSelectsState();
         calculateInvoice();
+
+        // Clean empty rows before submit to prevent Django validation errors
+        const form = document.getElementById('invoiceForm');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                document.querySelectorAll('.line-row').forEach(row => {
+                    const itemSelect = row.querySelector('.item-select');
+                    const idInput = row.querySelector('input[name$="-id"]');
+                    const isNewRow = !idInput || !idInput.value;
+                    
+                    if (isNewRow && (!itemSelect || !itemSelect.value)) {
+                        row.remove();
+                    }
+                });
+
+                // Re-index remaining rows and update TOTAL_FORMS
+                const remainingRows = document.querySelectorAll('.line-row');
+                const totalFormsInput = document.querySelector('input[name$="-TOTAL_FORMS"]');
+                if (totalFormsInput) {
+                    totalFormsInput.value = remainingRows.length;
+                    remainingRows.forEach((row, index) => {
+                        row.querySelectorAll('input, select, textarea').forEach(input => {
+                            if (input.name) {
+                                input.name = input.name.replace(/-\d+-/, `-${index}-`);
+                            }
+                            if (input.id) {
+                                input.id = input.id.replace(/-\d+-/, `-${index}-`);
+                            }
+                        });
+                    });
+                }
+            });
+        }
     });
 </script>
 {% endblock %}

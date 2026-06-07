@@ -11,6 +11,7 @@ from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
 from django.db.models import Sum, Prefetch, Q
 from apps.inventory.models import Item, ItemCategory
+from apps.sales.models import Customer
 from .models import POSStation, POSSession, POSOrder, POSPayment
 from .services import POSSessionService, POSCheckoutService
 from .forms import POSStationForm
@@ -61,6 +62,7 @@ def pos_dashboard(request):
         'stations': stations,
         'categories': categories,
         'items_json': items_list,
+        'customers': Customer.objects.values('id', 'name', 'phone')
     }
     
     return render(request, 'pos/dashboard.html', context)

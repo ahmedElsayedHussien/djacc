@@ -48,6 +48,7 @@ urlpatterns = [
     path('returns/', views.SalesReturnListView.as_view(), name='return-list'),
     path('returns/create/', views.SalesReturnCreateView.as_view(), name='return-create'),
     path('returns/<int:pk>/', views.SalesReturnDetailView.as_view(), name='return-detail'),
+    path('returns/<int:pk>/edit/', views.SalesReturnUpdateView.as_view(), name='return-edit'),
     path('returns/<int:pk>/post/', views.SalesReturnPostView.as_view(), name='return-post'),
     path('returns/<int:pk>/delete/', views.SalesReturnDeleteView.as_view(), name='return-delete'),
 
@@ -62,7 +63,9 @@ urlpatterns = [
     # API
     path('api/rep/<int:pk>/', views.RepDetailsAPIView.as_view(), name='rep-api'),
     path('api/customer/<int:customer_id>/invoices/', views.CustomerInvoicesAPIView.as_view(), name='customer-invoices-api'),
+    path('api/customer/<int:customer_id>/details/', views.CustomerDetailsAPIView.as_view(), name='customer-details-api'),
     path('api/invoice/<int:invoice_id>/lines/', views.SalesInvoiceLinesAPIView.as_view(), name='invoice-lines-api'),
+    path('api/item/<int:item_id>/customer/<int:customer_id>/price/', views.ItemPriceAndDiscountAPIView.as_view(), name='item-price-api'),
     
     # Sectors
     path('sectors/', views.CustomerSectorListView.as_view(), name='sector-list'),

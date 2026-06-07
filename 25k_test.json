@@ -1,0 +1,35 @@
+[
+  {
+    "entry__number": "INVENTORY-20260603-0005",
+    "account__name": "مخزن - الثلاجه",
+    "debit": "50000.00",
+    "credit": "0.00",
+    "entry__entry_type": "opening",
+    "entry__date": "2026-06-03",
+    "entry__is_posted": true,
+    "account_id": 116,
+    "entry_id": 37
+  },
+  {
+    "entry__number": "RECEIPT-20260605-0001",
+    "account__name": "شيكات تحت التحصيل",
+    "debit": "30000.00",
+    "credit": "0.00",
+    "entry__entry_type": "receipt",
+    "entry__date": "2026-06-05",
+    "entry__is_posted": true,
+    "account_id": 21,
+    "entry_id": 58
+  },
+  {
+    "entry__number": "BANK-20260605-0001",
+    "account__name": "البنك الاهلي — البنك الاهلي",
+    "debit": "30000.00",
+    "credit": "0.00",
+    "entry__entry_type": "bank",
+    "entry__date": "2026-06-05",
+    "entry__is_posted": true,
+    "account_id": 120,
+    "entry_id": 59
+  }
+]

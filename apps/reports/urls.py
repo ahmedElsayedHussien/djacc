@@ -8,6 +8,7 @@ urlpatterns = [
     path('trial-balance/', views.TrialBalanceView.as_view(), name='trial_balance'),
     path('income-statement/', views.IncomeStatementView.as_view(), name='income_statement'),
     path('balance-sheet/', views.BalanceSheetView.as_view(), name='balance_sheet'),
+    path('cash-flow-statement/', views.CashFlowStatementView.as_view(), name='cash_flow_statement'),
     path('customer-statement/', views.CustomerStatementView.as_view(), name='customer_statement'),
     path('supplier-statement/', views.SupplierStatementView.as_view(), name='supplier_statement'),
     path('stock-status/', views.StockStatusView.as_view(), name='stock_status'),

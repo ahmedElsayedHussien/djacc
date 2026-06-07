@@ -144,21 +144,36 @@
                     {% endif %}{% endif %}
 
                     <!-- Point of Sale (POS) -->
-                    {% if not request.user.salesrepresentative %}{% if perms.pos.view_posstation or perms.core.view_account or user.is_superuser %}
-                    <li class="nav-item">
-                        <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#posMenu" role="button" aria-expanded="false">
-                            <span><i class="bi bi-shop text-danger"></i> نقاط البيع</span>
-                            <i class="bi bi-chevron-left chevron"></i>
-                        </a>
-                        <div class="collapse" id="posMenu">
-                            <ul class="submenu">
-                                <li><a class="nav-link text-primary fw-bold" href="{% url 'pos:dashboard' %}"><i class="bi bi-pc-display-horizontal me-1"></i> نقطة البيع (POS)</a></li>
-                                <li><a class="nav-link" href="{% url 'pos:session-list' %}"><i class="bi bi-clock-history me-1"></i> سجل الورديات (التقفيل)</a></li>
-                                <li><a class="nav-link" href="{% url 'pos:station-list' %}"><i class="bi bi-sliders2 me-1"></i> ضبط نقاط البيع</a></li>
-                            </ul>
-                        </div>
-                    </li>
-                    {% endif %}{% endif %}
+                    {% if not request.user.salesrepresentative %}
+                        {% if perms.pos.view_posstation or perms.core.view_account or user.is_superuser %}
+                        <li class="nav-item">
+                            <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#posMenu" role="button" aria-expanded="false">
+                                <span><i class="bi bi-shop text-danger"></i> نقاط البيع</span>
+                                <i class="bi bi-chevron-left chevron"></i>
+                            </a>
+                            <div class="collapse" id="posMenu">
+                                <ul class="submenu">
+                                    <li><a class="nav-link text-primary fw-bold" href="{% url 'pos:dashboard' %}"><i class="bi bi-pc-display-horizontal me-1"></i> نقطة البيع (POS)</a></li>
+                                    <li><a class="nav-link" href="{% url 'pos:session-list' %}"><i class="bi bi-clock-history me-1"></i> سجل الورديات (التقفيل)</a></li>
+                                    <li><a class="nav-link" href="{% url 'pos:station-list' %}"><i class="bi bi-sliders2 me-1"></i> ضبط نقاط البيع</a></li>
+                                </ul>
+                            </div>
+                        </li>
+                        {% endif %}
+                    {% elif request.user.salesrepresentative and request.user.salesrepresentative.warehouse.posstation_set.all %}
+                        <li class="nav-item">
+                            <a class="nav-link nav-group-title" data-bs-toggle="collapse" href="#posMenu" role="button" aria-expanded="false">
+                                <span><i class="bi bi-shop text-danger"></i> نقاط البيع</span>
+                                <i class="bi bi-chevron-left chevron"></i>
+                            </a>
+                            <div class="collapse" id="posMenu">
+                                <ul class="submenu">
+                                    <li><a class="nav-link text-primary fw-bold" href="{% url 'pos:dashboard' %}"><i class="bi bi-pc-display-horizontal me-1"></i> شاشة البيع (POS)</a></li>
+                                    <li><a class="nav-link" href="{% url 'pos:session-list' %}"><i class="bi bi-clock-history me-1"></i> وردياتي</a></li>
+                                </ul>
+                            </div>
+                        </li>
+                    {% endif %}
 
                     <!-- Treasury -->
                     {% if not request.user.salesrepresentative %}{% if perms.treasury.view_cashbox or perms.treasury.view_bankaccount or perms.core.view_account %}
@@ -307,6 +322,14 @@
 
                 <!-- Quick Access Dashboards & Reports -->
                 <div class="d-flex align-items-center ms-auto me-2 me-md-4">
+                    <!-- POS Quick Access Button -->
+                    {% if not request.user.salesrepresentative and perms.pos.view_posstation or request.user.salesrepresentative and request.user.salesrepresentative.warehouse.posstation_set.all %}
+                    <a href="{% url 'pos:dashboard' %}" class="btn btn-sm btn-danger rounded-pill px-2 px-md-3 shadow-sm me-2 me-md-3 text-white fw-bold d-flex align-items-center gap-1">
+                        <i class="bi bi-pc-display-horizontal"></i>
+                        <span class="d-none d-md-inline">نقطة البيع</span>
+                    </a>
+                    {% endif %}
+
                     <!-- Dashboards Dropdown -->
                     {% if not request.user.salesrepresentative %}{% if user.is_superuser or perms.core.view_account or perms.sales.view_salesinvoice or perms.purchases.view_purchaseinvoice or perms.inventory.view_item or perms.treasury.view_cashbox or perms.hr.view_employee or perms.assets.view_asset or perms.expenses.view_expense %}
                     <div class="dropdown me-2 me-md-3">
