@@ -2,7 +2,7 @@ from django.db import models
 from django.conf import settings
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator, FileExtensionValidator
 from datetime import date
 from decimal import Decimal
 
@@ -212,7 +212,11 @@ class EmployeeDocument(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='documents')
     document_type = models.CharField(max_length=20, choices=DocumentType.choices, verbose_name="نوع المستند")
     title = models.CharField(max_length=100, verbose_name="عنوان المستند")
-    file = models.FileField(upload_to='hr/documents/', verbose_name="ملف المستند")
+    file = models.FileField(
+        upload_to='hr/documents/', 
+        validators=[FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'])],
+        verbose_name="ملف المستند"
+    )
     issue_date = models.DateField(null=True, blank=True, verbose_name="تاريخ الإصدار")
     expiry_date = models.DateField(null=True, blank=True, verbose_name="تاريخ الانتهاء")
     is_verified = models.BooleanField(default=False, verbose_name="تمت المراجعة")

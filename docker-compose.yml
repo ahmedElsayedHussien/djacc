@@ -5,29 +5,21 @@ services:
     image: mysql:8.0
     volumes:
       - mysql_data:/var/lib/mysql
-    environment:
-      - MYSQL_DATABASE=accounting
-      - MYSQL_ROOT_PASSWORD=root_password
-      - MYSQL_USER=user
-      - MYSQL_PASSWORD=password
+    env_file:
+      - .env
 
   redis:
     image: redis:7-alpine
 
   web:
     build: .
-    command: python manage.py runserver 0.0.0.0:8000
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4
     volumes:
       - .:/app
     ports:
       - "8000:8000"
-    environment:
-      - DEBUG=True
-      - SECRET_KEY=dev_key
-      - DB_NAME=accounting
-      - DB_USER=user
-      - DB_PASSWORD=password
-      - DB_HOST=db
+    env_file:
+      - .env
     depends_on:
       - db
       - redis

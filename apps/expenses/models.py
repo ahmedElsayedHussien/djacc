@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator, FileExtensionValidator
 from apps.core.models import ConcurrencyModel
 
 class ExpenseCategory(models.Model):
@@ -47,7 +47,12 @@ class Expense(ConcurrencyModel):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='created_expenses', verbose_name="أنشئ بواسطة")
     approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='approved_expenses', verbose_name="اعتمد بواسطة")
     journal_entry = models.OneToOneField('core.JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, verbose_name="قيد اليومية")
-    attachment = models.FileField(upload_to='expenses/', blank=True, verbose_name="المرفقات (صورة الفاتورة)")
+    attachment = models.FileField(
+        upload_to='expenses/', 
+        blank=True, 
+        validators=[FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png'])],
+        verbose_name="المرفقات (صورة الفاتورة)"
+    )
     settlement = models.ForeignKey('CustodySettlement', null=True, blank=True, on_delete=models.SET_NULL, related_name='expenses', verbose_name="تسوية العهدة")
 
     class Meta:

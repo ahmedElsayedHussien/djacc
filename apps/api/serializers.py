@@ -6,23 +6,23 @@ from apps.purchases.models import Supplier, PurchaseInvoice
 class AccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = Account
-        fields = '__all__'
+        fields = ['id', 'code', 'name', 'account_type', 'is_leaf', 'is_active', 'initial_balance', 'initial_balance_type', 'parent']
 
 class JournalLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = JournalLine
-        fields = '__all__'
+        fields = ['id', 'account', 'cost_center', 'description', 'debit', 'credit']
 
 class JournalEntrySerializer(serializers.ModelSerializer):
     lines = JournalLineSerializer(many=True, read_only=True)
     class Meta:
         model = JournalEntry
-        fields = '__all__'
+        fields = ['id', 'number', 'date', 'description', 'entry_type', 'is_posted', 'lines']
 
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
-        fields = '__all__'
+        fields = ['id', 'code', 'name', 'phone', 'email', 'tax_number', 'commercial_record', 'is_active', 'balance']
 
 class QuotationLineSerializer(serializers.ModelSerializer):
     class Meta:
@@ -39,17 +39,17 @@ class QuotationSerializer(serializers.ModelSerializer):
 class SalesInvoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesInvoice
-        fields = '__all__'
+        fields = ['id', 'number', 'date', 'customer', 'subtotal', 'tax_amount', 'total', 'status', 'is_return']
 
 class SupplierSerializer(serializers.ModelSerializer):
     class Meta:
         model = Supplier
-        fields = '__all__'
+        fields = ['id', 'code', 'name', 'phone', 'email', 'tax_number', 'is_active', 'balance']
 
 class PurchaseInvoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseInvoice
-        fields = '__all__'
+        fields = ['id', 'number', 'date', 'supplier', 'subtotal', 'tax_amount', 'total', 'status', 'is_return']
 
 class TaxTypeSerializer(serializers.ModelSerializer):
     class Meta:

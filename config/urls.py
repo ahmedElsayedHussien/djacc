@@ -7,7 +7,7 @@ from apps.core.handlers import handler403
 handler403 = handler403
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path('ahmedelsayed/', admin.site.urls),
     path('api/', include('apps.api.urls')),
     path('sales/', include('apps.sales.urls')),
     path('purchases/', include('apps.purchases.urls')),

@@ -155,8 +155,12 @@ class Certificate(models.Model):
     name = models.CharField(max_length=100, verbose_name="اسم الشهادة")
     serial_number = models.CharField(max_length=100, blank=True, verbose_name="الرقم التسلسلي")
     
-    # الملف المشفر
-    certificate_file = models.FileField(upload_to='certificates/', verbose_name="ملف الشهادة (P12)")
+    # الملف المشفر (مخفي عن التحميل العام)
+    from django.core.files.storage import FileSystemStorage
+    import os
+    private_storage = FileSystemStorage(location=os.path.join(settings.BASE_DIR, 'private_media'))
+    
+    certificate_file = models.FileField(upload_to='certificates/', storage=private_storage, verbose_name="ملف الشهادة (P12)")
     password_encrypted = models.CharField(max_length=500, verbose_name="كلمة المرور (مشفرة)")
     
     # معلومات الشهادة

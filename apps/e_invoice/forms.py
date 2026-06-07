@@ -81,8 +81,8 @@ class EInvoiceConfigForm(forms.ModelForm):
             'is_active': 'مفعلة',
         }
         widgets = {
-            'client_secret': forms.PasswordInput(render_value=True),
-            'security_token': forms.PasswordInput(render_value=True),
+            'client_secret': forms.PasswordInput(),
+            'security_token': forms.PasswordInput(),
         }
 
     def clean_timeout_seconds(self):
@@ -123,7 +123,7 @@ class CertificateForm(forms.ModelForm):
         widgets = {
             'valid_from': forms.DateInput(attrs={'type': 'date'}),
             'valid_until': forms.DateInput(attrs={'type': 'date'}),
-            'password_encrypted': forms.PasswordInput(render_value=True),
+            'password_encrypted': forms.PasswordInput(),
         }
 
     def clean_valid_from(self):
