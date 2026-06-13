@@ -207,3 +207,17 @@ class AssetUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
     success_url = reverse_lazy('assets:asset-list')
     permission_required = 'assets.change_asset'
 
+    def form_valid(self, form):
+        messages.success(self.request, 'تم تعديل بيانات الأصل بنجاح.')
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        for field, errors in form.errors.items():
+            for error in errors:
+                if field == '__all__':
+                    messages.error(self.request, f"خطأ: {error}")
+                else:
+                    field_label = form.fields[field].label if field in form.fields else field
+                    messages.error(self.request, f"{field_label}: {error}")
+        return super().form_invalid(form)
+

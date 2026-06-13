@@ -298,11 +298,11 @@ def session_list(request):
     sessions_data = []
     for s in page_obj:
         orders = list(s.orders.all())
-        total_sales = sum(o.grand_total for o in orders) if orders else Decimal('0')
-        payments = [p for o in orders for p in o.payments.all()]
-        total_cash = sum(p.amount for p in payments if p.method == 'cash')
-        total_card = sum(p.amount for p in payments if p.method == 'card')
-        total_wallet = sum(p.amount for p in payments if p.method == 'wallet')
+        total_sales = sum((o.grand_total if not o.is_return else -o.grand_total) for o in orders) if orders else Decimal('0')
+        
+        total_cash = sum((p.amount if not p.order.is_return else -p.amount) for o in orders for p in o.payments.all() if p.method == 'cash')
+        total_card = sum((p.amount if not p.order.is_return else -p.amount) for o in orders for p in o.payments.all() if p.method == 'card')
+        total_wallet = sum((p.amount if not p.order.is_return else -p.amount) for o in orders for p in o.payments.all() if p.method == 'wallet')
         
         sessions_data.append({
             'session': s,
@@ -349,14 +349,25 @@ def order_detail(request, pk):
 def collect_shortage(request, pk):
     """تحصيل العجز النقدي من كاشير بعد إغلاق الوردية"""
     session = get_object_or_404(POSSession, pk=pk)
+    settlement_method = request.POST.get('settlement_method', 'cash')
     try:
-        POSSessionService.collect_shortage(session, request.user)
+        POSSessionService.collect_shortage(session, request.user, settlement_method)
+        
+        if settlement_method == 'salary_deduction':
+            msg = f"قام {request.user.username} بتسوية عجز بقيمة {abs(session.difference):.2f} جنيه من وردية الكاشير رقم {session.id} ({session.user.username}) بالخصم من راتبه (سلفة)."
+        else:
+            msg = f"قام {request.user.username} بتحصيل نقدي لعجز بقيمة {abs(session.difference):.2f} جنيه من وردية الكاشير رقم {session.id} ({session.user.username})."
+            
         SystemNotification.notify_accountants(
-            title="تحصيل عجز وردية POS",
-            message=f"قام {request.user.username} بتحصيل عجز بقيمة {abs(session.difference):.2f} جنيه من وردية الكاشير رقم {session.id} ({session.user.username}).",
+            title="تسوية عجز وردية POS",
+            message=msg,
             url=reverse('pos:session-list'),
         )
-        messages.success(request, f'تم تحصيل العجز بقيمة {abs(session.difference):.2f} جنيه للوردية رقم {session.id}.')
+        
+        if settlement_method == 'salary_deduction':
+            messages.success(request, f'تم تحويل العجز بقيمة {abs(session.difference):.2f} جنيه إلى سلفة على راتب الموظف.')
+        else:
+            messages.success(request, f'تم تحصيل العجز بقيمة {abs(session.difference):.2f} جنيه للوردية رقم {session.id}.')
     except ValueError as e:
         logger.warning('ValueError collecting shortage: %s', e)
         messages.error(request, str(e))

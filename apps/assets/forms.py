@@ -32,6 +32,13 @@ class AssetForm(forms.ModelForm):
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            # Editing an existing asset, we don't allow modifying initial depreciation
+            if 'initial_accumulated_depreciation' in self.fields:
+                self.fields.pop('initial_accumulated_depreciation')
+
     def clean_purchase_date(self):
         d = self.cleaned_data.get('purchase_date')
         if d and d > timezone.now().date():

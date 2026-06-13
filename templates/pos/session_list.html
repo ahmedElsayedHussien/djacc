@@ -112,12 +112,55 @@
                                 </span>
                                 {% else %}
                                     {% if perms.pos.change_possession %}
-                                <form method="POST" action="{% url 'pos:collect-shortage' row.session.pk %}" style="display:inline" class="mt-1 d-block">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-sm btn-outline-success rounded-pill" onclick="return confirm('تأكيد تحصيل عجز الوردية رقم {{ row.session.id }} بقيمة {{ row.session.difference|floatformat:2 }} جنيه؟')">
-                                        <i class="bi bi-cash-coin"></i> تحصيل العجز
-                                    </button>
-                                </form>
+                                <button type="button" class="btn btn-sm btn-outline-success rounded-pill mt-1 d-block" data-bs-toggle="modal" data-bs-target="#collectShortageModal{{ row.session.id }}">
+                                    <i class="bi bi-cash-coin"></i> تحصيل العجز
+                                </button>
+                                
+                                <!-- Modal -->
+                                <div class="modal fade" id="collectShortageModal{{ row.session.id }}" tabindex="-1" aria-labelledby="collectShortageModalLabel{{ row.session.id }}" aria-hidden="true">
+                                  <div class="modal-dialog">
+                                    <div class="modal-content text-start">
+                                      <div class="modal-header border-0 pb-0">
+                                        <h5 class="modal-title fw-bold text-plum" id="collectShortageModalLabel{{ row.session.id }}"><i class="bi bi-shield-check me-2"></i>تسوية عجز الوردية #{{ row.session.id }}</h5>
+                                        <button type="button" class="btn-close ms-0 me-auto" data-bs-dismiss="modal" aria-label="Close"></button>
+                                      </div>
+                                      <form method="POST" action="{% url 'pos:collect-shortage' row.session.pk %}">
+                                          {% csrf_token %}
+                                          <div class="modal-body pt-3">
+                                            <div class="alert alert-warning border-warning-subtle text-dark mb-4">
+                                                عجز الكاشير: <strong class="fs-5 text-danger" dir="ltr">{{ row.session.difference|floatformat:2|cut:"-" }}</strong> ج.م
+                                            </div>
+                                            <p class="mb-3 text-secondary fw-semibold">اختر طريقة تسوية هذا العجز:</p>
+                                            
+                                            <div class="card border-0 bg-light mb-2">
+                                                <div class="card-body py-2 px-3">
+                                                    <div class="form-check d-flex align-items-center mb-0">
+                                                      <input class="form-check-input mt-0 me-3" type="radio" name="settlement_method" id="settlementCash{{ row.session.id }}" value="cash" checked style="transform: scale(1.2);">
+                                                      <label class="form-check-label fw-bold w-100 cursor-pointer" for="settlementCash{{ row.session.id }}">
+                                                        <i class="bi bi-cash text-success me-2 fs-5 align-middle"></i> دفع نقدي (توريد للخزنة)
+                                                      </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="card border-0 bg-light">
+                                                <div class="card-body py-2 px-3">
+                                                    <div class="form-check d-flex align-items-center mb-0">
+                                                      <input class="form-check-input mt-0 me-3" type="radio" name="settlement_method" id="settlementSalary{{ row.session.id }}" value="salary_deduction" style="transform: scale(1.2);">
+                                                      <label class="form-check-label fw-bold w-100 cursor-pointer" for="settlementSalary{{ row.session.id }}">
+                                                        <i class="bi bi-person-bounding-box text-danger me-2 fs-5 align-middle"></i> خصم من الراتب (تسجيل سلفة)
+                                                      </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                          </div>
+                                          <div class="modal-footer border-0 pt-0">
+                                            <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">إلغاء</button>
+                                            <button type="submit" class="btn btn-primary rounded-pill px-4">تأكيد الإجراء</button>
+                                          </div>
+                                      </form>
+                                    </div>
+                                  </div>
+                                </div>
                                     {% endif %}
                                 {% endif %}
                             {% endif %}

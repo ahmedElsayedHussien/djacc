@@ -430,12 +430,9 @@ class POSSessionService:
 
     @staticmethod
     @transaction.atomic
-    def collect_shortage(session, collected_by):
+    def collect_shortage(session, collected_by, settlement_method='cash'):
         """
         تحصيل العجز النقدي من الكاشير بعد غلق الوردية.
-        ينشئ قيداً عكسياً:
-          من ح/ الخزينة (قيمة العجز)
-          إلى ح/ عجز الخزينة (544) — عكس المصروف
         """
         session = POSSession.objects.select_for_update().get(pk=session.pk)
         if session.status not in (POSSession.Status.CLOSED, POSSession.Status.POSTED):
@@ -446,54 +443,107 @@ class POSSessionService:
             raise ValueError("تم تحصيل عجز هذه الوردية مسبقاً.")
 
         shortage = abs(session.difference)
-
-        # تحديد حساب الخزينة
-        rep = SalesRepresentative.objects.filter(user=session.user).first()
-        cashbox_account = None
-        if rep and rep.cash_box and rep.cash_box.account:
-            cashbox_account = rep.cash_box.account
-        elif session.station.cash_box and session.station.cash_box.account:
-            cashbox_account = session.station.cash_box.account
-
-        if not cashbox_account:
-            raise ValueError("لا يوجد حساب خزينة مرتبط بهذه الوردية.")
-
+        
         shortage_acc_code = getattr(settings, 'CASH_SHORTAGE_ACCOUNT', '544')
         shortage_acc = Account.objects.filter(code=shortage_acc_code).first()
         if not shortage_acc:
             raise ValueError(f"حساب عجز الخزينة (رمز {shortage_acc_code}) غير موجود في شجرة الحسابات.")
 
-        entry = JournalService.create_entry(
-            date_val=timezone.now().date(),
-            entry_type=JournalEntry.EntryType.RECEIPT,
-            description=f"تحصيل عجز خزينة وردية POS رقم {session.id} — كاشير {session.user.username}",
-            lines=[
-                {
-                    'account': cashbox_account,
-                    'debit': shortage,
-                    'credit': Decimal('0'),
-                    'description': f"تحصيل عجز من كاشير {session.user.username}",
-                },
-                {
-                    'account': shortage_acc,
-                    'debit': Decimal('0'),
-                    'credit': shortage,
-                    'description': f"عكس مصروف عجز خزينة وردية POS رقم {session.id}",
-                },
-            ],
-            source_document=session,
-            created_by=collected_by,
-        )
+        if settlement_method == 'salary_deduction':
+            from apps.hr.models import Employee, Loan
+            
+            employee = Employee.objects.filter(user=session.user).first()
+            if not employee:
+                raise ValueError("لا يوجد ملف موظف (HR) مرتبط بهذا الكاشير لخصم العجز منه.")
+                
+            advances_acc_code = getattr(settings, 'EMPLOYEE_LOAN_ACCOUNT', '114')
+            debit_account = Account.objects.filter(code=advances_acc_code).first()
+            if not debit_account:
+                raise ValueError(f"حساب سلف العاملين (رمز {advances_acc_code}) غير موجود في شجرة الحسابات.")
+                
+            entry = JournalService.create_entry(
+                date_val=timezone.now().date(),
+                entry_type=JournalEntry.EntryType.JOURNAL,
+                description=f"تسوية عجز وردية POS رقم {session.id} بالخصم من راتب {session.user.username}",
+                lines=[
+                    {
+                        'account': debit_account,
+                        'debit': shortage,
+                        'credit': Decimal('0'),
+                        'description': f"سلفة/عجز على كاشير {session.user.username}",
+                    },
+                    {
+                        'account': shortage_acc,
+                        'debit': Decimal('0'),
+                        'credit': shortage,
+                        'description': f"عكس مصروف عجز خزينة وردية POS رقم {session.id}",
+                    },
+                ],
+                source_document=session,
+                created_by=collected_by,
+            )
+            
+            # Create Loan record
+            Loan.objects.create(
+                employee=employee,
+                amount=shortage,
+                installments_count=1,
+                monthly_installment=shortage,
+                start_month=timezone.now().date(),
+                reason=f"تسوية آلية لعجز وردية نقاط البيع رقم {session.id}",
+                status=Loan.Status.APPROVED
+            )
+            
+            AuditService.log(
+                user=collected_by,
+                action='COLLECT_SHORTAGE',
+                obj=session,
+                notes=f"تسوية عجز وردية #{session.id} بالخصم من الراتب (سلفة) بقيمة {shortage} — قيد رقم {entry.id}",
+            )
+            
+        else:
+            # Default cash settlement
+            rep = SalesRepresentative.objects.filter(user=session.user).first()
+            cashbox_account = None
+            if rep and rep.cash_box and rep.cash_box.account:
+                cashbox_account = rep.cash_box.account
+            elif session.station.cash_box and session.station.cash_box.account:
+                cashbox_account = session.station.cash_box.account
+
+            if not cashbox_account:
+                raise ValueError("لا يوجد حساب خزينة مرتبط بهذه الوردية.")
+
+            entry = JournalService.create_entry(
+                date_val=timezone.now().date(),
+                entry_type=JournalEntry.EntryType.RECEIPT,
+                description=f"تحصيل عجز خزينة وردية POS رقم {session.id} — كاشير {session.user.username}",
+                lines=[
+                    {
+                        'account': cashbox_account,
+                        'debit': shortage,
+                        'credit': Decimal('0'),
+                        'description': f"تحصيل عجز من كاشير {session.user.username}",
+                    },
+                    {
+                        'account': shortage_acc,
+                        'debit': Decimal('0'),
+                        'credit': shortage,
+                        'description': f"عكس مصروف عجز خزينة وردية POS رقم {session.id}",
+                    },
+                ],
+                source_document=session,
+                created_by=collected_by,
+            )
+
+            AuditService.log(
+                user=collected_by,
+                action='COLLECT_SHORTAGE',
+                obj=session,
+                notes=f"تحصيل عجز وردية #{session.id} نقداً بقيمة {shortage} — قيد رقم {entry.id}",
+            )
 
         session.shortage_collected_at = timezone.now()
         session.save(update_fields=['shortage_collected_at'])
-
-        AuditService.log(
-            user=collected_by,
-            action='COLLECT_SHORTAGE',
-            obj=session,
-            notes=f"تحصيل عجز وردية #{session.id} بقيمة {shortage} — قيد رقم {entry.id}",
-        )
 
         return entry
 
@@ -518,15 +568,6 @@ class POSSessionService:
         total_card = Decimal('0')
         total_wallet = Decimal('0')
         total_tax = Decimal('0')
-
-        payments = POSPayment.objects.filter(order__in=orders)
-        for p in payments:
-            if p.method == 'cash':
-                total_cash += p.amount
-            elif p.method == 'card':
-                total_card += p.amount
-            elif p.method == 'wallet':
-                total_wallet += p.amount
 
         total_refund_cash = Decimal('0')
         total_refund_card = Decimal('0')
@@ -653,17 +694,25 @@ class POSSessionService:
             })
 
         # 2. Debit Bank Account (Total Card Received)
-        # ✅ Fix: Use .account to get the GL Account, not the BankAccount model itself
-        if total_card > 0 and session.station.bank_account and session.station.bank_account.account:
+        net_card = total_card - total_refund_card
+        if net_card > 0 and session.station.bank_account and session.station.bank_account.account:
             journal_lines.append({
                 'account': session.station.bank_account.account,
-                'debit': total_card,
+                'debit': net_card,
                 'credit': Decimal('0'),
                 'description': f"إجمالي مقبوضات الشبكة للوردية رقم {session.id}"
             })
+        elif net_card < 0 and session.station.bank_account and session.station.bank_account.account:
+            journal_lines.append({
+                'account': session.station.bank_account.account,
+                'debit': Decimal('0'),
+                'credit': abs(net_card),
+                'description': f"إجمالي مدفوعات الشبكة لمرتجعات للوردية رقم {session.id}"
+            })
 
         # 2.5. Debit Mobile Wallet (Total Wallet Received)
-        if total_wallet > 0:
+        net_wallet = total_wallet - total_refund_wallet
+        if net_wallet != 0:
             wallet_account = None
             if getattr(session.station, 'mobile_wallet', None) and session.station.mobile_wallet.account:
                 wallet_account = session.station.mobile_wallet.account
@@ -671,12 +720,20 @@ class POSSessionService:
                 wallet_account = session.station.cash_box.account
                 
             if wallet_account:
-                journal_lines.append({
-                    'account': wallet_account,
-                    'debit': total_wallet,
-                    'credit': Decimal('0'),
-                    'description': f"إجمالي مقبوضات المحفظة الإلكترونية للوردية رقم {session.id}"
-                })
+                if net_wallet > 0:
+                    journal_lines.append({
+                        'account': wallet_account,
+                        'debit': net_wallet,
+                        'credit': Decimal('0'),
+                        'description': f"إجمالي مقبوضات المحفظة الإلكترونية للوردية رقم {session.id}"
+                    })
+                elif net_wallet < 0:
+                    journal_lines.append({
+                        'account': wallet_account,
+                        'debit': Decimal('0'),
+                        'credit': abs(net_wallet),
+                        'description': f"إجمالي مدفوعات المحفظة الإلكترونية لمرتجعات للوردية رقم {session.id}"
+                    })
 
         # 2.75. Cash Shortage / Excess Adjustment
         diff_amount = getattr(session, 'difference', Decimal('0'))

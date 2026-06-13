@@ -285,7 +285,13 @@ class AssetService:
             last = Account.objects.filter(parent=parent).order_by('-code').first()
             if last:
                 try:
-                    new_code = str(int(last.code) + 1)
+                    suffix = last.code[len(parent.code):]
+                    if not suffix:
+                        new_code = parent.code + "01"
+                    else:
+                        suffix_len = len(suffix)
+                        next_suffix = str(int(suffix) + 1).zfill(suffix_len)
+                        new_code = parent.code + next_suffix
                 except ValueError:
                     new_code = parent.code + "01"
             else:

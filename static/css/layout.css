@@ -255,6 +255,8 @@ body {
         z-index: 1050; /* Above backdrop */
         transform: translateX(100%);
         box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
     }
 
     .sidebar.show {

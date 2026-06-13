@@ -902,18 +902,12 @@ class RepSettlementService:
             })
 
         elif diff < 0:
-            # المندوب سلم أكثر → الفرق دائن على ذمته (سيُستكمل لاحقاً)
+            # المندوب سلم أكثر من مبيعات اليوم → يتم خصم كامل المبلغ من عهدة المندوب (خزنته)
             lines.append({
                 'account': rep_cashbox_account,
                 'debit': 0,
-                'credit': settlement.total_sales,
-                'description': f'تسوية خزنة مندوب {rep.name}',
-            })
-            lines.append({
-                'account': rep_receivable_account,
-                'debit': 0,
-                'credit': abs(diff),
-                'description': f'مبلغ زائد من مندوب {rep.name} — تسوية {settlement.number}',
+                'credit': settlement.cash_delivered,
+                'description': f'توريد نقدية من خزنة مندوب {rep.name}',
             })
 
         else:
