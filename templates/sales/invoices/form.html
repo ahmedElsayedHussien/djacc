@@ -128,7 +128,12 @@
                                 {{ line_form.total }}
                             </td>
                             <td class="text-center" data-label="حذف">
-                                {% if line_form.instance.pk %}{{ line_form.DELETE }}{% endif %}
+                                <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn" title="حذف السطر">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                                <div class="d-none">
+                                    {% if line_form.instance.pk %}{{ line_form.DELETE }}{% endif %}
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -370,6 +375,21 @@
         });
         
         document.addEventListener('change', function(e) {
+            if (e.target.matches('.tax-select, .tax-select2')) {
+                const row = e.target.closest('.line-row');
+                const tax1Select = row.querySelector('.tax-select');
+                const tax2Select = row.querySelector('.tax-select2');
+                if (tax1Select && tax2Select && tax1Select.value && tax2Select.value && tax1Select.value === tax2Select.value) {
+                    alert('لا يمكن اختيار نفس الضريبة مرتين في نفس السطر.');
+                    e.target.value = '';
+                    if (e.target.matches('.tax-select')) {
+                        fetchTaxRate(e.target, '.tax-rate');
+                    } else {
+                        fetchTaxRate(e.target, '.tax-rate2');
+                    }
+                    return;
+                }
+            }
             if (e.target.matches('.tax-select')) {
                 fetchTaxRate(e.target, '.tax-rate');
             }
@@ -614,10 +634,56 @@
         }
 
         // Customer change triggers
+        let previousCustomerId = customerSelect ? customerSelect.value : '';
         if (customerSelect) {
+            let isReverting = false;
             customerSelect.addEventListener('change', function () {
-                fetchCustomerDetails(customerSelect.value);
-                updateItemSelectsState();
+                if (isReverting) return;
+                const newCustomer = customerSelect.value;
+                let hasLines = false;
+                document.querySelectorAll('.line-row').forEach(row => {
+                    const itemSelect = row.querySelector('.item-select');
+                    if (itemSelect && itemSelect.value) {
+                        hasLines = true;
+                    }
+                });
+
+                if (hasLines && previousCustomerId && newCustomer !== previousCustomerId) {
+                    if (confirm('تنبيه: تغيير العميل سيؤدي إلى مسح كافة الأصناف المضافة في الجدول الحالي. هل ترغب في الاستمرار؟')) {
+                        const rows = document.querySelectorAll('.line-row');
+                        for (let i = 1; i < rows.length; i++) {
+                            rows[i].remove();
+                        }
+                        const firstRow = document.querySelector('.line-row');
+                        if (firstRow) {
+                            firstRow.querySelectorAll('input, select').forEach(input => {
+                                if (input.type !== 'checkbox') input.value = '';
+                            });
+                            const unitSelect = firstRow.querySelector('.unit-select');
+                            if (unitSelect) unitSelect.innerHTML = '<option value="">---------</option>';
+                            const totalDisplay = firstRow.querySelector('.line-total-display');
+                            if (totalDisplay) totalDisplay.value = '0.00';
+                            const totalInput = firstRow.querySelector('.total-input');
+                            if (totalInput) totalInput.value = '0.00';
+                        }
+                        const totalFormsInput = document.getElementById('id_lines-TOTAL_FORMS');
+                        if (totalFormsInput) totalFormsInput.value = '1';
+                        
+                        previousCustomerId = newCustomer;
+                        fetchCustomerDetails(newCustomer);
+                        updateItemSelectsState();
+                        calculateInvoice();
+                        if (typeof saveDraft === 'function') saveDraft();
+                    } else {
+                        isReverting = true;
+                        $('#id_customer').val(previousCustomerId).trigger('change.select2');
+                        isReverting = false;
+                    }
+                } else {
+                    previousCustomerId = newCustomer;
+                    fetchCustomerDetails(newCustomer);
+                    updateItemSelectsState();
+                }
             });
             if (customerSelect.value) {
                 fetchCustomerDetails(customerSelect.value);
@@ -707,29 +773,62 @@
         const addRowBtn = document.getElementById('addRow');
         if (addRowBtn) {
             addRowBtn.addEventListener('click', function() {
-                const table = document.getElementById('line-items');
+                const table = document.getElementById('linesTable').querySelector('tbody');
                 const lastRow = table.querySelector('.line-row:last-child');
+                
+                if (lastRow) {
+                    const lastItemSelect = lastRow.querySelector('.item-select');
+                    const lastQtyInput = lastRow.querySelector('.qty-input');
+                    if (!lastItemSelect || !lastItemSelect.value) {
+                        alert('برجاء اختيار الصنف في السطر الحالي أولاً.');
+                        return;
+                    }
+                    const qtyVal = parseFloat(lastQtyInput ? lastQtyInput.value : 0);
+                    if (isNaN(qtyVal) || qtyVal <= 0) {
+                        alert('برجاء إدخال كمية صالحة أكبر من الصفر في السطر الحالي أولاً.');
+                        return;
+                    }
+                }
                 
                 const totalFormsInput = document.getElementById('id_lines-TOTAL_FORMS');
                 if (!totalFormsInput || !lastRow) return;
                 
                 const currentCount = parseInt(totalFormsInput.value);
+                
+                const lastWarehouseSelect = lastRow.querySelector('.warehouse-select');
+                const warehouseVal = lastWarehouseSelect ? lastWarehouseSelect.value : '';
+                
                 const newRow = lastRow.cloneNode(true);
                 
                 newRow.querySelectorAll('input, select').forEach(input => {
                     input.name = input.name.replace(`-${currentCount-1}-`, `-${currentCount}-`);
                     input.id = input.id.replace(`-${currentCount-1}-`, `-${currentCount}-`);
                     
-                    if (input.type !== 'checkbox') input.value = '';
+                    if (input.type !== 'checkbox' && !input.classList.contains('warehouse-select')) {
+                        input.value = '';
+                    }
                     
+                    if (input.classList.contains('available-qty-display')) input.value = '0';
                     if (input.classList.contains('line-total-display')) input.value = '0.00';
                     if (input.classList.contains('total-input')) input.value = '0.00';
                     if (input.classList.contains('tax-rate')) input.value = '0.00';
                     if (input.classList.contains('tax-rate2')) input.value = '0.00';
                 });
                 
+                const newWarehouseSelect = newRow.querySelector('.warehouse-select');
+                if (newWarehouseSelect) {
+                    newWarehouseSelect.value = warehouseVal;
+                }
+                
                 table.appendChild(newRow);
                 totalFormsInput.value = currentCount + 1;
+                
+                // Remove hidden delete checkbox if cloned
+                const deleteCb = newRow.querySelector('input[type="checkbox"][name$="-DELETE"]');
+                if (deleteCb) {
+                    deleteCb.checked = false;
+                    deleteCb.parentElement.innerHTML = '';
+                }
                 
                 // Explicitly clear/reset units for cloned row
                 const unitSelect = newRow.querySelector('.unit-select');
@@ -852,6 +951,28 @@
             }
         });
         updateItemSelectsState();
+
+        // Handle row removal
+        const linesTable = document.getElementById('linesTable');
+        if (linesTable) {
+            linesTable.addEventListener('click', function(e) {
+                const removeBtn = e.target.closest('.remove-row-btn');
+                if (removeBtn) {
+                    const row = removeBtn.closest('.line-row');
+                    const deleteCb = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+                    if (deleteCb) {
+                        // Existing row: mark for deletion and hide
+                        deleteCb.checked = true;
+                        row.classList.add('d-none');
+                    } else {
+                        // New row: remove from DOM
+                        row.remove();
+                    }
+                    calculateInvoice();
+                }
+            });
+        }
+
         calculateInvoice();
 
         // Clean empty rows before submit to prevent Django validation errors
@@ -885,6 +1006,167 @@
                     });
                 }
             });
+        }
+
+        // Auto-save draft in LocalStorage & Warning before leave
+        const storageKey = 'draft_sales_invoice_' + window.location.pathname;
+        let isFormSubmitted = false;
+
+        function saveDraft() {
+            if (isFormSubmitted) return;
+            const mainFields = {};
+            ['id_date', 'id_due_date', 'id_customer', 'id_payment_type', 'id_payment_method', 'id_cash_box', 'id_bank_account', 'id_cost_center', 'id_sales_representative'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) mainFields[id] = el.value;
+            });
+
+            const lines = [];
+            document.querySelectorAll('.line-row').forEach(row => {
+                const item = row.querySelector('.item-select')?.value;
+                const warehouse = row.querySelector('select[name$="-warehouse"]')?.value;
+                const unit = row.querySelector('.unit-select')?.value;
+                const qty = row.querySelector('.qty-input')?.value;
+                const cost = row.querySelector('.price-input')?.value;
+                const discount = row.querySelector('.discount-input')?.value;
+                const tax1 = row.querySelector('.tax-select')?.value;
+                const tax2 = row.querySelector('.tax-select2')?.value;
+                
+                if (item || qty || cost) {
+                    lines.push({ item, warehouse, unit, qty, cost, discount, tax1, tax2 });
+                }
+            });
+
+            const draftData = { mainFields, lines, timestamp: new Date().getTime() };
+            localStorage.setItem(storageKey, JSON.stringify(draftData));
+        }
+
+        function clearDraft() {
+            localStorage.removeItem(storageKey);
+        }
+
+        document.addEventListener('input', function(e) {
+            if (e.target.closest('#invoiceForm')) {
+                saveDraft();
+            }
+        });
+        document.addEventListener('change', function(e) {
+            if (e.target.closest('#invoiceForm')) {
+                saveDraft();
+            }
+        });
+
+        if (form) {
+            form.addEventListener('submit', function() {
+                isFormSubmitted = true;
+                clearDraft();
+            });
+        }
+
+        window.addEventListener('beforeunload', function(e) {
+            const draftStr = localStorage.getItem(storageKey);
+            if (draftStr && !isFormSubmitted) {
+                const draft = JSON.parse(draftStr);
+                const hasLines = draft.lines && draft.lines.length > 0;
+                const hasMain = Object.values(draft.mainFields).some(v => v !== '');
+                if (hasLines || hasMain) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
+            }
+        });
+
+        // Restore draft alert
+        const draftStr = localStorage.getItem(storageKey);
+        if (draftStr) {
+            const draft = JSON.parse(draftStr);
+            const hasLines = draft.lines && draft.lines.length > 0;
+            const hasMain = Object.values(draft.mainFields).some(v => v !== '');
+            if (hasLines || hasMain) {
+                const alertHtml = `
+                    <div id="draft-alert" class="alert alert-info d-flex align-items-center justify-content-between shadow-sm border-0 mb-4" role="alert">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-info-circle-fill me-2 fs-5"></i>
+                            <span>تنبيه: تم العثور على مسودة غير محفوظة لهذه الفاتورة. هل تريد استعادة البيانات التي قمت بإدخالها قبل مغادرة الصفحة؟</span>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" id="btn-restore-draft" class="btn btn-primary btn-sm px-3">استعادة البيانات</button>
+                            <button type="button" id="btn-discard-draft" class="btn btn-outline-secondary btn-sm">تجاهل</button>
+                        </div>
+                    </div>
+                `;
+                const cardBody = document.querySelector('.card-body');
+                if (cardBody) {
+                    cardBody.insertAdjacentHTML('afterbegin', alertHtml);
+                    
+                    document.getElementById('btn-discard-draft').addEventListener('click', function() {
+                        clearDraft();
+                        document.getElementById('draft-alert').remove();
+                    });
+
+                    document.getElementById('btn-restore-draft').addEventListener('click', async function() {
+                        for (const [id, val] of Object.entries(draft.mainFields)) {
+                            const el = document.getElementById(id);
+                            if (el) {
+                                el.value = val;
+                                el.dispatchEvent(new Event('change'));
+                            }
+                        }
+
+                        if (draft.lines && draft.lines.length > 0) {
+                            const table = document.getElementById('linesTable').querySelector('tbody');
+                            const rows = table.querySelectorAll('.line-row');
+                            for (let i = 1; i < rows.length; i++) {
+                                rows[i].remove();
+                            }
+
+                            const firstRow = table.querySelector('.line-row');
+                            const totalForms = document.getElementById('id_lines-TOTAL_FORMS');
+                            totalForms.value = '1';
+
+                            for (let i = 0; i < draft.lines.length; i++) {
+                                const line = draft.lines[i];
+                                let row = firstRow;
+                                if (i > 0) {
+                                    const lastRow = table.querySelector('.line-row:last-child');
+                                    row = lastRow.cloneNode(true);
+                                    const currentCount = parseInt(totalForms.value);
+                                    row.querySelectorAll('input, select').forEach(input => {
+                                        input.name = input.name.replace(`-${currentCount-1}-`, `-${currentCount}-`);
+                                        input.id = input.id.replace(`-${currentCount-1}-`, `-${currentCount}-`);
+                                    });
+                                    table.appendChild(row);
+                                    totalForms.value = currentCount + 1;
+                                }
+
+                                row.querySelector('.item-select').value = line.item || '';
+                                row.querySelector('.item-select').dispatchEvent(new Event('change'));
+                                
+                                await fetchItemUnits(row.querySelector('.item-select'));
+                                
+                                row.querySelector('.unit-select').value = line.unit || '';
+                                row.querySelector('select[name$="-warehouse"]').value = line.warehouse || '';
+                                row.querySelector('.qty-input').value = line.qty || '';
+                                row.querySelector('.price-input').value = line.cost || '';
+                                row.querySelector('.discount-input').value = line.discount || '';
+                                
+                                const tax1 = row.querySelector('.tax-select');
+                                if (tax1) {
+                                    tax1.value = line.tax1 || '';
+                                    tax1.dispatchEvent(new Event('change'));
+                                }
+                                const tax2 = row.querySelector('.tax-select2');
+                                if (tax2) {
+                                    tax2.value = line.tax2 || '';
+                                    tax2.dispatchEvent(new Event('change'));
+                                }
+                            }
+                        }
+                        
+                        calculateInvoice();
+                        document.getElementById('draft-alert').remove();
+                    });
+                }
+            }
         }
     });
 </script>

@@ -344,6 +344,14 @@ class SalesInvoiceLineForm(forms.ModelForm):
             raise forms.ValidationError('يجب أن تكون الكمية أكبر من صفر')
         return qty
 
+    def clean(self):
+        cleaned_data = super().clean()
+        tax_type = cleaned_data.get('tax_type')
+        tax_type2 = cleaned_data.get('tax_type2')
+        if tax_type and tax_type2 and tax_type == tax_type2:
+            self.add_error('tax_type2', 'لا يمكن اختيار نفس الضريبة مرتين.')
+        return cleaned_data
+
     def clean_unit_price(self):
         price = self.cleaned_data.get('unit_price')
         if price is not None and price < 0:
@@ -680,7 +688,7 @@ class SalesReturnLineForm(forms.ModelForm):
         }
         widgets = {
             'item': forms.Select(attrs={'class': 'form-select item-select'}),
-            'warehouse': forms.Select(attrs={'class': 'form-select'}),
+            'warehouse': forms.Select(attrs={'class': 'form-select warehouse-select'}),
             'unit': forms.Select(attrs={'class': 'form-select unit-select'}),
             'quantity': forms.NumberInput(attrs={'class': 'form-control qty-input', 'step': 'any'}),
             'unit_price': forms.NumberInput(attrs={'class': 'form-control price-input', 'step': 'any'}),
@@ -725,6 +733,14 @@ class SalesReturnLineForm(forms.ModelForm):
         if qty is not None and qty <= 0:
             raise forms.ValidationError('يجب أن تكون الكمية أكبر من صفر')
         return qty
+
+    def clean(self):
+        cleaned_data = super().clean()
+        tax_type = cleaned_data.get('tax_type')
+        tax_type2 = cleaned_data.get('tax_type2')
+        if tax_type and tax_type2 and tax_type == tax_type2:
+            self.add_error('tax_type2', 'لا يمكن اختيار نفس الضريبة مرتين.')
+        return cleaned_data
 
     def clean_unit_price(self):
         price = self.cleaned_data.get('unit_price')

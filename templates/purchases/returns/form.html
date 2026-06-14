@@ -6,7 +6,7 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-10">
-        <form method="post">
+        <form method="post" id="returnForm">
             {% csrf_token %}
                     {% if form.non_field_errors %}
                         <div class="alert alert-danger">
@@ -86,7 +86,14 @@
                                         {{ l_form.total }}
                                     </td>
                                     <td data-label="حساب المردودات"></td>
-                                    <td data-label="حذف">{{ l_form.DELETE|as_crispy_field }}</td>
+                                    <td data-label="حذف">
+                                        <button type="button" class="btn btn-outline-danger btn-sm remove-row-btn">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                        <div class="d-none">
+                                            {{ l_form.DELETE }}
+                                        </div>
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -374,6 +381,21 @@
         });
         
         document.addEventListener('change', function(e) {
+            if (e.target.matches('.tax-select, .tax-select2')) {
+                const row = e.target.closest('.line-row');
+                const tax1Select = row.querySelector('.tax-select');
+                const tax2Select = row.querySelector('.tax-select2');
+                if (tax1Select && tax2Select && tax1Select.value && tax2Select.value && tax1Select.value === tax2Select.value) {
+                    alert('لا يمكن اختيار نفس الضريبة مرتين في نفس السطر.');
+                    e.target.value = '';
+                    if (e.target.matches('.tax-select')) {
+                        fetchTaxRate(e.target, '.tax-rate');
+                    } else {
+                        fetchTaxRate(e.target, '.tax-rate2');
+                    }
+                    return;
+                }
+            }
             if (e.target.matches('.tax-select')) {
                 fetchTaxRate(e.target, '.tax-rate');
             }
@@ -600,14 +622,69 @@
             }
         }
 
-        // Customer change triggers
+        // Supplier change triggers
+        let previousSupplierId = supplierSelect ? supplierSelect.value : '';
         if (supplierSelect) {
+            let isReverting = false;
             supplierSelect.addEventListener('change', function () {
-                fetchCustomerDetails(supplierSelect.value);
-                updateItemSelectsState();
+                if (isReverting) return;
+                const newSupplier = supplierSelect.value;
+                let hasLines = false;
+                document.querySelectorAll('.line-row').forEach(row => {
+                    const itemSelect = row.querySelector('.item-select');
+                    if (itemSelect && itemSelect.value) {
+                        hasLines = true;
+                    }
+                });
+
+                if (hasLines && previousSupplierId && newSupplier !== previousSupplierId) {
+                    if (confirm('تنبيه: تغيير المورد سيؤدي إلى مسح كافة الأصناف المضافة في الجدول الحالي. هل ترغب في الاستمرار؟')) {
+                        const rows = document.querySelectorAll('.line-row');
+                        for (let i = 1; i < rows.length; i++) {
+                            rows[i].remove();
+                        }
+                        const firstRow = document.querySelector('.line-row');
+                        if (firstRow) {
+                            firstRow.querySelectorAll('input, select').forEach(input => {
+                                if (input.type !== 'checkbox') input.value = '';
+                            });
+                            const unitSelect = firstRow.querySelector('.unit-select');
+                            if (unitSelect) unitSelect.innerHTML = '<option value="">---------</option>';
+                            const totalDisplay = firstRow.querySelector('.line-total-display');
+                            if (totalDisplay) totalDisplay.value = '0.00';
+                            const totalInput = firstRow.querySelector('.total-input');
+                            if (totalInput) totalInput.value = '0.00';
+                        }
+                        const totalFormsInput = document.getElementById('id_lines-TOTAL_FORMS');
+                        if (totalFormsInput) totalFormsInput.value = '1';
+
+                        // Reset invoice selection
+                        if (invoiceSelect) {
+                            invoiceSelect.value = '';
+                            invoiceSelect.dispatchEvent(new Event('change'));
+                        }
+                        
+                        previousSupplierId = newSupplier;
+                        fetchCustomerDetails(newSupplier);
+                        updateItemSelectsState();
+                        updateInvoices();
+                        calculateReturn();
+                        if (typeof saveDraft === 'function') saveDraft();
+                    } else {
+                        isReverting = true;
+                        $('#id_supplier').val(previousSupplierId).trigger('change.select2');
+                        isReverting = false;
+                    }
+                } else {
+                    previousSupplierId = newSupplier;
+                    fetchCustomerDetails(newSupplier);
+                    updateItemSelectsState();
+                    updateInvoices();
+                }
             });
             if (supplierSelect.value) {
                 fetchCustomerDetails(supplierSelect.value);
+                updateInvoices();
             }
         }
 
@@ -652,17 +729,36 @@
         });
 
         // Add row logic
+        // Add row logic
         const addRowBtn = document.getElementById('addRow');
         if (addRowBtn) {
             addRowBtn.addEventListener('click', function() {
                 const table = document.getElementById('line-items');
                 const lastRow = table.querySelector('.line-form:last-child');
                 
+                if (lastRow) {
+                    const lastItemSelect = lastRow.querySelector('.item-select');
+                    const lastQtyInput = lastRow.querySelector('.qty-input');
+                    if (!lastItemSelect || !lastItemSelect.value) {
+                        alert('برجاء اختيار الصنف في السطر الحالي أولاً.');
+                        return;
+                    }
+                    const qtyVal = parseFloat(lastQtyInput ? lastQtyInput.value : 0);
+                    if (isNaN(qtyVal) || qtyVal <= 0) {
+                        alert('برجاء إدخال كمية صالحة أكبر من الصفر في السطر الحالي أولاً.');
+                        return;
+                    }
+                }
+                
                 const totalFormsInput = document.getElementById('id_lines-TOTAL_FORMS');
                 if (!totalFormsInput || !lastRow) return;
                 
                 const currentCount = parseInt(totalFormsInput.value);
+                const lastWarehouseSelect = lastRow.querySelector('select[name$="-warehouse"]');
+                const warehouseVal = lastWarehouseSelect ? lastWarehouseSelect.value : '';
+                
                 const newRow = lastRow.cloneNode(true);
+                newRow.classList.remove('d-none');
                 
                 newRow.querySelectorAll('input, select').forEach(input => {
                     input.name = input.name.replace(`-${currentCount-1}-`, `-${currentCount}-`);
@@ -670,7 +766,7 @@
                     
                     if (input.name.endsWith('-return_account')) {
                         // Keep default return account value
-                    } else if (input.type !== 'checkbox') {
+                    } else if (input.type !== 'checkbox' && !input.name.endsWith('-warehouse')) {
                         input.value = '';
                     }
                     
@@ -679,6 +775,17 @@
                     if (input.classList.contains('tax-rate')) input.value = '0.00';
                     if (input.classList.contains('tax-rate2')) input.value = '0.00';
                 });
+                
+                const newWarehouseSelect = newRow.querySelector('select[name$="-warehouse"]');
+                if (newWarehouseSelect) {
+                    newWarehouseSelect.value = warehouseVal;
+                }
+                
+                // Remove hidden delete checkbox if cloned
+                const deleteCb = newRow.querySelector('input[type="checkbox"][name$="-DELETE"]');
+                if (deleteCb) {
+                    deleteCb.checked = false;
+                }
                 
                 table.appendChild(newRow);
                 totalFormsInput.value = currentCount + 1;
@@ -700,6 +807,27 @@
                 
                 applyCustomerDefaultsToRow(newRow);
                 updateItemSelectsState();
+            });
+        }
+
+        // Handle row removal
+        const lineItems = document.getElementById('line-items');
+        if (lineItems) {
+            lineItems.addEventListener('click', function(e) {
+                const removeBtn = e.target.closest('.remove-row-btn');
+                if (removeBtn) {
+                    const row = removeBtn.closest('.line-row');
+                    const deleteCb = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+                    if (deleteCb) {
+                        // Existing row: mark for deletion and hide
+                        deleteCb.checked = true;
+                        row.classList.add('d-none');
+                    } else {
+                        // New row: remove from DOM
+                        row.remove();
+                    }
+                    calculateReturn();
+                }
             });
         }
 
@@ -860,12 +988,7 @@
                 });
         }
 
-        if (supplierSelect) {
-            supplierSelect.addEventListener('change', updateInvoices);
-            if (supplierSelect.value) {
-                updateInvoices();
-            }
-        }
+        
         
         const salesRepSelect = document.getElementById('id_sales_rep');
         {% if False %}
@@ -911,8 +1034,16 @@
         if (returnForm) {
             returnForm.addEventListener('submit', function(e) {
                 let isValid = true;
+                
+                // First, remove empty new rows
                 document.querySelectorAll('.line-row').forEach(row => {
-                    if (!validateLineQuantity(row)) {
+                    const itemSelect = row.querySelector('.item-select');
+                    const idInput = row.querySelector('input[name$="-id"]');
+                    const isNewRow = !idInput || !idInput.value;
+                    
+                    if (isNewRow && (!itemSelect || !itemSelect.value)) {
+                        row.remove();
+                    } else if (!validateLineQuantity(row)) {
                         isValid = false;
                     }
                 });
@@ -920,6 +1051,24 @@
                 if (!isValid) {
                     e.preventDefault();
                     alert('عفواً، لا يمكن حفظ المرتجع لأن بعض الأصناف تتجاوز الكميات المباعة في الفاتورة الأصلية. يرجى تصحيح الكميات أولاً.');
+                    return;
+                }
+
+                // Re-index remaining rows and update TOTAL_FORMS
+                const remainingRows = document.querySelectorAll('.line-row');
+                const totalFormsInput = document.querySelector('input[name$="-TOTAL_FORMS"]');
+                if (totalFormsInput) {
+                    totalFormsInput.value = remainingRows.length;
+                    remainingRows.forEach((row, index) => {
+                        row.querySelectorAll('input, select, textarea').forEach(input => {
+                            if (input.name) {
+                                input.name = input.name.replace(/-\d+-/, `-${index}-`);
+                            }
+                            if (input.id) {
+                                input.id = input.id.replace(/-\d+-/, `-${index}-`);
+                            }
+                        });
+                    });
                 }
             });
         }
@@ -936,6 +1085,168 @@
         
         updateItemSelectsState();
         calculateReturn();
+
+        // Auto-save draft in LocalStorage & Warning before leave
+        const storageKey = 'draft_purchase_return_' + window.location.pathname;
+        let isFormSubmitted = false;
+
+        function saveDraft() {
+            if (isFormSubmitted) return;
+            const mainFields = {};
+            ['id_date', 'id_invoice', 'id_supplier', 'id_payment_type', 'id_cash_box', 'id_cost_center', 'id_notes'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) mainFields[id] = el.value;
+            });
+
+            const lines = [];
+            document.querySelectorAll('.line-row').forEach(row => {
+                const item = row.querySelector('.item-select')?.value;
+                const warehouse = row.querySelector('select[name$="-warehouse"]')?.value;
+                const unit = row.querySelector('.unit-select')?.value;
+                const qty = row.querySelector('.qty-input')?.value;
+                const cost = row.querySelector('.price-input')?.value;
+                const discount = row.querySelector('.discount-input')?.value;
+                const tax1 = row.querySelector('.tax-select')?.value;
+                const tax2 = row.querySelector('.tax-select2')?.value;
+                
+                if (item || qty || cost) {
+                    lines.push({ item, warehouse, unit, qty, cost, discount, tax1, tax2 });
+                }
+            });
+
+            const draftData = { mainFields, lines, timestamp: new Date().getTime() };
+            localStorage.setItem(storageKey, JSON.stringify(draftData));
+        }
+
+        function clearDraft() {
+            localStorage.removeItem(storageKey);
+        }
+
+        document.addEventListener('input', function(e) {
+            if (e.target.closest('#returnForm')) {
+                saveDraft();
+            }
+        });
+        document.addEventListener('change', function(e) {
+            if (e.target.closest('#returnForm')) {
+                saveDraft();
+            }
+        });
+
+        const returnForm = document.getElementById('returnForm');
+        if (returnForm) {
+            returnForm.addEventListener('submit', function() {
+                isFormSubmitted = true;
+                clearDraft();
+            });
+        }
+
+        window.addEventListener('beforeunload', function(e) {
+            const draftStr = localStorage.getItem(storageKey);
+            if (draftStr && !isFormSubmitted) {
+                const draft = JSON.parse(draftStr);
+                const hasLines = draft.lines && draft.lines.length > 0;
+                const hasMain = Object.values(draft.mainFields).some(v => v !== '');
+                if (hasLines || hasMain) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
+            }
+        });
+
+        // Restore draft alert
+        const draftStr = localStorage.getItem(storageKey);
+        if (draftStr) {
+            const draft = JSON.parse(draftStr);
+            const hasLines = draft.lines && draft.lines.length > 0;
+            const hasMain = Object.values(draft.mainFields).some(v => v !== '');
+            if (hasLines || hasMain) {
+                const alertHtml = `
+                    <div id="draft-alert" class="alert alert-info d-flex align-items-center justify-content-between shadow-sm border-0 mb-4" role="alert">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-info-circle-fill me-2 fs-5"></i>
+                            <span>تنبيه: تم العثور على مسودة غير محفوظة لمرتجع المشتريات. هل تريد استعادة البيانات؟</span>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" id="btn-restore-draft" class="btn btn-primary btn-sm px-3">استعادة البيانات</button>
+                            <button type="button" id="btn-discard-draft" class="btn btn-outline-secondary btn-sm">تجاهل</button>
+                        </div>
+                    </div>
+                `;
+                const cardBody = document.querySelector('.card-body');
+                if (cardBody) {
+                    cardBody.insertAdjacentHTML('afterbegin', alertHtml);
+                    
+                    document.getElementById('btn-discard-draft').addEventListener('click', function() {
+                        clearDraft();
+                        document.getElementById('draft-alert').remove();
+                    });
+
+                    document.getElementById('btn-restore-draft').addEventListener('click', async function() {
+                        for (const [id, val] of Object.entries(draft.mainFields)) {
+                            const el = document.getElementById(id);
+                            if (el) {
+                                el.value = val;
+                                el.dispatchEvent(new Event('change'));
+                            }
+                        }
+
+                        if (draft.lines && draft.lines.length > 0) {
+                            const table = document.getElementById('line-items');
+                            const rows = table.querySelectorAll('.line-row');
+                            for (let i = 1; i < rows.length; i++) {
+                                rows[i].remove();
+                            }
+
+                            const firstRow = table.querySelector('.line-row');
+                            const totalForms = document.getElementById('id_lines-TOTAL_FORMS');
+                            totalForms.value = '1';
+
+                            for (let i = 0; i < draft.lines.length; i++) {
+                                const line = draft.lines[i];
+                                let row = firstRow;
+                                if (i > 0) {
+                                    const lastRow = table.querySelector('.line-row:last-child');
+                                    row = lastRow.cloneNode(true);
+                                    const currentCount = parseInt(totalForms.value);
+                                    row.querySelectorAll('input, select').forEach(input => {
+                                        input.name = input.name.replace(`-${currentCount-1}-`, `-${currentCount}-`);
+                                        input.id = input.id.replace(`-${currentCount-1}-`, `-${currentCount}-`);
+                                    });
+                                    table.appendChild(row);
+                                    totalForms.value = currentCount + 1;
+                                }
+
+                                row.querySelector('.item-select').value = line.item || '';
+                                row.querySelector('.item-select').dispatchEvent(new Event('change'));
+                                
+                                await fetchItemUnits(row.querySelector('.item-select'));
+                                
+                                row.querySelector('.unit-select').value = line.unit || '';
+                                row.querySelector('select[name$="-warehouse"]').value = line.warehouse || '';
+                                row.querySelector('.qty-input').value = line.qty || '';
+                                row.querySelector('.price-input').value = line.cost || '';
+                                row.querySelector('.discount-input').value = line.discount || '';
+                                
+                                const tax1 = row.querySelector('.tax-select');
+                                if (tax1) {
+                                    tax1.value = line.tax1 || '';
+                                    tax1.dispatchEvent(new Event('change'));
+                                }
+                                const tax2 = row.querySelector('.tax-select2');
+                                if (tax2) {
+                                    tax2.value = line.tax2 || '';
+                                    tax2.dispatchEvent(new Event('change'));
+                                }
+                            }
+                        }
+                        
+                        calculateReturn();
+                        document.getElementById('draft-alert').remove();
+                    });
+                }
+            }
+        }
     });
 </script>
 {% endblock %}

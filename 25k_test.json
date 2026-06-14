@@ -31,5 +31,82 @@
     "entry__is_posted": true,
     "account_id": 120,
     "entry_id": 59
+  },
+  {
+    "entry__number": "MANUAL-20260607-0001",
+    "account__name": "الرواتب والأجور الأساسية",
+    "debit": "26000.00",
+    "credit": "0.00",
+    "entry__entry_type": "manual",
+    "entry__date": "2026-06-07",
+    "entry__is_posted": true,
+    "account_id": 83,
+    "entry_id": 75
+  },
+  {
+    "entry__number": "BANK-20260607-0001",
+    "account__name": "نقدية بالطريق",
+    "debit": "33000.00",
+    "credit": "0.00",
+    "entry__entry_type": "bank",
+    "entry__date": "2026-06-07",
+    "entry__is_posted": true,
+    "account_id": 7,
+    "entry_id": 77
+  },
+  {
+    "entry__number": "BANK-20260607-0002",
+    "account__name": "الخزينة الرئيسية",
+    "debit": "33000.00",
+    "credit": "0.00",
+    "entry__entry_type": "bank",
+    "entry__date": "2026-06-07",
+    "entry__is_posted": true,
+    "account_id": 104,
+    "entry_id": 78
+  },
+  {
+    "entry__number": "MANUAL-20260607-0003",
+    "account__name": "الرواتب والأجور الأساسية",
+    "debit": "26000.00",
+    "credit": "0.00",
+    "entry__entry_type": "manual",
+    "entry__date": "2026-06-07",
+    "entry__is_posted": true,
+    "account_id": 83,
+    "entry_id": 81
+  },
+  {
+    "entry__number": "PAYMENT-20260607-0003",
+    "account__name": "رواتب وأجور مستحقة",
+    "debit": "26000.00",
+    "credit": "0.00",
+    "entry__entry_type": "payment",
+    "entry__date": "2026-06-07",
+    "entry__is_posted": true,
+    "account_id": 45,
+    "entry_id": 82
+  },
+  {
+    "entry__number": "MANUAL-20260613-0001",
+    "account__name": "أصول - اراضي",
+    "debit": "1200000.00",
+    "credit": "0.00",
+    "entry__entry_type": "manual",
+    "entry__date": "2026-06-13",
+    "entry__is_posted": true,
+    "account_id": 128,
+    "entry_id": 86
+  },
+  {
+    "entry__number": "PURCHASE-20260613-0001",
+    "account__name": "مخزن - الثلاجه",
+    "debit": "110000.00",
+    "credit": "0.00",
+    "entry__entry_type": "purchase",
+    "entry__date": "2026-06-13",
+    "entry__is_posted": true,
+    "account_id": 116,
+    "entry_id": 90
   }
 ]

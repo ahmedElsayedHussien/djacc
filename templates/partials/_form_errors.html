@@ -15,6 +15,9 @@
                 {% for line_form in lines %}
                     {% if line_form.errors %}
                         <li><strong>السطر {{ forloop.counter }}:</strong>
+                            {% for error in line_form.non_field_errors %}
+                                {{ error }}
+                            {% endfor %}
                             {% for field in line_form %}
                                 {% for error in field.errors %}
                                     {{ field.label }}: {{ error }} 

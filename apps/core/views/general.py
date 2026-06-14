@@ -131,7 +131,7 @@ def dashboard(request):
     
     # Receivables (What customers owe us) & Payables (What we owe suppliers)
     total_receivables = get_parent_balance(getattr(settings, 'CUSTOMERS_PARENT_ACCOUNT', '1121'))
-    total_payables = get_parent_balance(getattr(settings, 'SUPPLIERS_PARENT_ACCOUNT', '2111')) * Decimal('-1')
+    total_payables = get_parent_balance(getattr(settings, 'SUPPLIERS_PARENT_ACCOUNT', '2111'))
 
     # ==========================
     # 3. Inventory KPIs

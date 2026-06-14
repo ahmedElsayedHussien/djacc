@@ -153,6 +153,17 @@
         var taxId = event.target.value;
         var percentInput = document.getElementById(isTax1 ? 'id_tax_percent' : 'id_tax_percent2');
         
+        // Check for duplicate tax type selection
+        var tax1_id = document.getElementById('id_tax_type').value;
+        var tax2_id = document.getElementById('id_tax_type2').value;
+        if (tax1_id && tax2_id && tax1_id === tax2_id) {
+            alert('لا يمكن اختيار نفس الضريبة مرتين.');
+            event.target.value = '';
+            percentInput.value = '';
+            calculateNet();
+            return;
+        }
+        
         if (!taxId) {
             percentInput.value = '';
             calculateNet();

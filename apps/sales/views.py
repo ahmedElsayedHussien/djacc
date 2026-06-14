@@ -588,7 +588,9 @@ class SalesInvoiceCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
         data = super().get_context_data(**kwargs)
         reps = SalesRepresentative.objects.select_related('warehouse')
         data['rep_warehouse_mapping'] = {rep.id: rep.warehouse.id for rep in reps if rep.warehouse}
-        if self.request.POST:
+        if hasattr(self, 'lines'):
+            data['lines'] = self.lines
+        elif self.request.POST:
             data['lines'] = SalesInvoiceLineFormSet(self.request.POST)
         else:
             data['lines'] = SalesInvoiceLineFormSet()
@@ -596,7 +598,8 @@ class SalesInvoiceCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
 
     def form_valid(self, form):
         context = self.get_context_data()
-        lines = context['lines']
+        self.lines = context['lines']
+        lines = self.lines
         
         is_valid = False
         with transaction.atomic():
@@ -714,7 +717,9 @@ class SalesInvoiceUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         data = super().get_context_data(**kwargs)
-        if self.request.POST:
+        if hasattr(self, 'lines'):
+            data['lines'] = self.lines
+        elif self.request.POST:
             data['lines'] = SalesInvoiceLineFormSet(self.request.POST, instance=self.object)
         else:
             data['lines'] = SalesInvoiceLineFormSet(instance=self.object)
@@ -726,7 +731,8 @@ class SalesInvoiceUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
             return redirect('sales:invoice-detail', pk=self.object.pk)
 
         context = self.get_context_data()
-        lines = context['lines']
+        self.lines = context['lines']
+        lines = self.lines
         
         is_valid = False
         with transaction.atomic():
@@ -1407,7 +1413,9 @@ class SalesReturnCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
 
     def get_context_data(self, **kwargs):
         data = super().get_context_data(**kwargs)
-        if self.request.POST:
+        if hasattr(self, 'lines'):
+            lines = self.lines
+        elif self.request.POST:
             lines = SalesReturnLineFormSet(self.request.POST)
         else:
             lines = SalesReturnLineFormSet()
@@ -1427,7 +1435,36 @@ class SalesReturnCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
 
     def form_valid(self, form):
         context = self.get_context_data()
-        lines = context['lines']
+        self.lines = context['lines']
+        lines = self.lines
+        
+        # 1. Validation
+        is_valid = False
+        if lines.is_valid():
+            has_error = False
+            if form.instance.invoice_id:
+                for line_form in lines.forms:
+                    if line_form.cleaned_data and not line_form.cleaned_data.get('DELETE', False):
+                        item = line_form.cleaned_data.get('item')
+                        qty = line_form.cleaned_data.get('quantity')
+                        unit = line_form.cleaned_data.get('unit')
+                        
+                        if not item or qty is None:
+                            continue
+                            
+                        try:
+                            entered_base_qty = item.convert_to_base(qty, unit)
+                        except ValueError as e:
+                            line_form.add_error('unit', str(e))
+                            has_error = True
+                            continue
+            if not has_error:
+                is_valid = True
+
+        if not is_valid:
+            return self.form_invalid(form)
+
+        # 2. Database saving (Atomic)
         with transaction.atomic():
             form.instance.created_by = self.request.user
             form.instance.number = DocumentService.generate_number(SalesReturn, 'SRET')
@@ -1435,106 +1472,77 @@ class SalesReturnCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView):
             form.instance.subtotal = 0
             form.instance.total = 0
             
-            if lines.is_valid():
-                # Strict invoice-to-return validation
-                if form.instance.invoice_id:
-                    invoice_id = form.instance.invoice_id
-                    
-                    has_error = False
-                    for line_form in lines.forms:
-                        if line_form.cleaned_data and not line_form.cleaned_data.get('DELETE', False):
-                            item = line_form.cleaned_data.get('item')
-                            qty = line_form.cleaned_data.get('quantity')
-                            unit = line_form.cleaned_data.get('unit')
-                            
-                            if not item or qty is None:
-                                continue
-                                
-                            try:
-                                entered_base_qty = item.convert_to_base(qty, unit)
-                            except ValueError as e:
-                                line_form.add_error('unit', str(e))
-                                has_error = True
-                                continue
-                                # Validations removed as per user request to allow returning items not in invoice
-                                # and quantities exceeding the original invoice amount.
-                                pass
-                    if has_error:
-                        return self.form_invalid(form)
+            self.object = form.save()
+            default_ret_acc = Account.objects.get(code=getattr(settings, 'DEFAULT_SALES_RETURN_ACCOUNT', '413'))
+            default_cogs_acc = Account.objects.get(code=getattr(settings, 'DEFAULT_COGS_ACCOUNT', '511'))
 
-                self.object = form.save()
-                default_ret_acc = Account.objects.get(code=getattr(settings, 'DEFAULT_SALES_RETURN_ACCOUNT', '413'))
-                default_cogs_acc = Account.objects.get(code=getattr(settings, 'DEFAULT_COGS_ACCOUNT', '511'))
-
-                lines.instance = self.object
-                instances = lines.save(commit=False)
-                for instance in instances:
-                    if not instance.return_account_id:
-                        instance.return_account = default_ret_acc
-                    if not instance.cogs_account_id:
-                        instance.cogs_account = instance.item.cogs_account or default_cogs_acc
-                    
-                    # Store historical cost if linked return, else current cost
-                    if self.object.invoice_id:
-                        inv_line = SalesInvoiceLine.objects.filter(invoice_id=self.object.invoice_id, item=instance.item).first()
-                        if inv_line:
-                            instance.cost = inv_line.cost
-                        else:
-                            instance.cost = InventoryService.get_item_cost(instance.item, instance.warehouse)
+            lines.instance = self.object
+            instances = lines.save(commit=False)
+            for instance in instances:
+                if not instance.return_account_id:
+                    instance.return_account = default_ret_acc
+                if not instance.cogs_account_id:
+                    instance.cogs_account = instance.item.cogs_account or default_cogs_acc
+                
+                # Store historical cost if linked return, else current cost
+                if self.object.invoice_id:
+                    inv_line = SalesInvoiceLine.objects.filter(invoice_id=self.object.invoice_id, item=instance.item).first()
+                    if inv_line:
+                        instance.cost = inv_line.cost
                     else:
                         instance.cost = InventoryService.get_item_cost(instance.item, instance.warehouse)
-                    
-                    # ✅ Fix: Calculate base quantity
-                    if hasattr(instance, 'unit') and instance.unit:
-                        instance.base_quantity = instance.item.convert_to_base(instance.quantity, instance.unit)
-                    else:
-                        instance.base_quantity = instance.quantity
-                        
-                    instance.save()
+                else:
+                    instance.cost = InventoryService.get_item_cost(instance.item, instance.warehouse)
                 
-                for obj in lines.deleted_objects:
-                    obj.delete()
+                # ✅ Fix: Calculate base quantity
+                if hasattr(instance, 'unit') and instance.unit:
+                    instance.base_quantity = instance.item.convert_to_base(instance.quantity, instance.unit)
+                else:
+                    instance.base_quantity = instance.quantity
+                    
+                instance.save()
+            
+            for obj in lines.deleted_objects:
+                obj.delete()
 
-                # Calculate totals from lines using unified tax engine
-                gross_total = Decimal('0')
-                discount_total = Decimal('0')
-                tax_total_added = Decimal('0')
-                tax_total_deducted = Decimal('0')
+            # Calculate totals from lines using unified tax engine
+            gross_total = Decimal('0')
+            discount_total = Decimal('0')
+            tax_total_added = Decimal('0')
+            tax_total_deducted = Decimal('0')
+            
+            for line in self.object.lines.all():
+                gross_line = Decimal(str(line.quantity * line.unit_price))
+                disc_line = gross_line * (Decimal(str(line.discount_percent)) / Decimal('100'))
+                net_line = gross_line - disc_line
                 
-                for line in self.object.lines.all():
-                    gross_line = Decimal(str(line.quantity * line.unit_price))
-                    disc_line = gross_line * (Decimal(str(line.discount_percent)) / Decimal('100'))
-                    net_line = gross_line - disc_line
-                    
-                    res = calculate_line_taxes(
-                        net_line,
-                        line.tax_type,
-                        line.tax_percent,
-                        line.tax_type2,
-                        line.tax_percent2,
-                        is_purchase_or_expense=False
-                    )
-                    
-                    # Update line total in DB
-                    raw_total = net_line + res['tax1_signed'] + res['tax2_signed']
-                    line.total = raw_total.quantize(Decimal('0.01'))
-                    line.save()
-                    
-                    gross_total += gross_line
-                    discount_total += disc_line
-                    tax_total_added += res['tax_total_added']
-                    tax_total_deducted += res['tax_total_deducted']
+                res = calculate_line_taxes(
+                    net_line,
+                    line.tax_type,
+                    line.tax_percent,
+                    line.tax_type2,
+                    line.tax_percent2,
+                    is_purchase_or_expense=False
+                )
+                
+                # Update line total in DB
+                raw_total = net_line + res['tax1_signed'] + res['tax2_signed']
+                line.total = raw_total.quantize(Decimal('0.01'))
+                line.save()
+                
+                gross_total += gross_line
+                discount_total += disc_line
+                tax_total_added += res['tax_total_added']
+                tax_total_deducted += res['tax_total_deducted']
 
-                q = Decimal('0.01')
-                self.object.subtotal = gross_total.quantize(q)
-                self.object.discount_amount = discount_total.quantize(q)
-                self.object.tax_amount = (tax_total_added - tax_total_deducted).quantize(q)
-                self.object.total = (gross_total - discount_total + tax_total_added - tax_total_deducted).quantize(q)
-                self.object.save()
-                
-                messages.success(self.request, f"تم إنشاء مرتجع المبيعات {self.object.number} بنجاح (مسودة)")
-            else:
-                return self.form_invalid(form)
+            q = Decimal('0.01')
+            self.object.subtotal = gross_total.quantize(q)
+            self.object.discount_amount = discount_total.quantize(q)
+            self.object.tax_amount = (tax_total_added - tax_total_deducted).quantize(q)
+            self.object.total = (gross_total - discount_total + tax_total_added - tax_total_deducted).quantize(q)
+            self.object.save()
+
+        messages.success(self.request, f"تم إنشاء مرتجع المبيعات {self.object.number} بنجاح (مسودة)")
         return redirect(self.get_success_url())
 
 
@@ -1635,7 +1643,9 @@ class SalesReturnUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         data = super().get_context_data(**kwargs)
-        if self.request.POST:
+        if hasattr(self, 'lines'):
+            lines = self.lines
+        elif self.request.POST:
             lines = SalesReturnLineFormSet(self.request.POST, instance=self.object)
         else:
             lines = SalesReturnLineFormSet(instance=self.object)
@@ -1657,104 +1667,107 @@ class SalesReturnUpdateView(LoginRequiredMixin, PermRequiredMixin, UpdateView):
             return redirect('sales:return-detail', pk=self.object.pk)
 
         context = self.get_context_data()
-        lines = context['lines']
+        self.lines = context['lines']
+        lines = self.lines
         
+        # 1. Validation
+        is_valid = False
+        if lines.is_valid():
+            has_error = False
+            if form.instance.invoice_id:
+                for line_form in lines.forms:
+                    if line_form.cleaned_data and not line_form.cleaned_data.get('DELETE', False):
+                        item = line_form.cleaned_data.get('item')
+                        qty = line_form.cleaned_data.get('quantity')
+                        unit = line_form.cleaned_data.get('unit')
+                        if not item or qty is None:
+                            continue
+                        try:
+                            entered_base_qty = item.convert_to_base(qty, unit)
+                        except ValueError as e:
+                            line_form.add_error('unit', str(e))
+                            has_error = True
+                            continue
+            if not has_error:
+                is_valid = True
+
+        if not is_valid:
+            return self.form_invalid(form)
+
+        # 2. Database saving (Atomic)
         with transaction.atomic():
-            if lines.is_valid():
-                has_error = False
-                if form.instance.invoice_id:
-                    for line_form in lines.forms:
-                        if line_form.cleaned_data and not line_form.cleaned_data.get('DELETE', False):
-                            item = line_form.cleaned_data.get('item')
-                            qty = line_form.cleaned_data.get('quantity')
-                            unit = line_form.cleaned_data.get('unit')
-                            if not item or qty is None:
-                                continue
-                            try:
-                                entered_base_qty = item.convert_to_base(qty, unit)
-                            except ValueError as e:
-                                line_form.add_error('unit', str(e))
-                                has_error = True
-                                continue
-                
-                if has_error:
-                    return self.form_invalid(form)
+            self.object = form.save()
+            lines.instance = self.object
+            instances = lines.save(commit=False)
+            
+            try:
+                default_ret_acc = Account.objects.get(code=getattr(settings, 'DEFAULT_SALES_RETURN_ACCOUNT', '413'))
+            except Account.DoesNotExist:
+                default_ret_acc = None
 
-                self.object = form.save()
-                lines.instance = self.object
-                instances = lines.save(commit=False)
-                
-                try:
-                    default_ret_acc = Account.objects.get(code=getattr(settings, 'DEFAULT_SALES_RETURN_ACCOUNT', '413'))
-                except Account.DoesNotExist:
-                    default_ret_acc = None
+            try:
+                default_cogs_acc = Account.objects.get(code=getattr(settings, 'DEFAULT_COGS_ACCOUNT', '511'))
+            except Account.DoesNotExist:
+                default_cogs_acc = None
 
-                try:
-                    default_cogs_acc = Account.objects.get(code=getattr(settings, 'DEFAULT_COGS_ACCOUNT', '511'))
-                except Account.DoesNotExist:
-                    default_cogs_acc = None
-
-                for instance in instances:
-                    if not instance.pk:
-                        if not hasattr(instance, 'return_account') or not instance.return_account_id:
-                            instance.return_account = instance.item.sales_return_account or default_ret_acc
-                        if not hasattr(instance, 'cogs_account') or not instance.cogs_account_id:
-                            instance.cogs_account = instance.item.cogs_account or default_cogs_acc
-                        if not hasattr(instance, 'cost') or not instance.cost:
-                            instance.cost = InventoryService.get_item_cost(instance.item, instance.warehouse)
-                            
-                    if instance.unit:
-                        instance.base_quantity = instance.item.convert_to_base(instance.quantity, instance.unit)
-                    else:
-                        instance.base_quantity = instance.quantity
+            for instance in instances:
+                if not instance.pk:
+                    if not hasattr(instance, 'return_account') or not instance.return_account_id:
+                        instance.return_account = instance.item.sales_return_account or default_ret_acc
+                    if not hasattr(instance, 'cogs_account') or not instance.cogs_account_id:
+                        instance.cogs_account = instance.item.cogs_account or default_cogs_acc
+                    if not hasattr(instance, 'cost') or not instance.cost:
+                        instance.cost = InventoryService.get_item_cost(instance.item, instance.warehouse)
                         
-                    instance.save()
+                if instance.unit:
+                    instance.base_quantity = instance.item.convert_to_base(instance.quantity, instance.unit)
+                else:
+                    instance.base_quantity = instance.quantity
                     
-                for obj in lines.deleted_objects:
-                    obj.delete()
+                instance.save()
                 
-                gross_total = Decimal('0')
-                discount_total = Decimal('0')
-                tax_total_added = Decimal('0')
-                tax_total_deducted = Decimal('0')
+            for obj in lines.deleted_objects:
+                obj.delete()
+            
+            gross_total = Decimal('0')
+            discount_total = Decimal('0')
+            tax_total_added = Decimal('0')
+            tax_total_deducted = Decimal('0')
+            
+            for line in self.object.lines.all():
+                gross_line = Decimal(str(line.quantity * line.unit_price))
+                disc_line = gross_line * (Decimal(str(line.discount_percent)) / Decimal('100'))
+                net_line = gross_line - disc_line
                 
-                for line in self.object.lines.all():
-                    gross_line = Decimal(str(line.quantity * line.unit_price))
-                    disc_line = gross_line * (Decimal(str(line.discount_percent)) / Decimal('100'))
-                    net_line = gross_line - disc_line
-                    
-                    res = calculate_line_taxes(
-                        net_line,
-                        line.tax_type,
-                        line.tax_percent,
-                        line.tax_type2,
-                        line.tax_percent2,
-                        is_purchase_or_expense=False
-                    )
-                    
-                    raw_total = net_line + res['tax1_signed'] + res['tax2_signed']
-                    line.total = raw_total.quantize(Decimal('0.01'))
-                    line.save()
-                    
-                    gross_total += gross_line
-                    discount_total += disc_line
-                    tax_total_added += res['tax_total_added']
-                    tax_total_deducted += res['tax_total_deducted']
+                res = calculate_line_taxes(
+                    net_line,
+                    line.tax_type,
+                    line.tax_percent,
+                    line.tax_type2,
+                    line.tax_percent2,
+                    is_purchase_or_expense=False
+                )
+                
+                raw_total = net_line + res['tax1_signed'] + res['tax2_signed']
+                line.total = raw_total.quantize(Decimal('0.01'))
+                line.save()
+                
+                gross_total += gross_line
+                discount_total += disc_line
+                tax_total_added += res['tax_total_added']
+                tax_total_deducted += res['tax_total_deducted']
 
-                q = Decimal('0.01')
-                self.object.subtotal = gross_total.quantize(q)
-                self.object.discount_amount = discount_total.quantize(q)
-                self.object.tax_amount = (tax_total_added - tax_total_deducted).quantize(q)
-                self.object.total = (gross_total - discount_total + tax_total_added - tax_total_deducted).quantize(q)
-                self.object.save()
-                
-                messages.success(self.request, f"تم تعديل المرتجع {self.object.number} بنجاح")
-                if hasattr(self.request.user, 'salesrepresentative'):
-                    return redirect('reports:rep_dashboard')
-                return redirect('sales:return-list')
-            else:
-                transaction.set_rollback(True)
-                return self.form_invalid(form)
+            q = Decimal('0.01')
+            self.object.subtotal = gross_total.quantize(q)
+            self.object.discount_amount = discount_total.quantize(q)
+            self.object.tax_amount = (tax_total_added - tax_total_deducted).quantize(q)
+            self.object.total = (gross_total - discount_total + tax_total_added - tax_total_deducted).quantize(q)
+            self.object.save()
+
+        messages.success(self.request, f"تم تعديل المرتجع {self.object.number} بنجاح")
+        if hasattr(self.request.user, 'salesrepresentative'):
+            return redirect('reports:rep_dashboard')
+        return redirect('sales:return-list')
 
 class SalesReturnDeleteView(LoginRequiredMixin, PermRequiredMixin, View):
     permission_required = 'sales.delete_salesreturn'

@@ -98,7 +98,9 @@ class PurchaseReturnCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView
 
     def get_context_data(self, **kwargs):
         data = super().get_context_data(**kwargs)
-        if self.request.POST:
+        if hasattr(self, 'lines'):
+            data['lines'] = self.lines
+        elif self.request.POST:
             data['lines'] = PurchaseReturnLineFormSet(self.request.POST)
         else:
             data['lines'] = PurchaseReturnLineFormSet()
@@ -106,81 +108,90 @@ class PurchaseReturnCreateView(LoginRequiredMixin, PermRequiredMixin, CreateView
 
     def form_valid(self, form):
         context = self.get_context_data()
-        lines = context['lines']
-        with transaction.atomic():
-            form.instance.created_by = self.request.user
+        self.lines = context['lines']
+        lines = self.lines
+        
+        # 1. Validation
+        is_valid = False
+        if lines.is_valid():
+            is_valid = True
             
-            form.instance.subtotal = 0
-            form.instance.total = 0
-            try:
-                if lines.is_valid():
-                    self.object = form.save()
-                    lines.instance = self.object
-                    instances = lines.save(commit=False)
-                    
-                    # ... (rest of the logic inside the previous block)
-                    # I will replace the whole block to be safe
-                    gross_total = 0
-                    discount_total = 0
-                    tax_total_added = 0
-                    tax_total_deducted = 0
-                    
-                    for line in instances:
-                        if self.object.invoice:
-                            original_line = self.object.invoice.lines.select_for_update().filter(item=line.item).first()
-                            if not original_line:
-                                raise ValidationError(f"الصنف {line.item.name} غير موجود في الفاتورة الأصلية")
-                            
-                            previous_returned = PurchaseReturnLine.objects.filter(
-                                purchase_return__invoice=self.object.invoice,
-                                purchase_return__status='posted',
-                                item=line.item
-                            ).aggregate(total=Sum('quantity'))['total'] or 0
-                            
-                            available = original_line.quantity - previous_returned
-                            if line.quantity > available:
-                                raise ValidationError(
-                                    f"الكمية المرتجعة للصنف {line.item.name} ({line.quantity}) "
-                                    f"تتجاوز الكمية المتاحة للإرجاع ({available})"
-                                )
+        if not is_valid:
+            return self.form_invalid(form)
 
-                        line_subtotal = Decimal(str(line.quantity * line.unit_cost))
-                        line_discount = line_subtotal * (Decimal(str(line.discount_percent)) / Decimal('100'))
-                        net_line = line_subtotal - line_discount
+        try:
+            with transaction.atomic():
+                form.instance.created_by = self.request.user
+                form.instance.subtotal = 0
+                form.instance.total = 0
+                
+                self.object = form.save()
+                lines.instance = self.object
+                instances = lines.save(commit=False)
+                
+                gross_total = Decimal('0')
+                discount_total = Decimal('0')
+                tax_total_added = Decimal('0')
+                tax_total_deducted = Decimal('0')
+                
+                for line in instances:
+                    if self.object.invoice:
+                        original_line = self.object.invoice.lines.select_for_update().filter(item=line.item).first()
+                        if not original_line:
+                            raise ValidationError(f"الصنف {line.item.name} غير موجود في الفاتورة الأصلية")
                         
-                        res = calculate_line_taxes(
-                            net_line,
-                            line.tax_type,
-                            line.tax_percent,
-                            line.tax_type2,
-                            line.tax_percent2,
-                            is_purchase_or_expense=True
-                        )
+                        previous_returned = PurchaseReturnLine.objects.filter(
+                            purchase_return__invoice=self.object.invoice,
+                            purchase_return__status='posted',
+                            item=line.item
+                        ).aggregate(total=Sum('quantity'))['total'] or 0
                         
-                        line.total = net_line + res['tax1_signed'] + res['tax2_signed']
-                        if hasattr(line, 'unit') and line.unit:
-                            line.base_quantity = line.item.convert_to_base(line.quantity, line.unit)
-                        else:
-                            line.base_quantity = line.quantity
-                        line.save()
-                        
-                        gross_total += line_subtotal
-                        discount_total += line_discount
-                        tax_total_added += res['tax_total_added']
-                        tax_total_deducted += res['tax_total_deducted']
+                        available = original_line.quantity - previous_returned
+                        if line.quantity > available:
+                            raise ValidationError(
+                                f"الكمية المرتجعة للصنف {line.item.name} ({line.quantity}) "
+                                f"تتجاوز الكمية المتاحة للإرجاع ({available})"
+                            )
 
-                    self.object.subtotal = gross_total
-                    self.object.discount_amount = discount_total
-                    self.object.tax_amount = tax_total_added - tax_total_deducted
-                    self.object.total = gross_total - discount_total + tax_total_added - tax_total_deducted
-                    self.object.save()
-                else:
-                    return self.form_invalid(form)
-            except ValidationError as e:
-                messages.error(self.request, str(e))
-                logger.exception('Validation error in PurchaseReturnCreateView')
-                transaction.set_rollback(True)
-                return self.form_invalid(form)
+                    line_subtotal = Decimal(str(line.quantity * line.unit_cost))
+                    line_discount = line_subtotal * (Decimal(str(line.discount_percent)) / Decimal('100'))
+                    net_line = line_subtotal - line_discount
+                    
+                    res = calculate_line_taxes(
+                        net_line,
+                        line.tax_type,
+                        line.tax_percent,
+                        line.tax_type2,
+                        line.tax_percent2,
+                        is_purchase_or_expense=True
+                    )
+                    
+                    line.total = net_line + res['tax1_signed'] + res['tax2_signed']
+                    if hasattr(line, 'unit') and line.unit:
+                        line.base_quantity = line.item.convert_to_base(line.quantity, line.unit)
+                    else:
+                        line.base_quantity = line.quantity
+                    line.save()
+                    
+                    gross_total += line_subtotal
+                    discount_total += line_discount
+                    tax_total_added += res['tax_total_added']
+                    tax_total_deducted += res['tax_total_deducted']
+
+                for obj in lines.deleted_objects:
+                    obj.delete()
+
+                self.object.subtotal = gross_total
+                self.object.discount_amount = discount_total
+                self.object.tax_amount = tax_total_added - tax_total_deducted
+                self.object.total = gross_total - discount_total + tax_total_added - tax_total_deducted
+                self.object.save()
+        except ValidationError as e:
+            messages.error(self.request, str(e))
+            logger.exception('Validation error in PurchaseReturnCreateView')
+            return self.form_invalid(form)
+            
+        messages.success(self.request, f"تم إنشاء مرتجع المشتريات {self.object.number} بنجاح (مسودة)")
         return redirect(self.success_url)
 
 class PurchaseReturnDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):
@@ -318,7 +329,9 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermRequiredMixin, CreateVie
 
     def get_context_data(self, **kwargs):
         data = super().get_context_data(**kwargs)
-        if self.request.POST:
+        if hasattr(self, 'lines'):
+            data['lines'] = self.lines
+        elif self.request.POST:
             data['lines'] = PurchaseInvoiceLineFormSet(self.request.POST)
         else:
             data['lines'] = PurchaseInvoiceLineFormSet()
@@ -326,7 +339,16 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermRequiredMixin, CreateVie
 
     def form_valid(self, form):
         context = self.get_context_data()
-        lines = context['lines']
+        self.lines = context['lines']
+        lines = self.lines
+        
+        is_valid = False
+        if lines.is_valid():
+            is_valid = True
+            
+        if not is_valid:
+            return self.form_invalid(form)
+
         with transaction.atomic():
             from apps.core.models import CostCenter
             cc_80 = CostCenter.objects.filter(code='80').first()
@@ -336,50 +358,53 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermRequiredMixin, CreateVie
             form.instance.subtotal = 0
             form.instance.total = 0
             form.instance.created_by = self.request.user
-            if lines.is_valid():
-                self.object = form.save()
-                lines.instance = self.object
-                instances = lines.save(commit=False)
+            
+            self.object = form.save()
+            lines.instance = self.object
+            instances = lines.save(commit=False)
+            
+            gross_total = Decimal('0')
+            discount_total = Decimal('0')
+            tax_total_added = Decimal('0')
+            tax_total_deducted = Decimal('0')
+            
+            for instance in instances:
+                line_subtotal = Decimal(str(instance.quantity * instance.unit_cost))
+                line_discount = line_subtotal * (Decimal(str(instance.discount_percent)) / Decimal('100'))
+                net_line = line_subtotal - line_discount
                 
-                gross_total = Decimal('0')
-                discount_total = Decimal('0')
-                tax_total_added = Decimal('0')
-                tax_total_deducted = Decimal('0')
+                res = calculate_line_taxes(
+                    net_line,
+                    instance.tax_type,
+                    instance.tax_percent,
+                    instance.tax_type2,
+                    instance.tax_percent2,
+                    is_purchase_or_expense=True
+                )
                 
-                for instance in instances:
-                    line_subtotal = Decimal(str(instance.quantity * instance.unit_cost))
-                    line_discount = line_subtotal * (Decimal(str(instance.discount_percent)) / Decimal('100'))
-                    net_line = line_subtotal - line_discount
-                    
-                    res = calculate_line_taxes(
-                        net_line,
-                        instance.tax_type,
-                        instance.tax_percent,
-                        instance.tax_type2,
-                        instance.tax_percent2,
-                        is_purchase_or_expense=True
-                    )
-                    
-                    instance.total = net_line + res['tax1_signed'] + res['tax2_signed']
-                    # Calculate base quantity
-                    if instance.unit:
-                        instance.base_quantity = instance.item.convert_to_base(instance.quantity, instance.unit)
-                    else:
-                        instance.base_quantity = instance.quantity
-                    instance.save()
-                    
-                    gross_total += line_subtotal
-                    discount_total += line_discount
-                    tax_total_added += res['tax_total_added']
-                    tax_total_deducted += res['tax_total_deducted']
+                instance.total = net_line + res['tax1_signed'] + res['tax2_signed']
+                # Calculate base quantity
+                if instance.unit:
+                    instance.base_quantity = instance.item.convert_to_base(instance.quantity, instance.unit)
+                else:
+                    instance.base_quantity = instance.quantity
+                instance.save()
+                
+                gross_total += line_subtotal
+                discount_total += line_discount
+                tax_total_added += res['tax_total_added']
+                tax_total_deducted += res['tax_total_deducted']
 
-                self.object.subtotal = gross_total
-                self.object.discount_amount = discount_total
-                self.object.tax_amount = tax_total_added - tax_total_deducted
-                self.object.total = gross_total - discount_total + tax_total_added - tax_total_deducted
-                self.object.save()
-            else:
-                return self.form_invalid(form)
+            self.object.subtotal = gross_total
+            self.object.discount_amount = discount_total
+            self.object.tax_amount = tax_total_added - tax_total_deducted
+            self.object.total = gross_total - discount_total + tax_total_added - tax_total_deducted
+            self.object.save()
+            
+            for obj in lines.deleted_objects:
+                obj.delete()
+        
+        messages.success(self.request, f"تم إنشاء فاتورة المشتريات {self.object.number} بنجاح (مسودة)")
         return redirect(self.success_url)
 
 class PurchaseInvoiceDetailView(LoginRequiredMixin, PermRequiredMixin, DetailView):

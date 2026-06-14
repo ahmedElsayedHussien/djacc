@@ -196,6 +196,14 @@ class PurchaseInvoiceLineForm(forms.ModelForm):
             raise forms.ValidationError('يجب أن تكون الكمية أكبر من صفر')
         return qty
 
+    def clean(self):
+        cleaned_data = super().clean()
+        tax_type = cleaned_data.get('tax_type')
+        tax_type2 = cleaned_data.get('tax_type2')
+        if tax_type and tax_type2 and tax_type == tax_type2:
+            self.add_error('tax_type2', 'لا يمكن اختيار نفس الضريبة مرتين.')
+        return cleaned_data
+
 
 class BasePurchaseLineFormSet(BaseInlineFormSet):
     def clean(self):
@@ -412,6 +420,14 @@ class PurchaseReturnLineForm(forms.ModelForm):
         if qty is not None and qty <= 0:
             raise forms.ValidationError('يجب أن تكون الكمية أكبر من صفر')
         return qty
+
+    def clean(self):
+        cleaned_data = super().clean()
+        tax_type = cleaned_data.get('tax_type')
+        tax_type2 = cleaned_data.get('tax_type2')
+        if tax_type and tax_type2 and tax_type == tax_type2:
+            self.add_error('tax_type2', 'لا يمكن اختيار نفس الضريبة مرتين.')
+        return cleaned_data
 
 PurchaseReturnLineFormSet = inlineformset_factory(
     PurchaseReturn, PurchaseReturnLine,

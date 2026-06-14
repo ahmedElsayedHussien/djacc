@@ -133,11 +133,14 @@ class ExpenseForm(forms.ModelForm):
         if method == 'custody' and not cleaned.get('custody'):
             raise forms.ValidationError('يجب تحديد العهدة')
             
+        tax_type = cleaned.get('tax_type')
+        tax_type2 = cleaned.get('tax_type2')
+        if tax_type and tax_type2 and tax_type == tax_type2:
+            self.add_error('tax_type2', 'لا يمكن اختيار نفس الضريبة مرتين.')
+            
         # Calculate taxes and assign to instance to pass model validation
         subtotal = cleaned.get('subtotal') or 0
-        tax_type = cleaned.get('tax_type')
         tax_percent = cleaned.get('tax_percent') or 0
-        tax_type2 = cleaned.get('tax_type2')
         tax_percent2 = cleaned.get('tax_percent2') or 0
         
         from decimal import Decimal
