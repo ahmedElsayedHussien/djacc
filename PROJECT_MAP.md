@@ -129,6 +129,8 @@ User Request → URL → View → Service Layer → Model → DB
 | **Pricing: sector offer discount auto-apply** | ✅ Added | 🔴 عالية |
 | **Pricing: price_list auto-fill with standard_price fallback** | ✅ Fixed | 🔴 عالية |
 | **Pricing: Quotation-to-Invoice extra_discount_percent** | ✅ Added | 🟡 متوسطة |
+| **POS: Salary Deduction for Shortage Settlement** | ✅ Added | 🟡 متوسطة |
+| **PWA: Minimal Installable Implementation (Network Only)** | ✅ Added | 🟡 متوسطة |
 
 ## [DESIGN SYSTEM REFERENCE]
 

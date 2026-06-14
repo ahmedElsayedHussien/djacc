@@ -10,6 +10,12 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- PWA Manifest & Theme -->
+    <link rel="manifest" href="{% url 'core:manifest' %}">
+    <meta name="theme-color" content="#2c3e50">
+    <link rel="apple-touch-icon" href="/static/images/logo-192.png">
+    
     <!-- DJACC Pro Design System -->
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
@@ -688,5 +694,18 @@
     </script>
 
     {% block extra_js %}{% endblock %}
+    
+    <!-- PWA Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('{% url "core:sw" %}').then(function(registration) {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                }, function(err) {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
+    </script>
 </body>
 </html>

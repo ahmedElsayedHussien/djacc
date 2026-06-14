@@ -49,13 +49,18 @@ The system is built as a modular ERP/Accounting software, divided into several i
 
 ### 2.6. Other Apps
 *   `expenses`: For managing operational and administrative expenses.
-*   `pos`: Point of Sale interface for fast retail transactions.
+*   `pos`: Point of Sale interface for fast retail transactions. Includes shift management (تسويات وإغلاق الورديات) and Shortage Settlement (تحصيل العجز النقدي أو تحويله لسلفة على راتب الكاشير عبر التكامل مع موديول الموارد البشرية).
 *   `e_invoice`: Electronic Invoicing integration (likely for local tax authority compliance).
 
 ### 2.7. `hr` (Human Resources)
-*   **Key Models:** `Employee`, `Department`, `JobTitle`. Used to link system users to their organizational roles.
+*   **Key Models:** `Employee`, `Department`, `JobTitle`, `Loan`, `Payslip`. Used to link system users to their organizational roles and manage salaries and deductions.
 
-### 2.6. `treasury` (Treasury & Cash Management)
+### 2.8. Progressive Web App (PWA)
+*   **Purpose:** The system is installable as a standalone app on desktops and mobile devices.
+*   **Implementation:** Minimal PWA architecture using a `manifest.json` and a `sw.js` (Service Worker).
+*   **Caching Strategy:** STRICTLY `Network-Only`. The service worker intentionally bypasses caching for all requests to ensure financial reports and AJAX calls remain 100% accurate and up-to-date in real-time.
+
+### 2.9. `treasury` (Treasury & Cash Management)
 *   **Key Models:** `CashBox` (الخزينة), `BankAccount`.
 *   **Utilities:** `get_available_cash_boxes(user)` ensures users only interact with cash boxes they have access to.
 
