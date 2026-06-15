@@ -769,7 +769,10 @@ class ReportService:
 
     @staticmethod
     def net_sales_profitability_report(from_date, to_date):
-        
+        from apps.pos.models import POSOrder
+        from apps.inventory.models import StockMovement
+        from django.contrib.contenttypes.models import ContentType
+
         # Gross Sales & Discounts
         sales_data = SalesInvoice.objects.filter(
             status=SalesInvoice.Status.POSTED,
@@ -790,6 +793,27 @@ class ReportService:
         gross_sales = sales_data['gross_sales'] or Decimal('0')
         discounts = sales_data['total_discounts'] or Decimal('0')
         returns = returns_data['total_returns'] or Decimal('0')
+
+        # POS Orders
+        pos_orders = POSOrder.objects.filter(
+            status__in=[POSOrder.Status.PAID, POSOrder.Status.POSTED],
+            date__date__range=[from_date, to_date]
+        )
+        pos_sales_agg = pos_orders.filter(is_return=False).aggregate(
+            gross=Sum('subtotal'),
+            discount=Sum('discount')
+        )
+        pos_returns_agg = pos_orders.filter(is_return=True).aggregate(
+            returns=Sum('subtotal')
+        )
+
+        pos_gross = pos_sales_agg['gross'] or Decimal('0')
+        pos_discount = pos_sales_agg['discount'] or Decimal('0')
+        pos_returns = pos_returns_agg['returns'] or Decimal('0')
+
+        gross_sales += pos_gross
+        discounts += pos_discount
+        returns += pos_returns
         net_sales = gross_sales - discounts - returns
         
         # COGS (from Invoice Lines)
@@ -799,6 +823,25 @@ class ReportService:
         ).aggregate(
             total_cogs=Sum(F('quantity') * F('cost'))
         )['total_cogs'] or Decimal('0')
+
+        # POS COGS (from StockMovements)
+        pos_order_ct = ContentType.objects.get_for_model(POSOrder)
+        pos_order_ids = list(pos_orders.values_list('id', flat=True))
+        
+        pos_cogs_sales = StockMovement.objects.filter(
+            content_type=pos_order_ct,
+            object_id__in=pos_order_ids,
+            movement_type=StockMovement.MovementType.SALES_ISSUE
+        ).aggregate(total=Sum('total_cost'))['total'] or Decimal('0')
+        
+        pos_cogs_returns = StockMovement.objects.filter(
+            content_type=pos_order_ct,
+            object_id__in=pos_order_ids,
+            movement_type=StockMovement.MovementType.SALE_RETURN
+        ).aggregate(total=Sum('total_cost'))['total'] or Decimal('0')
+
+        pos_cogs = abs(pos_cogs_sales) - abs(pos_cogs_returns)
+        cogs += pos_cogs
         
         gross_profit = net_sales - cogs
         profit_margin = (gross_profit / net_sales * 100) if net_sales > 0 else 0
@@ -815,7 +858,13 @@ class ReportService:
 
     @staticmethod
     def product_profitability_report(from_date, to_date):
+        from apps.pos.models import POSOrder, POSOrderLine
+        from apps.inventory.models import StockMovement
+        from django.contrib.contenttypes.models import ContentType
+        from apps.sales.models import SalesReturnLine
+        from django.db.models import ExpressionWrapper, DecimalField
         
+        # 1. ERP Invoices (excluding tax)
         lines = SalesInvoiceLine.objects.filter(
             invoice__status=SalesInvoice.Status.POSTED,
             invoice__date__range=[from_date, to_date]
@@ -823,16 +872,120 @@ class ReportService:
             'item__code', 'item__name', 'item__category__name'
         ).annotate(
             total_qty=Sum('quantity'),
-            total_revenue=Sum('total'),
+            total_revenue=Sum(F('quantity') * F('unit_price') * (1 - ExpressionWrapper(F('discount_percent') / 100.0, output_field=DecimalField()))),
             total_cost=Sum(F('quantity') * F('cost')),
+        )
+
+        # 2. ERP Returns (excluding tax)
+        returns = SalesReturnLine.objects.filter(
+            sales_return__status=SalesReturn.Status.POSTED,
+            sales_return__date__range=[from_date, to_date]
+        ).values(
+            'item__code'
         ).annotate(
-            profit=F('total_revenue') - F('total_cost')
-        ).order_by('-profit')
-        
-        return lines
+            total_qty=Sum('quantity'),
+            total_revenue=Sum(F('quantity') * F('unit_price') * (1 - ExpressionWrapper(F('discount_percent') / 100.0, output_field=DecimalField()))),
+            total_cost=Sum(F('quantity') * F('cost')),
+        )
+
+        # Get POS orders
+        pos_orders = POSOrder.objects.filter(
+            status__in=[POSOrder.Status.PAID, POSOrder.Status.POSTED],
+            date__date__range=[from_date, to_date]
+        )
+        pos_order_ids = list(pos_orders.values_list('id', flat=True))
+
+        pos_product_data = {}
+        if pos_order_ids:
+            # Query POS lines (excluding tax)
+            pos_lines = POSOrderLine.objects.filter(
+                order_id__in=pos_order_ids
+            ).values(
+                'item_id', 'item__code', 'item__name', 'item__category__name', 'order__is_return'
+            ).annotate(
+                total_qty=Sum('qty'),
+                subtotal=Sum(F('qty') * F('price') - F('discount'))
+            )
+
+            for line in pos_lines:
+                item_id = line['item_id']
+                if item_id not in pos_product_data:
+                    pos_product_data[item_id] = {
+                        'item__code': line['item__code'],
+                        'item__name': line['item__name'],
+                        'item__category__name': line['item__category__name'] or '',
+                        'total_qty': Decimal('0'),
+                        'total_revenue': Decimal('0'),
+                        'total_cost': Decimal('0'),
+                    }
+                
+                coef = Decimal('-1') if line['order__is_return'] else Decimal('1')
+                pos_product_data[item_id]['total_qty'] += line['total_qty'] * coef
+                pos_product_data[item_id]['total_revenue'] += line['subtotal'] * coef
+
+            # Query POS costs (StockMovements)
+            pos_order_ct = ContentType.objects.get_for_model(POSOrder)
+            movs = StockMovement.objects.filter(
+                content_type=pos_order_ct,
+                object_id__in=pos_order_ids,
+                movement_type__in=[StockMovement.MovementType.SALES_ISSUE, StockMovement.MovementType.SALE_RETURN]
+            ).values('item_id', 'movement_type').annotate(total_cost=Sum('total_cost'))
+
+            pos_costs = {}
+            for m in movs:
+                item_id = m['item_id']
+                if item_id not in pos_costs:
+                    pos_costs[item_id] = Decimal('0')
+                if m['movement_type'] == StockMovement.MovementType.SALES_ISSUE:
+                    pos_costs[item_id] += abs(m['total_cost'])
+                elif m['movement_type'] == StockMovement.MovementType.SALE_RETURN:
+                    pos_costs[item_id] -= abs(m['total_cost'])
+
+            for item_id, cost_val in pos_costs.items():
+                if item_id in pos_product_data:
+                    pos_product_data[item_id]['total_cost'] = cost_val
+
+        # Merge ERP Invoices, subtract ERP Returns, and merge POS
+        merged_report = {}
+        for line in lines:
+            code = line['item__code']
+            merged_report[code] = {
+                'item__code': code,
+                'item__name': line['item__name'],
+                'item__category__name': line['item__category__name'] or '',
+                'total_qty': line['total_qty'],
+                'total_revenue': line['total_revenue'] or Decimal('0'),
+                'total_cost': line['total_cost'] or Decimal('0'),
+            }
+
+        for ret in returns:
+            code = ret['item__code']
+            if code in merged_report:
+                merged_report[code]['total_qty'] -= ret['total_qty']
+                merged_report[code]['total_revenue'] -= ret['total_revenue'] or Decimal('0')
+                merged_report[code]['total_cost'] -= ret['total_cost'] or Decimal('0')
+
+        for item_id, pdata in pos_product_data.items():
+            code = pdata['item__code']
+            if code in merged_report:
+                merged_report[code]['total_qty'] += pdata['total_qty']
+                merged_report[code]['total_revenue'] += pdata['total_revenue']
+                merged_report[code]['total_cost'] += pdata['total_cost']
+            else:
+                merged_report[code] = pdata
+
+        # Recompute profit and sort
+        final_list = []
+        for code, data in merged_report.items():
+            data['profit'] = data['total_revenue'] - data['total_cost']
+            final_list.append(data)
+
+        final_list.sort(key=lambda x: x['profit'], reverse=True)
+        return final_list
 
     @staticmethod
     def sales_by_sector_report(from_date, to_date):
+        from apps.pos.models import POSOrder
         
         sectors = SalesInvoice.objects.filter(
             status=SalesInvoice.Status.POSTED,
@@ -844,22 +997,103 @@ class ReportService:
         ).annotate(
             balance=F('total_sales') - F('total_paid')
         ).order_by('-total_sales')
-        
-        return sectors
+
+        # Get POS orders
+        pos_orders = POSOrder.objects.filter(
+            status__in=[POSOrder.Status.PAID, POSOrder.Status.POSTED],
+            date__date__range=[from_date, to_date]
+        ).select_related('customer', 'customer__sector')
+
+        pos_sectors = {}
+        for order in pos_orders:
+            sector_name = None
+            if order.customer and order.customer.sector:
+                sector_name = order.customer.sector.name
+            
+            if not sector_name:
+                sector_name = "نقاط البيع (مبيعات طيار)"
+
+            if sector_name not in pos_sectors:
+                pos_sectors[sector_name] = {
+                    'customer__sector__name': sector_name,
+                    'invoice_count': 0,
+                    'total_sales': Decimal('0'),
+                    'total_paid': Decimal('0'),
+                }
+
+            coef = Decimal('-1') if order.is_return else Decimal('1')
+            pos_sectors[sector_name]['invoice_count'] += 1
+            pos_sectors[sector_name]['total_sales'] += order.grand_total * coef
+            pos_sectors[sector_name]['total_paid'] += order.grand_total * coef
+
+        # Merge ERP and POS
+        merged_sectors = {}
+        for sec in sectors:
+            name = sec['customer__sector__name'] or "غير محدد"
+            merged_sectors[name] = {
+                'customer__sector__name': name,
+                'invoice_count': sec['invoice_count'],
+                'total_sales': sec['total_sales'] or Decimal('0'),
+                'total_paid': sec['total_paid'] or Decimal('0'),
+            }
+
+        for name, psec in pos_sectors.items():
+            if name in merged_sectors:
+                merged_sectors[name]['invoice_count'] += psec['invoice_count']
+                merged_sectors[name]['total_sales'] += psec['total_sales']
+                merged_sectors[name]['total_paid'] += psec['total_paid']
+            else:
+                merged_sectors[name] = psec
+
+        # Recompute balance and convert to list
+        final_list = []
+        for name, data in merged_sectors.items():
+            data['balance'] = data['total_sales'] - data['total_paid']
+            final_list.append(data)
+
+        final_list.sort(key=lambda x: x['total_sales'], reverse=True)
+        return final_list
 
     @staticmethod
     def rep_performance_report_enhanced(from_date, to_date):
+        from apps.pos.models import POSOrder
         
         reps = SalesRepresentative.objects.filter(is_active=True)
         results = []
         for rep in reps:
-            sales = SalesInvoice.objects.filter(
+            sales_data = SalesInvoice.objects.filter(
                 sales_rep=rep, status=SalesInvoice.Status.POSTED, date__range=[from_date, to_date]
-            ).aggregate(total=Sum('total'))['total'] or Decimal('0')
+            ).aggregate(
+                subtotal=Sum('subtotal'),
+                discount=Sum('discount_amount')
+            )
+            sales = (sales_data['subtotal'] or Decimal('0')) - (sales_data['discount'] or Decimal('0'))
             
             returns = SalesReturn.objects.filter(
                 sales_rep=rep, status=SalesReturn.Status.POSTED, date__range=[from_date, to_date]
-            ).aggregate(total=Sum('total'))['total'] or Decimal('0')
+            ).aggregate(total=Sum('subtotal'))['total'] or Decimal('0')
+
+            # Aggregate POS sales and returns for this rep's user (excluding tax, net of discounts)
+            pos_sales_data = POSOrder.objects.filter(
+                session__user=rep.user,
+                status__in=[POSOrder.Status.PAID, POSOrder.Status.POSTED],
+                is_return=False,
+                date__date__range=[from_date, to_date]
+            ).aggregate(
+                subtotal=Sum('subtotal'),
+                discount=Sum('discount')
+            )
+            pos_sales = (pos_sales_data['subtotal'] or Decimal('0')) - (pos_sales_data['discount'] or Decimal('0'))
+
+            pos_returns = POSOrder.objects.filter(
+                session__user=rep.user,
+                status__in=[POSOrder.Status.PAID, POSOrder.Status.POSTED],
+                is_return=True,
+                date__date__range=[from_date, to_date]
+            ).aggregate(total=Sum('subtotal'))['total'] or Decimal('0')
+
+            sales += pos_sales
+            returns += pos_returns
             
             net_sales = sales - returns
             
@@ -1019,6 +1253,8 @@ class ReportService:
 
     @staticmethod
     def item_price_fluctuation_report(item_id, from_date, to_date):
+        from apps.pos.models import POSOrder, POSOrderLine
+
         if not item_id:
             return []
 
@@ -1078,8 +1314,27 @@ class ReportService:
                 total_revenue=Sum(F('quantity') * F('unit_price'))
             )
 
-            qty = sales_data['total_qty'] or Decimal('0')
-            rev = sales_data['total_revenue'] or Decimal('0')
+            # Query POS Order Lines for the same period
+            pos_end_date_filter = Q(order__date__date__lte=p['end_date']) if is_last else Q(order__date__date__lt=p['end_date'])
+            pos_lines = POSOrderLine.objects.filter(
+                Q(item_id=item_id) &
+                Q(order__status__in=[POSOrder.Status.PAID, POSOrder.Status.POSTED]) &
+                Q(order__date__date__gte=p['start_date']) &
+                pos_end_date_filter
+            ).select_related('order')
+
+            erp_qty = sales_data['total_qty'] or Decimal('0')
+            erp_rev = sales_data['total_revenue'] or Decimal('0')
+
+            pos_qty = Decimal('0')
+            pos_rev = Decimal('0')
+            for pl in pos_lines:
+                coef = Decimal('-1') if pl.order.is_return else Decimal('1')
+                pos_qty += pl.qty * coef
+                pos_rev += (pl.qty * pl.price) * coef
+
+            qty = erp_qty + pos_qty
+            rev = erp_rev + pos_rev
             avg_selling_price = (rev / qty).quantize(Decimal('0.00')) if qty > 0 else Decimal('0')
             
             unit_profit = avg_selling_price - p['cost'] if qty > 0 else Decimal('0')

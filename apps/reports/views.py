@@ -1040,32 +1040,90 @@ class SalesRepDashboardView(LoginRequiredMixin, PermissionRequiredMixin, Templat
             context['van_items'] = van_items
             context['van_inventory_value'] = van_inventory_value
 
-            sales_today = SalesInvoice.objects.filter(
+            from apps.pos.models import POSOrder
+
+            # ERP Sales (excluding tax, net of discounts)
+            sales_today_data = SalesInvoice.objects.filter(
                 sales_rep=rep,
                 status=SalesInvoice.Status.POSTED,
                 date=today
-            ).aggregate(total=Sum('total'))['total'] or Decimal('0')
+            ).aggregate(
+                subtotal=Sum('subtotal'),
+                discount=Sum('discount_amount')
+            )
+            sales_today = (sales_today_data['subtotal'] or Decimal('0')) - (sales_today_data['discount'] or Decimal('0'))
+
+            # POS Sales (excluding tax, net of discounts)
+            pos_sales_today_data = POSOrder.objects.filter(
+                session__user=rep.user,
+                status__in=[POSOrder.Status.PAID, POSOrder.Status.POSTED],
+                is_return=False,
+                date__date=today
+            ).aggregate(
+                subtotal=Sum('subtotal'),
+                discount=Sum('discount')
+            )
+            pos_sales_today = (pos_sales_today_data['subtotal'] or Decimal('0')) - (pos_sales_today_data['discount'] or Decimal('0'))
+            sales_today += pos_sales_today
             context['sales_today'] = sales_today
 
-            sales_this_month = SalesInvoice.objects.filter(
+            # ERP Sales this month
+            sales_this_month_data = SalesInvoice.objects.filter(
                 sales_rep=rep,
                 status=SalesInvoice.Status.POSTED,
                 date__range=[start_of_month, today]
-            ).aggregate(total=Sum('total'))['total'] or Decimal('0')
+            ).aggregate(
+                subtotal=Sum('subtotal'),
+                discount=Sum('discount_amount')
+            )
+            sales_this_month = (sales_this_month_data['subtotal'] or Decimal('0')) - (sales_this_month_data['discount'] or Decimal('0'))
+
+            # POS Sales this month
+            pos_sales_this_month_data = POSOrder.objects.filter(
+                session__user=rep.user,
+                status__in=[POSOrder.Status.PAID, POSOrder.Status.POSTED],
+                is_return=False,
+                date__date__range=[start_of_month, today]
+            ).aggregate(
+                subtotal=Sum('subtotal'),
+                discount=Sum('discount')
+            )
+            pos_sales_this_month = (pos_sales_this_month_data['subtotal'] or Decimal('0')) - (pos_sales_this_month_data['discount'] or Decimal('0'))
+            sales_this_month += pos_sales_this_month
             context['sales_this_month'] = sales_this_month
 
+            # ERP Returns today (excluding tax)
             returns_today = SalesReturn.objects.filter(
                 sales_rep=rep,
                 status=SalesReturn.Status.POSTED,
                 date=today
-            ).aggregate(total=Sum('total'))['total'] or Decimal('0')
+            ).aggregate(total=Sum('subtotal'))['total'] or Decimal('0')
+
+            # POS Returns today (excluding tax)
+            pos_returns_today = POSOrder.objects.filter(
+                session__user=rep.user,
+                status__in=[POSOrder.Status.PAID, POSOrder.Status.POSTED],
+                is_return=True,
+                date__date=today
+            ).aggregate(total=Sum('subtotal'))['total'] or Decimal('0')
+            returns_today += pos_returns_today
             context['returns_today'] = returns_today
 
+            # ERP Returns this month
             returns_this_month = SalesReturn.objects.filter(
                 sales_rep=rep,
                 status=SalesReturn.Status.POSTED,
                 date__range=[start_of_month, today]
-            ).aggregate(total=Sum('total'))['total'] or Decimal('0')
+            ).aggregate(total=Sum('subtotal'))['total'] or Decimal('0')
+
+            # POS Returns this month
+            pos_returns_this_month = POSOrder.objects.filter(
+                session__user=rep.user,
+                status__in=[POSOrder.Status.PAID, POSOrder.Status.POSTED],
+                is_return=True,
+                date__date__range=[start_of_month, today]
+            ).aggregate(total=Sum('subtotal'))['total'] or Decimal('0')
+            returns_this_month += pos_returns_this_month
             context['returns_this_month'] = returns_this_month
 
             target = SalesTarget.objects.filter(

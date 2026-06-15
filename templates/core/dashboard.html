@@ -5,9 +5,9 @@
 {% block content %}
 <!-- Section 1: Financials & Sales (المالية والمبيعات) -->
 <h5 class="mb-3 text-muted"><i class="bi bi-graph-up-arrow me-2"></i>مؤشرات الإيرادات والسيولة</h5>
-<div class="row g-4 mb-4">
+<div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-5 g-4 mb-4">
     <!-- Total Liquidity -->
-    <div class="col-md-3">
+    <div class="col">
         <div class="card shadow-sm border-0 bg-success text-white h-100">
             <div class="card-body d-flex flex-column justify-content-center text-center">
                 <div class="h6 text-white-50">السيولة المتاحة (صناديق + بنوك)</div>
@@ -17,7 +17,7 @@
         </div>
     </div>
     <!-- MTD Sales -->
-    <div class="col-md-3">
+    <div class="col">
         <div class="card shadow-sm border-0 bg-primary text-white h-100">
             <div class="card-body d-flex flex-column justify-content-center text-center">
                 <div class="h6 text-white-50">مبيعات الشهر الحالي</div>
@@ -26,8 +26,18 @@
             </div>
         </div>
     </div>
+    <!-- MTD Sales Returns -->
+    <div class="col">
+        <div class="card shadow-sm border-0 bg-warning text-dark h-100">
+            <div class="card-body d-flex flex-column justify-content-center text-center">
+                <div class="h6 text-dark-50">مرتجع مبيعات هذا الشهر</div>
+                <div class="h2 fw-bold mb-0" dir="ltr">{{ mtd_sales_returns|floatformat:2 }}</div>
+                <div class="small mt-2"><i class="bi bi-arrow-counterclockwise"></i> مرتجعات المبيعات هذا الشهر</div>
+            </div>
+        </div>
+    </div>
     <!-- Accounts Receivable -->
-    <div class="col-md-3">
+    <div class="col">
         <div class="card shadow-sm border-0 bg-info text-white h-100">
             <div class="card-body d-flex flex-column justify-content-center text-center">
                 <div class="h6 text-white-50">الذمم المدينة (لنا بالسوق)</div>
@@ -37,7 +47,7 @@
         </div>
     </div>
     <!-- Accounts Payable -->
-    <div class="col-md-3">
+    <div class="col">
         <div class="card shadow-sm border-0 bg-danger text-white h-100">
             <div class="card-body d-flex flex-column justify-content-center text-center">
                 <div class="h6 text-white-50">الذمم الدائنة (علينا للموردين)</div>

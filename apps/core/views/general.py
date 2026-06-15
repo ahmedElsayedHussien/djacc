@@ -101,15 +101,74 @@ def dashboard(request):
     first_day_of_month = today.replace(day=1)
     
     # ==========================
-    # 1. Sales & Purchases (MTD)
+    # 1. Sales & Purchases (MTD) - Net (excl. Tax, less Discounts & Returns)
     # ==========================
-    mtd_sales = SalesInvoice.objects.filter(
+    from apps.sales.models import SalesReturn
+    from apps.purchases.models import PurchaseReturn
+
+    from apps.pos.models import POSOrder
+
+    # Sales MTD
+    sales_mtd_data = SalesInvoice.objects.filter(
         date__gte=first_day_of_month, status='posted'
-    ).aggregate(total=Sum('total'))['total'] or Decimal('0')
-    
-    mtd_purchases = PurchaseInvoice.objects.filter(
+    ).aggregate(
+        gross=Sum('subtotal'),
+        discount=Sum('discount_amount')
+    )
+    sales_mtd_returns = SalesReturn.objects.filter(
         date__gte=first_day_of_month, status='posted'
-    ).aggregate(total=Sum('total'))['total'] or Decimal('0')
+    ).aggregate(
+        returns=Sum('subtotal')
+    )
+
+    # POS MTD
+    pos_sales_mtd = POSOrder.objects.filter(
+        date__date__gte=first_day_of_month,
+        status__in=['paid', 'posted'],
+        is_return=False
+    ).aggregate(
+        gross=Sum('subtotal'),
+        discount=Sum('discount')
+    )
+    pos_returns_mtd = POSOrder.objects.filter(
+        date__date__gte=first_day_of_month,
+        status__in=['paid', 'posted'],
+        is_return=True
+    ).aggregate(
+        returns=Sum('subtotal')
+    )
+
+    mtd_sales = (
+        (sales_mtd_data['gross'] or Decimal('0')) - 
+        (sales_mtd_data['discount'] or Decimal('0')) +
+        (pos_sales_mtd['gross'] or Decimal('0')) -
+        (pos_sales_mtd['discount'] or Decimal('0')) - 
+        (sales_mtd_returns['returns'] or Decimal('0')) -
+        (pos_returns_mtd['returns'] or Decimal('0'))
+    )
+    mtd_sales_returns = (
+        (sales_mtd_returns['returns'] or Decimal('0')) +
+        (pos_returns_mtd['returns'] or Decimal('0'))
+    )
+
+    # Purchases MTD
+    purchases_mtd_data = PurchaseInvoice.objects.filter(
+        date__gte=first_day_of_month, status='posted'
+    ).aggregate(
+        gross=Sum('subtotal'),
+        discount=Sum('discount_amount')
+    )
+    purchases_mtd_returns = PurchaseReturn.objects.filter(
+        date__gte=first_day_of_month, status='posted'
+    ).aggregate(
+        returns=Sum('subtotal')
+    )
+    mtd_purchases = (
+        (purchases_mtd_data['gross'] or Decimal('0')) - 
+        (purchases_mtd_data['discount'] or Decimal('0')) - 
+        (purchases_mtd_returns['returns'] or Decimal('0'))
+    )
+
     
     # ==========================
     # 2. Finance & Treasury
@@ -157,6 +216,7 @@ def dashboard(request):
         'total_payables': total_payables,
         # Sales & Purchases
         'mtd_sales': mtd_sales,
+        'mtd_sales_returns': mtd_sales_returns,
         'mtd_purchases': mtd_purchases,
         # Inventory
         'inventory_value': inventory_value,
@@ -225,3 +285,20 @@ def delete_notification(request, pk):
     notification.delete()
     messages.success(request, "تم مسح الإشعار بنجاح.")
     return redirect('core:notification-list')
+
+
+@login_required
+def unread_notifications_api(request):
+    from django.http import JsonResponse
+    from django.urls import reverse
+    notifications = request.user.system_notifications.filter(is_read=False).order_by('-created_at')[:8]
+    data = []
+    for notif in notifications:
+        data.append({
+            'id': notif.id,
+            'title': notif.title,
+            'message': notif.message,
+            'url': reverse('core:notification-read', args=[notif.id]),
+        })
+    return JsonResponse(data, safe=False)
+

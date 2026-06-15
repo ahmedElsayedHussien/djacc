@@ -707,5 +707,98 @@
             });
         }
     </script>
+
+    <!-- Browser & PWA Push Notifications -->
+    {% if request.user.is_authenticated %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            function startNotificationPolling() {
+                // Initialize shown notifications from localStorage
+                let shownNotifications = new Set(JSON.parse(localStorage.getItem('shown_notifications') || '[]'));
+                
+                // Keep the localStorage clean (max 200 items)
+                if (shownNotifications.size > 200) {
+                    shownNotifications = new Set(Array.from(shownNotifications).slice(-50));
+                    localStorage.setItem('shown_notifications', JSON.stringify(Array.from(shownNotifications)));
+                }
+
+                function checkNotifications() {
+                    fetch('{% url "core:notification-unread-api" %}')
+                        .then(response => response.json())
+                        .then(data => {
+                            let newNotifFound = false;
+                            data.forEach(notif => {
+                                if (!shownNotifications.has(notif.id)) {
+                                    shownNotifications.add(notif.id);
+                                    newNotifFound = true;
+                                    
+                                    const options = {
+                                        body: notif.message,
+                                        icon: '/static/images/logo-192.png',
+                                        badge: '/static/images/logo-192.png',
+                                        data: { url: notif.url },
+                                        tag: 'notif-' + notif.id,
+                                        renotify: true
+                                    };
+                                    
+                                    // Try showing the notification via Service Worker registration for better PWA integration
+                                    if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+                                        navigator.serviceWorker.ready.then(function(registration) {
+                                            registration.showNotification(notif.title, options);
+                                        }).catch(function(err) {
+                                            console.warn('Service Worker failed to show notification, falling back to Web Notification:', err);
+                                            showFallbackNotification(notif.title, options);
+                                        });
+                                    } else {
+                                        showFallbackNotification(notif.title, options);
+                                    }
+                                }
+                            });
+                            
+                            if (newNotifFound) {
+                                localStorage.setItem('shown_notifications', JSON.stringify(Array.from(shownNotifications)));
+                            }
+                        })
+                        .catch(err => console.error('Error fetching unread notifications:', err));
+                }
+
+                function showFallbackNotification(title, options) {
+                    try {
+                        const notification = new Notification(title, options);
+                        notification.onclick = function(event) {
+                            event.preventDefault();
+                            window.focus();
+                            window.location.href = options.data.url;
+                            notification.close();
+                        };
+                    } catch (e) {
+                        console.error('Failed to display fallback notification:', e);
+                    }
+                }
+
+                // Initial run, then repeat every 15 seconds
+                checkNotifications();
+                setInterval(checkNotifications, 15000);
+            }
+
+            if ('Notification' in window) {
+                if (Notification.permission === 'granted') {
+                    startNotificationPolling();
+                } else if (Notification.permission === 'default') {
+                    // Ask for permission after 3 seconds to be polite
+                    setTimeout(function() {
+                        Notification.requestPermission().then(function(permission) {
+                            console.log('Notification permission status:', permission);
+                            if (permission === 'granted') {
+                                startNotificationPolling();
+                            }
+                        });
+                    }, 3000);
+                }
+            }
+        });
+    </script>
+    {% endif %}
 </body>
 </html>
+
