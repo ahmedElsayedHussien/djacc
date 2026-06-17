@@ -120,7 +120,7 @@
                     </form>
                     {% endif %}
                     
-                    {% if entry.is_posted and not entry.is_reversed and not entry.is_reversal and perms.core.delete_journalentry %}
+                    {% if entry.is_posted and not entry.is_reversed and not entry.is_reversal and request.user.is_superuser %}
                     <form method="post" action="{% url 'core:journal-reverse' entry.pk %}"
                           data-reverse-type="journal-entry"
                           data-reverse-doc="عكس قيد رقم {{ entry.number }}"

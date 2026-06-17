@@ -42,4 +42,5 @@ urlpatterns = [
     path('reports/open-orders/', report_views.OpenPurchaseOrdersReportView.as_view(), name='report-open-orders'),
     path('reports/returns-analysis/', report_views.PurchaseReturnAnalysisReportView.as_view(), name='report-returns-analysis'),
     path('reports/item-price-fluctuations/', report_views.ItemPriceFluctuationReportView.as_view(), name='report-item-price-fluctuations'),
+    path('reports/detailed/', report_views.DetailedPurchaseReportView.as_view(), name='report-detailed'),
 ]

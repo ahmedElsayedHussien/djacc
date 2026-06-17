@@ -108,5 +108,16 @@
     "entry__is_posted": true,
     "account_id": 116,
     "entry_id": 90
+  },
+  {
+    "entry__number": "PURCHASE-20260615-0001",
+    "account__name": "مخزن - الثلاجه",
+    "debit": "120000.00",
+    "credit": "0.00",
+    "entry__entry_type": "purchase",
+    "entry__date": "2026-06-15",
+    "entry__is_posted": true,
+    "account_id": 116,
+    "entry_id": 94
   }
 ]

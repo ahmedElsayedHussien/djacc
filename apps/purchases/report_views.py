@@ -1,9 +1,9 @@
 import logging
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, ListView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from apps.core.mixins import PermRequiredMixin
 from datetime import date
-from .models import Supplier
+from .models import Supplier, PurchaseInvoice, PurchaseInvoiceLine
 from apps.reports.services import ReportService
 from django.core.paginator import Paginator
 from apps.inventory.models import Item
@@ -142,4 +142,72 @@ class ItemPriceFluctuationReportView(LoginRequiredMixin, PermRequiredMixin, Temp
         context['items'] = Item.objects.all().order_by('name')
         context['from_date'] = from_date_obj
         context['to_date'] = to_date_obj
+        return context
+
+class DetailedPurchaseReportView(LoginRequiredMixin, PermRequiredMixin, ListView):
+    template_name = 'purchases/reports/detailed_purchases.html'
+    context_object_name = 'report_data'
+    permission_required = 'purchases.view_purchaseinvoice'
+    paginate_by = 100
+
+    def get_queryset(self):
+        date_from_str = self.request.GET.get('date_from')
+        date_to_str = self.request.GET.get('date_to')
+        supplier_id = self.request.GET.get('supplier')
+        
+        qs = PurchaseInvoiceLine.objects.filter(invoice__status=PurchaseInvoice.Status.POSTED).select_related(
+            'invoice', 'invoice__supplier', 'item'
+        ).order_by('-invoice__date', '-invoice__number')
+        
+        if date_from_str:
+            qs = qs.filter(invoice__date__gte=date.fromisoformat(date_from_str))
+        if date_to_str:
+            qs = qs.filter(invoice__date__lte=date.fromisoformat(date_to_str))
+        if supplier_id:
+            qs = qs.filter(invoice__supplier_id=supplier_id)
+            
+        return qs
+
+    def get(self, request, *args, **kwargs):
+        if request.GET.get('export') == 'xlsx':
+            import openpyxl
+            from openpyxl.styles import Font
+            from django.http import HttpResponse
+            
+            queryset = self.get_queryset()
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Detailed Purchases"
+            
+            # Set sheet direction to RTL for Arabic
+            ws.views.sheetView[0].showGridLines = True
+            
+            headers = ["التاريخ", "رقم الفاتورة", "المورد", "الصنف", "الكمية", "سعر الشراء", "الخصم", "الضريبة", "الصافي"]
+            for col_idx, h in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col_idx, value=h)
+                cell.font = Font(bold=True)
+                
+            for row_idx, line in enumerate(queryset, 2):
+                ws.cell(row=row_idx, column=1, value=line.invoice.date.strftime('%Y-%m-%d'))
+                ws.cell(row=row_idx, column=2, value=line.invoice.number)
+                ws.cell(row=row_idx, column=3, value=line.invoice.supplier.name)
+                ws.cell(row=row_idx, column=4, value=line.item.name)
+                ws.cell(row=row_idx, column=5, value=float(line.quantity))
+                ws.cell(row=row_idx, column=6, value=float(line.unit_cost))
+                ws.cell(row=row_idx, column=7, value=float(line.discount_amount))
+                ws.cell(row=row_idx, column=8, value=float(line.tax_amount))
+                ws.cell(row=row_idx, column=9, value=float(line.total))
+                
+            response = HttpResponse(
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = 'attachment; filename="detailed_purchases.xlsx"'
+            wb.save(response)
+            return response
+            
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['suppliers'] = Supplier.objects.all()
         return context

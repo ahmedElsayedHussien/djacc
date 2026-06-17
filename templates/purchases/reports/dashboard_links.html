@@ -46,6 +46,19 @@
             </a>
         </div>
         <div class="col-md-4 col-lg-3">
+            <a href="{% url 'purchases:report-detailed' %}" class="text-decoration-none">
+                <div class="card h-100 report-card shadow-sm border-start border-info border-4">
+                    <div class="card-body">
+                        <div class="icon-shape bg-info bg-opacity-10 text-info">
+                            <i class="bi bi-list-check fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark">تقرير المشتريات التفصيلي</h6>
+                        <p class="text-muted small mb-0">حركات شراء الأصناف بالتاريخ والمورد والتكلفة التفصيلية.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4 col-lg-3">
             <a href="{% url 'purchases:report-item-cost' %}" class="text-decoration-none">
                 <div class="card h-100 report-card shadow-sm">
                     <div class="card-body">

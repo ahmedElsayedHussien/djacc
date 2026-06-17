@@ -271,6 +271,21 @@ class SalesInvoiceLine(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
+    @property
+    def discount_amount(self):
+        from decimal import Decimal
+        subtotal = self.quantity * self.unit_price
+        disc = subtotal * ((self.discount_percent or Decimal('0')) / Decimal('100'))
+        extra = subtotal * ((self.extra_discount_percent or Decimal('0')) / Decimal('100'))
+        return disc + extra
+
+    @property
+    def tax_amount(self):
+        subtotal = self.quantity * self.unit_price
+        disc_val = self.discount_amount
+        net_line = subtotal - disc_val
+        return self.total - net_line
+
 class CustomerReceipt(models.Model):
     """تحصيل من عميل"""
     class ChequeStatus(models.TextChoices):

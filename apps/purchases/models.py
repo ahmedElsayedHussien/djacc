@@ -172,6 +172,18 @@ class PurchaseInvoiceLine(ConcurrencyModel):
         verbose_name = "صنف في فاتورة مشتريات"
         verbose_name_plural = "أصناف فواتير المشتريات"
 
+    @property
+    def discount_amount(self):
+        subtotal = self.quantity * self.unit_cost
+        return subtotal * ((self.discount_percent or Decimal('0')) / Decimal('100'))
+
+    @property
+    def tax_amount(self):
+        subtotal = self.quantity * self.unit_cost
+        disc_val = self.discount_amount
+        net_line = subtotal - disc_val
+        return self.total - net_line
+
 class SupplierPayment(ConcurrencyModel):
     """سداد لمورد"""
     number = models.CharField(max_length=50, unique=True, verbose_name="رقم السند")
